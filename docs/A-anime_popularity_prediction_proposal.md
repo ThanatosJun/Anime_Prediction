@@ -188,9 +188,11 @@ Popularity 低 │ 不建議合作 │ 利基市場  │
 
 ### 2. 文獻回顧與研究現況
 
-- **靜態多模態特徵於動漫領域之應用**：
-  近期研究已開始探索多模態特徵在動漫領域的預測潛力。Armenta-Segura & Sidorov (2025, PeerJ) 首次提出使用 Text (劇情簡介，基於 GPT-2) 與 Image (主視覺圖，基於 ResNet-50) 來預測 MAL (MyAnimeList) 上的最終靜態評分 (Score)。
-  *侷限性*：該研究證實了多模態特徵的有效性，但僅侷限於「靜態」圖文特徵，忽略了動漫作品中極為關鍵的動態元素（如：作畫流暢度、配音、配樂）。此外，其預測目標為長期累積的靜態評分，無法滿足產業對於「開播前（冷啟動）首週熱度爆發力」的商業預測需求。
+本研究之開展建立在以下幾個關鍵學術基礎上：
+
+- **2.1 動畫領域之靜態多模態預測**：
+  近期研究開始探索多模態特徵在動漫領域的預測潛力。最為核心的對標文獻為 Armenta-Segura & Sidorov (2025, PeerJ)，該研究使用 Text (GPT-2) 與 Image (ResNet-50) 預測 MAL 的最終靜態評分 (Score)。
+  *侷限性與突破*：該研究證實了圖文特徵的有效性，但忽略了作畫與配樂等動態影音元素。且其預測目標為長期累積靜態評分，無法滿足產業對於「開播前（冷啟動）首週熱度爆發力」的商業預測需求。本研究引入 PV 影片模態並預測首週 Popularity 以填補此一實務空白。
 
 - **動態影像（Video/PV）於影視預測之潛力**：
   在真人電影與短影音領域，SOTA 研究（如 Liu et al., 2023, IEEE TMM）已證實，透過 3D-CNN 或 VideoMAE 萃取預告片 (Trailer/PV) 的動態視覺美學與音軌情感波動，能大幅提升電影首週末票房的預測準確率。
@@ -203,7 +205,7 @@ Popularity 低 │ 不建議合作 │ 利基市場  │
 ### 3. 研究設計與資料集
 
 **3.1 資料集與預處理 (Dataset & Preprocessing)**
-本研究鎖定 2019 年春季至 2026 年的 TV 動畫，結合 Kaggle 的 `calebmwelsh/anilist-anime-dataset` 以獲取靜態播前元資料 (如 `description`, `coverImage`, `trailer_id`, `studios`, 與前作 `popularity`)。為預測動態爆發力，研究將自行開發爬蟲，透過 AniList GraphQL API 獲取開播首週 (Day 7) 的真實 `popularity` 與 `averageScore` 作為目標變數 $Y$。
+本研究鎖定 2019 年春季至 2026 年的 TV 動畫，基於 Kaggle 之開源資料集 `calebmwelsh/anilist-anime-dataset`，獲取靜態的播前元資料 (如 `description`, `coverImage`, `trailer_id`, `studios`, 與前作 `popularity`)。為彌補其缺乏時序資料之限制並預測動態爆發力，本研究將自行開發爬蟲，透過 AniList GraphQL API 獲取開播首週 (Day 7) 的真實 `popularity` 與 `averageScore` 作為目標變數 $Y$。
 針對嚴重的右偏分佈問題，對 Day 7 `popularity` 進行 $\log(Y+1)$ 轉換，確保模型訓練的穩定性。
 
 **3.2 多模態特徵萃取 (Multimodal Feature Extraction)**
@@ -219,6 +221,13 @@ Popularity 低 │ 不建議合作 │ 利基市場  │
 1.  **Baseline (Tabular + Text)**: 輸入控制變數與劇情大綱 (代表業界最基本的「IP/製作陣容 + 故事設定」評估水準)。
 2.  **加入靜態視覺 (+Image)**: Tabular + Text + Image (評估加入靜態主視覺圖後，對觀眾吸引力的增益)。
 3.  **Full Model (+PV)**: Tabular + Text + Image + Video/Audio PV (檢驗動態視聽資訊帶來的最終極限增益)。
+
+**3.4 評估指標 (Evaluation Metrics)**
+針對「開播前熱度 (Popularity)」與「評分 (Score)」雙軌預測的迴歸任務，本研究採用以下指標來評估模型表現與消融實驗的成效：
+*   **MAE (Mean Absolute Error)**：直觀反映預測值與真實值之間的絕對誤差大小，特別適合用來評估 Score（常見於 1~10 或 1~100）的預測準確度。
+*   **RMSE (Root Mean Squared Error)**：對預測偏差較大的極端值（Outliers）更敏感，可檢驗模型是否在少數「出圈爆紅」或「翻車墜海」的極端作品中產生嚴重誤判。
+*   **MAPE (Mean Absolute Percentage Error)**：衡量預測誤差的相對比例。由於 Popularity（觀看/追蹤人數）跨距極大，即使經過 $\log$ 轉換，使用 MAPE 仍有助於衡量模型在不同量級作品上的等效預測能力。
+*   **$R^2$ (決定係數)**：衡量模型所能解釋的變異比例。用於對比 Baseline 與 Full Model，可以清晰量化「加入 PV 或圖片資訊後，對整體預測變異的解釋力提升了多少 %」。
 
 ### 4. 預期成果與挑戰限制
 
@@ -244,6 +253,28 @@ Popularity 低 │ 不建議合作 │ 利基市場  │
 3. `Ablation Study`（消融實驗）
 4. `Anime Pre-release Popularity Prediction`（動漫播出前熱度預測）
 5. `IP Coordination Strategy`（IP 合作策略輔助）
+
+---
+
+## 📚 參考文獻與必讀清單 (Reference Checklist)
+
+### 一、直接相關：動漫評分與人氣預測
+- 🔴 **必讀**: Armenta-Segura, E., & Sidorov, G. (2025). *Anime popularity prediction before huge investments: a multimodal approach using deep learning*. PeerJ Computer Science.
+- 🔴 **必讀**: *Unveiling Anime Preferences: A Data-driven Analysis using MyAnimeList API*.
+- 🔴 **必讀**: Liu et al. (2025). 動漫評分預測相關研究 (arXiv:2501.01422).
+- 🔴 **必讀**: Ryu et al. (2024). 播出前基於 PV 之預測研究 (JIIS).
+
+### 二、PV / Trailer 影像與音訊特徵提取
+- 🟡 **建議**: *Movie Trailer Deep Features* (JAIT V15N6, 2024).
+- 🟡 **建議**: BIIC Lab NTHU. *Trailer + Reactor Expressions* (2024).
+
+### 三、多模態融合架構 (Multimodal Fusion)
+- 🔴 **必讀**: *Bag of Tricks Multimodal AutoML* (arXiv:2412.16243, 2024).
+- 🟡 **建議**: *Cross-modal Transformer, Box Office* (ACM CTNN, 2024).
+
+### 四、串流平台內容人氣預測
+- 🟡 **建議**: *AI-based Popularity Prediction of TV Shows* (IJRASET, 2026).
+- 🟡 **建議**: *Streaming Popularity with NLP* (PMC, 2021).
 
 ---
 
