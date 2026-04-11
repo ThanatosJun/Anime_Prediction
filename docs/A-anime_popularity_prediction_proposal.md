@@ -104,9 +104,9 @@
 
 | 實驗組 | 輸入特徵 | 目的 |
 |---|---|---|
-| **Baseline** | 只用 Tabular（含 IP 歷史） | 代表現有業界做法的上限 |
-| **Multimodal（無 PV）** | Tabular + 文字 + 封面圖 | 測試靜態多模態的貢獻 |
-| **完整模型** | Tabular + 文字 + 封面圖 + PV | 測試動態 PV 特徵的額外貢獻 |
+| **Baseline** | Tabular + 文字（大綱） | 代表現有業界基本的「IP + 故事劇情」評估水準 |
+| **加入靜態主視覺 (+Image)** | Tabular + 文字 + 封面圖 | 測試靜態主視覺圖（視覺設計）帶來的額外貢獻 |
+| **完整模型 (+PV)** | Tabular + 文字 + 封面圖 + PV（影片+音訊） | 測試動態 PV 特徵的極限增益 |
 
 **核心假設**：在已知 IP 熱度的情況下，加入多模態特徵（特別是 PV）能顯著降低預測誤差。
 
@@ -216,15 +216,15 @@ Popularity 低 │ 不建議合作 │ 利基市場  │
 
 **3.3 預測模型與消融實驗設計 (Ablation Study Framework)**
 建立雙軌回歸模型，分別以 MSE (Mean Squared Error) 訓練預測 Day 7 $\log(\text{Popularity})$ 與 Score。為驗證 PV 動態特徵的有效性，實驗分為三組：
-1.  **Baseline**: 僅輸入 Tabular 特徵 (代表現行業內僅看 IP 知名度與製作公司的決策上限)。
-2.  **Multimodal (無 PV)**: Tabular + Text + Image (評估靜態圖文行銷的影響)。
-3.  **Full Model**: Tabular + Text + Image + Video/Audio PV 特徵 (檢驗動態視聽資訊帶來的額外性能增益)。
+1.  **Baseline (Tabular + Text)**: 輸入控制變數與劇情大綱 (代表業界最基本的「IP/製作陣容 + 故事設定」評估水準)。
+2.  **加入靜態視覺 (+Image)**: Tabular + Text + Image (評估加入靜態主視覺圖後，對觀眾吸引力的增益)。
+3.  **Full Model (+PV)**: Tabular + Text + Image + Video/Audio PV (檢驗動態視聽資訊帶來的最終極限增益)。
 
 ### 4. 預期成果與挑戰限制
 
 - **預期成果與實務貢獻 (Expected Outcomes)**：
   1. **提升冷啟動預測之精確度 (Accuracy Improvement)**：透過引入高維度的 PV 動態特徵（Spatio-temporal Features），本研究預期能顯著降低僅依賴 Tabular 與靜態圖文模型的預測誤差 (MAE / RMSE)，實現動漫首播熱度的高精準測。
-  2. **跨模態特徵重要性分析**：藉由消融實驗，能夠向業界量化展示「行銷宣傳 (PV)」與「靜態文本 (劇情與大作 IP)」在驅動初期熱度上的權重差異，為行銷資源分配提供數據支持。
+  2. **消融實驗之量化驗證 (Ablation Study Validation)**：本研究設計了嚴謹的三組消融實驗（Baseline 基礎大綱、+Image 靜態與 +PV 動態），其預期成果能將各模態的貢獻「量化拆解」。不僅能直接證明加入影像特徵的階段性有效性，更能向業界明確展示「動態行銷宣傳 (PV)」與「先天 IP 暨劇情設定 (Tabular+Text)」在驅動初期熱度上的權重差異，為未來的行銷資源分配提供科學化數據支持。
   3. **實務決策框架 (Business Decision Matrix)**：基於 Popularity 與 Score 的雙軌預測結果，產出如同前述之「大眾爆紅 vs. 利基精品」的決策矩陣，直接賦能串流平台的版權採購策略。
 
 - **技術挑戰 (Technical Challenges)**：
@@ -242,9 +242,8 @@ Popularity 低 │ 不建議合作 │ 利基市場  │
 1. `Multimodal Representation Learning`（多模態表徵學習）
 2. `Feature Fusion`（特徵融合）
 3. `Ablation Study`（消融實驗）
-4. `Anime Popularity Prediction`（動漫熱度預測）
-5. `Pre-release Prediction`（播出前預測）
-6. `Log Transformation`（長尾處理）
+4. `Anime Pre-release Popularity Prediction`（動漫播出前熱度預測）
+5. `IP Coordination Strategy`（IP 合作策略輔助）
 
 ---
 
