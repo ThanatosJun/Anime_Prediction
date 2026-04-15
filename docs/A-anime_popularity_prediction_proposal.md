@@ -279,3 +279,5 @@ Popularity 低 │ 不建議合作 │ 利基市場  │
 ---
 
 *最後更新：2026-04-11*
+
+Graph QL: https://anilist.co/graphiql
