@@ -26,16 +26,17 @@ PROCESSED_CSV = PROCESSED_DIR / "anilist_anime_data_processed_v1.csv"
 PROCESSED_META = PROCESSED_DIR / "anilist_anime_data_processed_v1_meta.json"
 OUTLIER_SUMMARY_JSON = EDA_DIR / "outlier_handling_summary.json"
 OUTLIER_SUMMARY_MD = EDA_DIR / "outlier_handling_summary.md"
+RULE_VERSION = "decision_eda_v1"
 
 LOWER_BOUND_COLUMNS = ["episodes", "duration", "averageScore", "meanScore", "popularity", "favourites", "trending"]
 CLIP_COLUMNS = {
     "episodes": (0.01, 0.99),
     "duration": (0.01, 0.99),
-    "averageScore": (0.01, 0.99),
-    "meanScore": (0.01, 0.99),
+    "averageScore": (0.005, 0.995),
+    "meanScore": (0.005, 0.995),
     "popularity": (0.01, 0.99),
     "favourites": (0.01, 0.99),
-    "trending": (0.01, 0.99),
+    "trending": (0.01, 0.95),
 }
 
 
@@ -94,6 +95,7 @@ def _write_summary(summary: dict) -> None:
     lines = [
         "# Outlier Handling Summary",
         "",
+        f"- Rule version: `{summary['rule_version']}`",
         f"- Input file: `{summary['input_file']}`",
         f"- Output rows: `{summary['row_count']}`",
         f"- Output columns: `{summary['column_count']}`",
@@ -134,9 +136,11 @@ def main() -> None:
     df.to_csv(PROCESSED_CSV, index=False)
 
     meta = {
+        "rule_version": RULE_VERSION,
         "input_file": str(input_file.as_posix()),
         "row_count": int(len(df)),
         "column_count": int(len(df.columns)),
+        "clip_config": CLIP_COLUMNS,
         "non_negative": non_negative_stats,
         "percentile_clipping": clipping_stats,
     }

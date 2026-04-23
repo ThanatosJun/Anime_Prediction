@@ -23,6 +23,7 @@ RAW_PICKLE = RAW_DIR / "anilist_anime_data_complete.pkl"
 RAW_CSV = RAW_DIR / "anilist_anime_data_complete.csv"
 
 OUTPUT_BASENAME = "anilist_anime_data_interim"
+RULE_VERSION = "decision_eda_v1"
 
 KEEP_COLUMNS = [
     "id",
@@ -64,6 +65,14 @@ NUMERIC_COLUMNS = [
     "startDate_month",
     "startDate_day",
 ]
+
+MISSING_RULES = {
+    "episodes": {"method": "format_median_then_global_median"},
+    "duration": {"method": "format_median_then_global_median"},
+    "averageScore": {"method": "meanScore_then_global_median"},
+    "seasonYear": {"method": "startDate_year"},
+    "title_english": {"method": "title_romaji"},
+}
 
 
 def load_raw_dataset() -> pd.DataFrame:
@@ -117,6 +126,9 @@ def impute_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     if "seasonYear" in df.columns and "startDate_year" in df.columns:
         df["seasonYear"] = df["seasonYear"].fillna(df["startDate_year"])
 
+    if "title_english" in df.columns and "title_romaji" in df.columns:
+        df["title_english"] = df["title_english"].fillna(df["title_romaji"])
+
     return df
 
 
@@ -150,6 +162,8 @@ def main() -> None:
     interim_df = add_release_date(interim_df)
 
     metadata = {
+        "rule_version": RULE_VERSION,
+        "applied_missing_rules": MISSING_RULES,
         "rows": int(len(interim_df)),
         "columns": int(len(interim_df.columns)),
         "removed_duplicates": int(removed_duplicates),
