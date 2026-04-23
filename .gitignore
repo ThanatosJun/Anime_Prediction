@@ -21,6 +21,8 @@ data/eda/*
 !data/eda/README.md
 !data/eda/*_summary.md
 !data/eda/*_summary.json
+!data/eda/*_diagnostic.md
+!data/eda/*_diagnostic.json
 !data/eda/figures/
 !data/eda/figures/*.png
 !data/eda/figures/*.md
