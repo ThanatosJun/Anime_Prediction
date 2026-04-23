@@ -1,0 +1,35 @@
+{
+  "generated_at_utc": "2026-04-23T07:56:57.313076+00:00",
+  "rows_raw": 20324,
+  "rows_processed": 20324,
+  "coverage": {
+    "description_missing_ratio": 0.05840385750836449,
+    "coverImage_medium_missing_ratio": 0.0,
+    "trailer_id_missing_ratio": 0.6314701830348357,
+    "studios_missing_ratio": 0.0,
+    "genres_missing_ratio": 0.0
+  },
+  "snapshot_control": {
+    "corr_release_year_vs_popularity_raw": 0.1529367822712231,
+    "corr_release_year_vs_popularity_quarter_pct": -0.046774356538458246
+  },
+  "rq1_retrieval_proxy": {
+    "metadata_relation_coverage": {
+      "studios_available_ratio": 1.0,
+      "genres_available_ratio": 1.0
+    },
+    "split_distribution": {
+      "test": 9110,
+      "val": 5440,
+      "train": 4831,
+      "holdout_unknown": 943
+    }
+  },
+  "rq2_multimodal_proxy": {
+    "multimodal_source_coverage": {
+      "text_description_available_ratio": 0.9415961424916355,
+      "image_cover_available_ratio": 1.0,
+      "trailer_id_available_ratio": 0.3685298169651643
+    }
+  }
+}

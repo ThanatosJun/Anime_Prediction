@@ -1,6 +1,6 @@
 # Target Engineering Summary
 
-- Rule version: `decision_eda_v2`
+- Rule version: `decision_eda_v3`
 - Input file: `data/interim/anilist_anime_data_interim_20260423.csv`
 
 ## Popularity Quarter Target
@@ -19,3 +19,12 @@
 - `val` rows: 5440
 - `train` rows: 4831
 - `unknown` rows: 943
+
+## Unknown Split Policy
+
+- Policy: `exclude_unknown_from_model_splits`
+- Excluded unknown rows from model splits: `943`
+- Effective `test` rows: 9110
+- Effective `val` rows: 5440
+- Effective `train` rows: 4831
+- Effective `holdout_unknown` rows: 943

@@ -30,7 +30,8 @@ OUTLIER_SUMMARY_JSON = EDA_DIR / "outlier_handling_summary.json"
 OUTLIER_SUMMARY_MD = EDA_DIR / "outlier_handling_summary.md"
 TARGET_SUMMARY_JSON = EDA_DIR / "target_engineering_summary.json"
 TARGET_SUMMARY_MD = EDA_DIR / "target_engineering_summary.md"
-RULE_VERSION = "decision_eda_v2"
+RULE_VERSION = "decision_eda_v3"
+UNKNOWN_SPLIT_POLICY = "exclude_unknown_from_model_splits"
 
 LOWER_BOUND_COLUMNS = ["episodes", "duration", "averageScore", "meanScore", "popularity", "favourites", "trending"]
 CLIP_COLUMNS = {
@@ -214,6 +215,39 @@ def _apply_pre_release_temporal_split(df: pd.DataFrame) -> dict:
     }
 
 
+def _apply_unknown_split_policy(df: pd.DataFrame) -> dict:
+    df["split_pre_release_effective"] = df["split_pre_release"]
+    if UNKNOWN_SPLIT_POLICY == "exclude_unknown_from_model_splits":
+        df.loc[df["split_pre_release"] == "unknown", "split_pre_release_effective"] = "holdout_unknown"
+    df["is_model_split"] = df["split_pre_release_effective"].isin(["train", "val", "test"])
+
+    effective_counts = (
+        df["split_pre_release_effective"]
+        .value_counts(dropna=False)
+        .rename_axis("split")
+        .reset_index(name="count")
+    )
+    model_split_counts = (
+        df[df["is_model_split"]]["split_pre_release_effective"]
+        .value_counts(dropna=False)
+        .rename_axis("split")
+        .reset_index(name="count")
+    )
+
+    return {
+        "policy": UNKNOWN_SPLIT_POLICY,
+        "excluded_unknown_count": int((df["split_pre_release"] == "unknown").sum()),
+        "effective_split_counts": [
+            {"split": str(row["split"]), "count": int(row["count"])}
+            for _, row in effective_counts.iterrows()
+        ],
+        "model_split_counts": [
+            {"split": str(row["split"]), "count": int(row["count"])}
+            for _, row in model_split_counts.iterrows()
+        ],
+    }
+
+
 def _write_summary(summary: dict) -> None:
     EDA_DIR.mkdir(parents=True, exist_ok=True)
     OUTLIER_SUMMARY_JSON.write_text(
@@ -282,6 +316,13 @@ def _write_target_summary(summary: dict) -> None:
     for item in split.get("split_counts", []):
         lines.append(f"- `{item['split']}` rows: {item['count']}")
 
+    lines.extend(["", "## Unknown Split Policy", ""])
+    policy = summary["unknown_split_policy"]
+    lines.append(f"- Policy: `{policy['policy']}`")
+    lines.append(f"- Excluded unknown rows from model splits: `{policy['excluded_unknown_count']}`")
+    for item in policy.get("effective_split_counts", []):
+        lines.append(f"- Effective `{item['split']}` rows: {item['count']}")
+
     TARGET_SUMMARY_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -294,6 +335,7 @@ def main() -> None:
     _derive_release_quarter(df)
     popularity_quarter_target = _add_popularity_quarter_target(df)
     pre_release_split = _apply_pre_release_temporal_split(df)
+    unknown_split_policy = _apply_unknown_split_policy(df)
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     df.to_csv(PROCESSED_CSV, index=False)
@@ -308,6 +350,7 @@ def main() -> None:
         "percentile_clipping": clipping_stats,
         "popularity_quarter_target": popularity_quarter_target,
         "pre_release_split": pre_release_split,
+        "unknown_split_policy": unknown_split_policy,
     }
     PROCESSED_META.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     _write_summary(meta)

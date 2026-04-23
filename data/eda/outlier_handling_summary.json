@@ -1,8 +1,8 @@
 {
-  "rule_version": "decision_eda_v2",
+  "rule_version": "decision_eda_v3",
   "input_file": "data/interim/anilist_anime_data_interim_20260423.csv",
   "row_count": 20324,
-  "column_count": 31,
+  "column_count": 33,
   "clip_config": {
     "episodes": [
       0.01,
@@ -198,6 +198,42 @@
       {
         "split": "unknown",
         "count": 943
+      }
+    ]
+  },
+  "unknown_split_policy": {
+    "policy": "exclude_unknown_from_model_splits",
+    "excluded_unknown_count": 943,
+    "effective_split_counts": [
+      {
+        "split": "test",
+        "count": 9110
+      },
+      {
+        "split": "val",
+        "count": 5440
+      },
+      {
+        "split": "train",
+        "count": 4831
+      },
+      {
+        "split": "holdout_unknown",
+        "count": 943
+      }
+    ],
+    "model_split_counts": [
+      {
+        "split": "test",
+        "count": 9110
+      },
+      {
+        "split": "val",
+        "count": 5440
+      },
+      {
+        "split": "train",
+        "count": 4831
       }
     ]
   }
