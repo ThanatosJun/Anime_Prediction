@@ -13,12 +13,10 @@ Anime_Prediction/
 │   ├── processed/                                  # 最終建模資料 (可重建，不入版控)
 │   ├── eda/                                        # EDA 摘要輸出 (md/json)
 │   └── archive_local/                              # 本機長期保存區 (不入版控)
-├── docs/                                           # 提案相關文件目錄
-│   ├── A-anime_popularity_prediction_proposal.md   # 🌟 最終定案版：期末研究提案 (主檔)
-│   ├── B-Proposal_Anime_Multimodal_Recommendation.md # 歷史提案 (推薦系統方向草案)
-│   ├── Proposal_Route_C_Anime_Cold_Start_Prediction.md # 提案 C (路線決策脈絡紀錄檔)
-│   ├── Proposal_Route_A_Biometric_Vulnerability.md # 提案 A (生物辨識漏洞相關草案)
-│   └── Proposal_Route_B_Social_Media_Deepfake.md   # 提案 B (社群媒體 Deepfake 相關草案)
+├── docs/                                           # 文件目錄
+│   ├── data_processing_for_paper.md               # 論文處理紀錄 (方法學說明)
+│   ├── data_pipeline_handoff.md                   # 團隊交接指南
+│   └── archive_proposal_versions/                 # 提案階段歷史文件歸檔
 ├── scripts/                                        # 資料流程腳本 (EDA/Cleaning/Outlier)
 │   ├── run_baseline_eda.py
 │   ├── run_decision_eda.py
