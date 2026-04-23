@@ -8,18 +8,81 @@
 ```text
 Anime_Prediction/
 ├── data/
-│   └── raw/                                        # AniList 原始資料集檔案 (csv/xlsx/pkl + 說明)
+│   ├── raw/                                        # AniList 原始資料集檔案 (csv/xlsx/pkl + 說明)
+│   ├── interim/                                    # 清理後中間資料 (可重建，不入版控)
+│   ├── processed/                                  # 最終建模資料 (可重建，不入版控)
+│   └── eda/                                        # EDA 摘要輸出 (md/json)
 ├── docs/                                           # 提案相關文件目錄
 │   ├── A-anime_popularity_prediction_proposal.md   # 🌟 最終定案版：期末研究提案 (主檔)
 │   ├── B-Proposal_Anime_Multimodal_Recommendation.md # 歷史提案 (推薦系統方向草案)
 │   ├── Proposal_Route_C_Anime_Cold_Start_Prediction.md # 提案 C (路線決策脈絡紀錄檔)
 │   ├── Proposal_Route_A_Biometric_Vulnerability.md # 提案 A (生物辨識漏洞相關草案)
 │   └── Proposal_Route_B_Social_Media_Deepfake.md   # 提案 B (社群媒體 Deepfake 相關草案)
+├── scripts/                                        # 資料流程腳本 (EDA/Cleaning/Outlier)
+│   ├── run_baseline_eda.py
+│   ├── build_interim_dataset.py
+│   └── build_processed_dataset.py
 ├── fetch_data.py                                   # AniList GraphQL 抓取與匯出腳本
 ├── .github/                                        # GitHub 相關設定與 Skills
 ├── .gitignore                                      # Git 忽略檔案設定 (排除 agents/skills)
 └── README.md                                       # 專案說明文件 (本檔案)
 ```
+
+## Dataset Processing Workflow
+
+### 1) Baseline EDA
+
+```bash
+python scripts/run_baseline_eda.py
+```
+
+輸出：
+- `data/eda/baseline_eda_summary.json`
+- `data/eda/baseline_eda_summary.md`
+
+### 2) Build Interim Dataset
+
+```bash
+python scripts/build_interim_dataset.py
+```
+
+主要處理：
+- 保留建模核心欄位
+- 型別統一（數值欄位 coercion）
+- 以 `id` 去重
+- 缺值補值（如 `episodes`, `duration`, `averageScore`）
+
+輸出：
+- `data/interim/anilist_anime_data_interim_YYYYMMDD.csv`
+- `data/interim/anilist_anime_data_interim_YYYYMMDD_meta.json`
+
+### 3) Build Processed Dataset (Outlier Handling)
+
+```bash
+python scripts/build_processed_dataset.py
+```
+
+主要處理：
+- 非負值約束（負值裁切為 0）
+- 關鍵數值欄位 percentile clipping (P1-P99)
+
+輸出：
+- `data/processed/anilist_anime_data_processed_v1.csv`
+- `data/processed/anilist_anime_data_processed_v1_meta.json`
+- `data/eda/outlier_handling_summary.json`
+- `data/eda/outlier_handling_summary.md`
+
+## 檔名規範
+
+- Raw：`anilist_anime_data_complete.*`
+- Interim：`anilist_anime_data_interim_YYYYMMDD.*`
+- Processed：`anilist_anime_data_processed_v1.*`
+
+## 版控策略
+
+- `data/raw` 保留原始資料來源。
+- `data/interim`、`data/processed` 大型可重建產物不納入版控。
+- `data/eda` 保留輕量摘要（`*_summary.md`, `*_summary.json`）便於追蹤品質變化。
 
 ## 🎯 最終定案研究任務摘要
 
