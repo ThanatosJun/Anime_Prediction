@@ -1,9 +1,9 @@
 # Outlier Handling Summary
 
 - Rule version: `decision_eda_v3`
-- Input file: `data/interim/anilist_anime_data_interim_20260423.csv`
+- Input file: `data/interim/anilist_anime_data_interim_20260424.csv`
 - Output rows: `20324`
-- Output columns: `33`
+- Output columns: `38`
 
 ## Non-negative Enforcement
 

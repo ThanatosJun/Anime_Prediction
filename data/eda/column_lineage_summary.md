@@ -1,20 +1,25 @@
 # Column Lineage Summary
 
-- Generated at (UTC): `2026-04-23T15:54:38.277650+00:00`
-- Column counts: raw=`61`, interim=`25`, processed=`33`, multimodal_input=`21`
+- Generated at (UTC): `2026-04-23T16:33:08.852329+00:00`
+- Column counts: raw=`61`, interim=`30`, processed=`38`, multimodal_input=`21`
 
 ## Raw -> Interim
 
 - Kept columns: `24`
 - Dropped columns: `37`
-- Added columns: `1`
+- Added columns: `6`
 
 ### Added in Interim
+- `has_sequel`: derived
+- `is_sequel`: derived
+- `prequel_count`: derived
+- `prequel_meanScore_mean`: derived
+- `prequel_popularity_mean`: derived
 - `release_date`: derived in interim (`add_release_date`)
 
 ## Interim -> Processed
 
-- Kept columns: `25`
+- Kept columns: `30`
 - Dropped columns: `0`
 - Added columns: `8`
 
@@ -31,7 +36,7 @@
 ## Processed -> Multimodal Input
 
 - Kept columns: `11`
-- Dropped columns: `22`
+- Dropped columns: `27`
 - Added columns: `10`
 
 ### Added in Multimodal Input
@@ -55,7 +60,7 @@
 ## Raw -> Processed Direct View
 
 - Dropped from raw by final stage: `37`
-- Added by final stage: `9`
+- Added by final stage: `14`
 
 ## Raw -> Interim Drop Reasons
 
@@ -80,7 +85,7 @@
 - `nextAiringEpisode`: post-schedule dynamic field; excluded to avoid temporal inconsistency/leakage risk
 - `rankings`: nested ranking history; may introduce post-release leakage and high variance
 - `recommendations`: nested recommendation graph payload; excluded from baseline tabular preprocessing
-- `relations`: graph-style relation payload; handled in retrieval augmentation stage instead of baseline tabular stage
+- `relations`: graph-style payload dropped as raw nested JSON; key sequel/prequel signals are distilled into structured interim relation features
 - `reviews`: nested text payload with variable quality/length; deferred to dedicated NLP stage
 - `seasonInt`: redundant encoded season field; season + seasonYear retained
 - `siteUrl`: identifier-style URL field; non-semantic for baseline model input

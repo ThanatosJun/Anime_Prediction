@@ -1,8 +1,8 @@
 {
   "rule_version": "decision_eda_v3",
-  "input_file": "data/interim/anilist_anime_data_interim_20260423.csv",
+  "input_file": "data/interim/anilist_anime_data_interim_20260424.csv",
   "row_count": 20324,
-  "column_count": 33,
+  "column_count": 38,
   "clip_config": {
     "episodes": [
       0.01,

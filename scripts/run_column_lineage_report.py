@@ -65,7 +65,7 @@ def _reason_for_raw_drop(column: str) -> str:
         # Deeply nested / high-cardinality structures (moved to later multimodal/retrieval stage)
         "characters": "high-cardinality nested structure; deferred to dedicated retrieval/graph feature stage",
         "staff": "high-cardinality nested structure; deferred to dedicated retrieval/graph feature stage",
-        "relations": "graph-style relation payload; handled in retrieval augmentation stage instead of baseline tabular stage",
+        "relations": "graph-style payload dropped as raw nested JSON; key sequel/prequel signals are distilled into structured interim relation features",
         "recommendations": "nested recommendation graph payload; excluded from baseline tabular preprocessing",
         "reviews": "nested text payload with variable quality/length; deferred to dedicated NLP stage",
         "airingSchedule": "nested schedule nodes; not required for current pre-release baseline target engineering",

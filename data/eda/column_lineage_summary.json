@@ -1,9 +1,9 @@
 {
-  "generated_at_utc": "2026-04-23T15:54:38.277650+00:00",
+  "generated_at_utc": "2026-04-23T16:33:08.852329+00:00",
   "stage_column_counts": {
     "raw": 61,
-    "interim": 25,
-    "processed": 33,
+    "interim": 30,
+    "processed": 38,
     "multimodal_input": 21
   },
   "raw_to_interim": {
@@ -73,6 +73,11 @@
       "volumes"
     ],
     "added": [
+      "has_sequel",
+      "is_sequel",
+      "prequel_count",
+      "prequel_meanScore_mean",
+      "prequel_popularity_mean",
       "release_date"
     ]
   },
@@ -85,10 +90,15 @@
       "favourites",
       "format",
       "genres",
+      "has_sequel",
       "id",
       "isAdult",
+      "is_sequel",
       "meanScore",
       "popularity",
+      "prequel_count",
+      "prequel_meanScore_mean",
+      "prequel_popularity_mean",
       "release_date",
       "season",
       "seasonYear",
@@ -183,9 +193,14 @@
       "volumes"
     ],
     "added": [
+      "has_sequel",
       "is_model_split",
+      "is_sequel",
       "popularity_quarter_bucket",
       "popularity_quarter_pct",
+      "prequel_count",
+      "prequel_meanScore_mean",
+      "prequel_popularity_mean",
       "release_date",
       "release_quarter",
       "release_quarter_key",
@@ -216,7 +231,12 @@
       "favourites",
       "format",
       "genres",
+      "has_sequel",
       "isAdult",
+      "is_sequel",
+      "prequel_count",
+      "prequel_meanScore_mean",
+      "prequel_popularity_mean",
       "release_date",
       "release_quarter_key",
       "season",
@@ -361,7 +381,7 @@
     "nextAiringEpisode": "post-schedule dynamic field; excluded to avoid temporal inconsistency/leakage risk",
     "rankings": "nested ranking history; may introduce post-release leakage and high variance",
     "recommendations": "nested recommendation graph payload; excluded from baseline tabular preprocessing",
-    "relations": "graph-style relation payload; handled in retrieval augmentation stage instead of baseline tabular stage",
+    "relations": "graph-style payload dropped as raw nested JSON; key sequel/prequel signals are distilled into structured interim relation features",
     "reviews": "nested text payload with variable quality/length; deferred to dedicated NLP stage",
     "seasonInt": "redundant encoded season field; season + seasonYear retained",
     "siteUrl": "identifier-style URL field; non-semantic for baseline model input",
