@@ -51,15 +51,17 @@ def _corr_safe(a: pd.Series, b: pd.Series) -> float | None:
     return None if pd.isna(corr) else float(corr)
 
 
-def build_summary(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
-    coverage = {
-        "description_missing_ratio": _missing_ratio(raw_df, "description"),
-        "coverImage_medium_missing_ratio": _missing_ratio(raw_df, "coverImage_medium"),
-        "trailer_id_missing_ratio": _missing_ratio(raw_df, "trailer_id"),
-        "studios_missing_ratio": _missing_ratio(processed_df, "studios"),
-        "genres_missing_ratio": _missing_ratio(processed_df, "genres"),
-    }
+def _safe_available_ratio(series: pd.Series) -> float:
+    return float(series.notna().mean())
 
+
+def _safe_non_empty_json_ratio(series: pd.Series) -> float:
+    cleaned = series.astype(str).str.strip()
+    non_empty = cleaned.notna() & (cleaned != "") & (cleaned != "[]") & (cleaned != "{}") & (cleaned != "nan")
+    return float(non_empty.mean())
+
+
+def _snapshot_control_metrics(processed_df: pd.DataFrame) -> dict:
     snapshot_control = {}
     if "release_year" in processed_df.columns:
         snapshot_control["corr_release_year_vs_popularity_raw"] = _corr_safe(
@@ -70,6 +72,52 @@ def build_summary(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
             processed_df["release_year"], processed_df["popularity_quarter_pct"]
         )
 
+    raw_corr = snapshot_control.get("corr_release_year_vs_popularity_raw")
+    normalized_corr = snapshot_control.get("corr_release_year_vs_popularity_quarter_pct")
+    if raw_corr is not None and normalized_corr is not None:
+        snapshot_control["absolute_corr_reduction"] = abs(raw_corr) - abs(normalized_corr)
+    else:
+        snapshot_control["absolute_corr_reduction"] = None
+    return snapshot_control
+
+
+def _bucket_balance_by_split(processed_df: pd.DataFrame) -> dict:
+    if "split_pre_release_effective" not in processed_df.columns or "popularity_quarter_bucket" not in processed_df.columns:
+        return {}
+    subset = processed_df[processed_df["is_model_split"] == True].copy() if "is_model_split" in processed_df.columns else processed_df
+    table = pd.crosstab(subset["split_pre_release_effective"], subset["popularity_quarter_bucket"], normalize="index")
+    output = {}
+    for split_name, row in table.iterrows():
+        output[str(split_name)] = {str(col): float(val) for col, val in row.to_dict().items()}
+    return output
+
+
+def _multimodal_coverage_by_split(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
+    if "id" not in raw_df.columns or "id" not in processed_df.columns or "split_pre_release_effective" not in processed_df.columns:
+        return {}
+    raw_subset = raw_df[["id", "description", "coverImage_medium", "trailer_id"]].copy()
+    merged = processed_df[["id", "split_pre_release_effective"]].merge(raw_subset, on="id", how="left")
+    result = {}
+    for split_name, group in merged.groupby("split_pre_release_effective", dropna=False):
+        result[str(split_name)] = {
+            "text_description_available_ratio": _safe_available_ratio(group["description"]),
+            "image_cover_available_ratio": _safe_available_ratio(group["coverImage_medium"]),
+            "trailer_id_available_ratio": _safe_available_ratio(group["trailer_id"]),
+        }
+    return result
+
+
+def build_summary(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
+    coverage = {
+        "description_missing_ratio": _missing_ratio(raw_df, "description"),
+        "coverImage_medium_missing_ratio": _missing_ratio(raw_df, "coverImage_medium"),
+        "trailer_id_missing_ratio": _missing_ratio(raw_df, "trailer_id"),
+        "studios_missing_ratio": _missing_ratio(processed_df, "studios"),
+        "genres_missing_ratio": _missing_ratio(processed_df, "genres"),
+    }
+
+    snapshot_control = _snapshot_control_metrics(processed_df)
+
     rq1_proxy = {
         "metadata_relation_coverage": {
             "studios_available_ratio": None
@@ -78,10 +126,17 @@ def build_summary(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
             "genres_available_ratio": None
             if coverage["genres_missing_ratio"] is None
             else 1.0 - coverage["genres_missing_ratio"],
+            "studios_non_empty_ratio": _safe_non_empty_json_ratio(processed_df["studios"])
+            if "studios" in processed_df.columns
+            else None,
+            "genres_non_empty_ratio": _safe_non_empty_json_ratio(processed_df["genres"])
+            if "genres" in processed_df.columns
+            else None,
         },
         "split_distribution": processed_df["split_pre_release_effective"].value_counts(dropna=False).to_dict()
         if "split_pre_release_effective" in processed_df.columns
         else {},
+        "popularity_bucket_balance_by_split": _bucket_balance_by_split(processed_df),
     }
 
     rq2_proxy = {
@@ -95,7 +150,8 @@ def build_summary(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
             "trailer_id_available_ratio": None
             if coverage["trailer_id_missing_ratio"] is None
             else 1.0 - coverage["trailer_id_missing_ratio"],
-        }
+        },
+        "multimodal_coverage_by_split": _multimodal_coverage_by_split(raw_df, processed_df),
     }
 
     return {
@@ -128,20 +184,31 @@ def write_outputs(summary: dict) -> None:
     lines.append(
         f"- Corr(release_year, popularity_quarter_pct): `{sc.get('corr_release_year_vs_popularity_quarter_pct')}`"
     )
+    lines.append(f"- Absolute correlation reduction: `{sc.get('absolute_corr_reduction')}`")
 
     lines.extend(["", "## RQ1 Proxy (Retrieval/Metadata Readiness)", ""])
     rq1 = summary["rq1_retrieval_proxy"]
     md_cov = rq1["metadata_relation_coverage"]
     lines.append(f"- Studios available ratio: `{md_cov.get('studios_available_ratio')}`")
     lines.append(f"- Genres available ratio: `{md_cov.get('genres_available_ratio')}`")
+    lines.append(f"- Studios non-empty ratio: `{md_cov.get('studios_non_empty_ratio')}`")
+    lines.append(f"- Genres non-empty ratio: `{md_cov.get('genres_non_empty_ratio')}`")
     for split_name, count in rq1.get("split_distribution", {}).items():
         lines.append(f"- Split `{split_name}` rows: `{count}`")
+    lines.append("")
+    lines.append("### Popularity Bucket Balance by Split")
+    for split_name, dist in rq1.get("popularity_bucket_balance_by_split", {}).items():
+        lines.append(f"- `{split_name}`: {dist}")
 
     lines.extend(["", "## RQ2 Proxy (Multimodal Readiness)", ""])
     rq2 = summary["rq2_multimodal_proxy"]["multimodal_source_coverage"]
     lines.append(f"- Text description available ratio: `{rq2.get('text_description_available_ratio')}`")
     lines.append(f"- Image cover available ratio: `{rq2.get('image_cover_available_ratio')}`")
     lines.append(f"- Trailer id available ratio: `{rq2.get('trailer_id_available_ratio')}`")
+    lines.append("")
+    lines.append("### Multimodal Coverage by Split")
+    for split_name, stats in summary["rq2_multimodal_proxy"].get("multimodal_coverage_by_split", {}).items():
+        lines.append(f"- `{split_name}`: {stats}")
 
     RQ_SUMMARY_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-04-23T07:56:57.313076+00:00",
+  "generated_at_utc": "2026-04-23T08:05:51.662201+00:00",
   "rows_raw": 20324,
   "rows_processed": 20324,
   "coverage": {
@@ -11,18 +11,41 @@
   },
   "snapshot_control": {
     "corr_release_year_vs_popularity_raw": 0.1529367822712231,
-    "corr_release_year_vs_popularity_quarter_pct": -0.046774356538458246
+    "corr_release_year_vs_popularity_quarter_pct": -0.046774356538458246,
+    "absolute_corr_reduction": 0.10616242573276485
   },
   "rq1_retrieval_proxy": {
     "metadata_relation_coverage": {
       "studios_available_ratio": 1.0,
-      "genres_available_ratio": 1.0
+      "genres_available_ratio": 1.0,
+      "studios_non_empty_ratio": 0.8137669750049203,
+      "genres_non_empty_ratio": 0.8686282227907892
     },
     "split_distribution": {
       "test": 9110,
       "val": 5440,
       "train": 4831,
       "holdout_unknown": 943
+    },
+    "popularity_bucket_balance_by_split": {
+      "test": {
+        "cold_0_25": 0.24785949506037322,
+        "hot_50_75": 0.24939626783754115,
+        "top_75_100": 0.25170142700329307,
+        "warm_25_50": 0.25104281009879253
+      },
+      "train": {
+        "cold_0_25": 0.23369902711653903,
+        "hot_50_75": 0.24259987580211137,
+        "top_75_100": 0.26950941833988823,
+        "warm_25_50": 0.25419167874146137
+      },
+      "val": {
+        "cold_0_25": 0.24669117647058825,
+        "hot_50_75": 0.24926470588235294,
+        "top_75_100": 0.253125,
+        "warm_25_50": 0.2509191176470588
+      }
     }
   },
   "rq2_multimodal_proxy": {
@@ -30,6 +53,28 @@
       "text_description_available_ratio": 0.9415961424916355,
       "image_cover_available_ratio": 1.0,
       "trailer_id_available_ratio": 0.3685298169651643
+    },
+    "multimodal_coverage_by_split": {
+      "holdout_unknown": {
+        "text_description_available_ratio": 0.9066808059384942,
+        "image_cover_available_ratio": 1.0,
+        "trailer_id_available_ratio": 0.2046659597030753
+      },
+      "test": {
+        "text_description_available_ratio": 0.9237102085620198,
+        "image_cover_available_ratio": 1.0,
+        "trailer_id_available_ratio": 0.6647639956092206
+      },
+      "train": {
+        "text_description_available_ratio": 0.9507348375077623,
+        "image_cover_available_ratio": 1.0,
+        "trailer_id_available_ratio": 0.04160629269302422
+      },
+      "val": {
+        "text_description_available_ratio": 0.9694852941176471,
+        "image_cover_available_ratio": 1.0,
+        "trailer_id_available_ratio": 0.19117647058823528
+      }
     }
   }
 }
