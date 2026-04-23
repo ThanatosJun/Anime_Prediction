@@ -21,6 +21,7 @@ Anime_Prediction/
 │   └── Proposal_Route_B_Social_Media_Deepfake.md   # 提案 B (社群媒體 Deepfake 相關草案)
 ├── scripts/                                        # 資料流程腳本 (EDA/Cleaning/Outlier)
 │   ├── run_baseline_eda.py
+│   ├── run_decision_eda.py
 │   ├── build_interim_dataset.py
 │   ├── build_processed_dataset.py
 │   └── generate_raw_manifest.py
@@ -32,6 +33,16 @@ Anime_Prediction/
 
 ## Dataset Processing Workflow
 
+### Quick Rebuild (Team Handoff Friendly)
+
+```bash
+python scripts/generate_raw_manifest.py && ^
+python scripts/run_baseline_eda.py && ^
+python scripts/run_decision_eda.py && ^
+python scripts/build_interim_dataset.py && ^
+python scripts/build_processed_dataset.py
+```
+
 ### 1) Baseline EDA
 
 ```bash
@@ -42,7 +53,17 @@ python scripts/run_baseline_eda.py
 - `data/eda/baseline_eda_summary.json`
 - `data/eda/baseline_eda_summary.md`
 
-### 2) Build Interim Dataset
+### 2) Decision EDA (Rule Recommendation Layer)
+
+```bash
+python scripts/run_decision_eda.py
+```
+
+輸出：
+- `data/eda/decision_eda_summary.json`
+- `data/eda/decision_eda_summary.md`
+
+### 3) Build Interim Dataset
 
 ```bash
 python scripts/build_interim_dataset.py
@@ -58,7 +79,7 @@ python scripts/build_interim_dataset.py
 - `data/interim/anilist_anime_data_interim_YYYYMMDD.csv`
 - `data/interim/anilist_anime_data_interim_YYYYMMDD_meta.json`
 
-### 3) Build Processed Dataset (Outlier Handling)
+### 4) Build Processed Dataset (Outlier Handling)
 
 ```bash
 python scripts/build_processed_dataset.py
@@ -74,7 +95,7 @@ python scripts/build_processed_dataset.py
 - `data/eda/outlier_handling_summary.json`
 - `data/eda/outlier_handling_summary.md`
 
-### 4) Freeze Raw Snapshot Metadata
+### 5) Freeze Raw Snapshot Metadata
 
 ```bash
 python scripts/generate_raw_manifest.py
@@ -95,6 +116,13 @@ python scripts/generate_raw_manifest.py
 - `data/interim`、`data/processed` 大型可重建產物不納入版控。
 - `data/eda` 保留輕量摘要（`*_summary.md`, `*_summary.json`）便於追蹤品質變化。
 - `data/archive_local` 作為本機長期保存與版本紀錄區，不納入版控。
+
+## 規則維護入口（給接手成員）
+
+- 缺值處理與補值規則：`scripts/build_interim_dataset.py`（`MISSING_RULES`）
+- 異常值閾值與 clipping 設定：`scripts/build_processed_dataset.py`（`CLIP_COLUMNS`）
+- 規則建議來源：`scripts/run_decision_eda.py` + `data/eda/decision_eda_summary.*`
+- 規則版本追蹤：`data/interim/*_meta.json`、`data/processed/*_meta.json` 的 `rule_version`
 
 ## 🎯 最終定案研究任務摘要
 
