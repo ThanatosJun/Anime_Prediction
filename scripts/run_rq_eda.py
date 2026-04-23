@@ -97,7 +97,9 @@ def _bucket_balance_by_split(processed_df: pd.DataFrame) -> dict:
 
 
 def _multimodal_coverage_by_split(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
-    if "id" not in raw_df.columns or "id" not in processed_df.columns or "split_pre_release_effective" not in processed_df.columns:
+    required_processed = {"id", "split_pre_release_effective"}
+    required_raw = {"id", "description", "coverImage_medium", "trailer_id"}
+    if not required_processed.issubset(processed_df.columns) or not required_raw.issubset(raw_df.columns):
         return {}
     raw_subset = raw_df[["id", "description", "coverImage_medium", "trailer_id"]].copy()
     merged = processed_df[["id", "split_pre_release_effective"]].merge(raw_subset, on="id", how="left")
@@ -112,8 +114,9 @@ def _multimodal_coverage_by_split(raw_df: pd.DataFrame, processed_df: pd.DataFra
 
 
 def _multimodal_split_frame(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> pd.DataFrame:
-    required_cols = {"id", "split_pre_release_effective"}
-    if not required_cols.issubset(processed_df.columns) or "id" not in raw_df.columns:
+    required_processed = {"id", "split_pre_release_effective"}
+    required_raw = {"id", "description", "coverImage_medium", "bannerImage", "trailer_id"}
+    if not required_processed.issubset(processed_df.columns) or not required_raw.issubset(raw_df.columns):
         return pd.DataFrame()
     raw_subset = raw_df[["id", "description", "coverImage_medium", "bannerImage", "trailer_id"]].copy()
     merged = processed_df[["id", "split_pre_release_effective"]].merge(raw_subset, on="id", how="left")

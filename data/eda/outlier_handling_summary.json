@@ -112,19 +112,23 @@
     "bucket_counts": [
       {
         "bucket": "top_75_100",
-        "count": 5208
+        "count": 4972
       },
       {
         "bucket": "warm_25_50",
-        "count": 5115
+        "count": 4880
       },
       {
         "bucket": "hot_50_75",
-        "count": 5036
+        "count": 4800
       },
       {
         "bucket": "cold_0_25",
-        "count": 4965
+        "count": 4729
+      },
+      {
+        "bucket": "nan",
+        "count": 943
       }
     ],
     "largest_quarter_groups": [

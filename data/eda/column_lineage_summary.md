@@ -1,6 +1,6 @@
 # Column Lineage Summary
 
-- Generated at (UTC): `2026-04-23T16:33:08.852329+00:00`
+- Generated at (UTC): `2026-04-23T19:05:57.193550+00:00`
 - Column counts: raw=`61`, interim=`30`, processed=`38`, multimodal_input=`21`
 
 ## Raw -> Interim

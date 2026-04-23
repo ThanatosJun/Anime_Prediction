@@ -1,6 +1,6 @@
 # Holdout Unknown Diagnostic
 
-- Generated at (UTC): `2026-04-23T16:32:24.298644+00:00`
+- Generated at (UTC): `2026-04-23T19:05:54.843789+00:00`
 - Total rows: `20324`
 - holdout_unknown rows: `943` (4.64%)
 - Policy: `holdout_unknown samples are excluded from model train/val/test.`

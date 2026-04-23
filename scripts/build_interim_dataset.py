@@ -11,7 +11,7 @@ Cleaning scope:
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -235,7 +235,7 @@ def add_release_date(df: pd.DataFrame) -> pd.DataFrame:
 
 def write_outputs(df: pd.DataFrame, metadata: dict) -> tuple[Path, Path]:
     INTERIM_DIR.mkdir(parents=True, exist_ok=True)
-    date_suffix = datetime.now().strftime("%Y%m%d")
+    date_suffix = datetime.now(timezone.utc).strftime("%Y%m%d")
 
     csv_path = INTERIM_DIR / f"{OUTPUT_BASENAME}_{date_suffix}.csv"
     meta_path = INTERIM_DIR / f"{OUTPUT_BASENAME}_{date_suffix}_meta.json"

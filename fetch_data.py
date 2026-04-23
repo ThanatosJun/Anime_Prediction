@@ -648,13 +648,13 @@ def main():
         
     # Save to CSV
     csv_filename = raw_dir / "anilist_anime_data_complete.csv"
-    df.to_csv(csv_filename, index=True)
+    df.to_csv(csv_filename, index=False)
     logger.info(f"Saved {len(df)} anime records to {csv_filename}")
     
     # Save to Excel (optional)
     try:
         excel_filename = raw_dir / "anilist_anime_data_complete.xlsx"
-        df.to_excel(excel_filename, index=True)
+        df.to_excel(excel_filename, index=False)
         logger.info(f"Saved {len(df)} anime records to {excel_filename}")
     except Exception as e:
         logger.error(f"Warning: Could not save to Excel format: {e}")

@@ -57,7 +57,8 @@ def _plot_split_bucket_balance(summary: dict) -> None:
         return
 
     df = pd.DataFrame(balance).T.fillna(0.0)
-    df = df[["cold_0_25", "warm_25_50", "hot_50_75", "top_75_100"]]
+    bucket_cols = ["cold_0_25", "warm_25_50", "hot_50_75", "top_75_100"]
+    df = df.reindex(columns=bucket_cols, fill_value=0.0)
 
     plt.figure(figsize=(8, 5))
     bottoms = pd.Series([0.0] * len(df), index=df.index)
@@ -84,7 +85,7 @@ def _plot_multimodal_coverage(summary: dict) -> None:
         "image_cover_available_ratio",
         "trailer_id_available_ratio",
     ]
-    df = df[cols]
+    df = df.reindex(columns=cols, fill_value=0.0)
 
     ax = df.plot(kind="bar", figsize=(9, 5))
     ax.set_title("Multimodal Source Coverage by Split")

@@ -5,10 +5,11 @@
 
 ## Popularity Quarter Target
 
-- `top_75_100`: 5208
-- `warm_25_50`: 5115
-- `hot_50_75`: 5036
-- `cold_0_25`: 4965
+- `top_75_100`: 4972
+- `warm_25_50`: 4880
+- `hot_50_75`: 4800
+- `cold_0_25`: 4729
+- `nan`: 943
 
 ## Temporal Pre-release Split
 

@@ -133,7 +133,14 @@ def _add_popularity_quarter_target(df: pd.DataFrame) -> dict:
 
     popularity = pd.to_numeric(df["popularity"], errors="coerce")
     quarter_key = df["release_quarter_key"]
-    pct = popularity.groupby(quarter_key, dropna=False).rank(pct=True, ascending=True)
+    pct = pd.Series(pd.NA, index=df.index, dtype="Float64")
+    valid_quarter = quarter_key.notna()
+    pct.loc[valid_quarter] = (
+        popularity.loc[valid_quarter]
+        .groupby(quarter_key.loc[valid_quarter], dropna=False)
+        .rank(pct=True, ascending=True)
+        .astype("Float64")
+    )
     df["popularity_quarter_pct"] = pct
 
     bins = [-0.000001, 0.25, 0.50, 0.75, 1.0]
