@@ -23,6 +23,8 @@ data/eda/*
 !data/eda/*_summary.json
 !data/eda/*_diagnostic.md
 !data/eda/*_diagnostic.json
+!data/eda/*_lineage.md
+!data/eda/*_lineage.json
 !data/eda/figures/
 !data/eda/figures/*.png
 !data/eda/figures/*.md
