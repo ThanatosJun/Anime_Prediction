@@ -222,6 +222,18 @@ The intended downstream modeling design is a fusion setup:
 - Relation/studio/cast and multimodal availability are preserved as research-readiness evidence in EDA and lineage outputs.
 - The popularity bucket fields (`popularity_quarter_pct`, `popularity_quarter_bucket`) are used as auxiliary diagnostics and control features, not as the final statement of target definition.
 
+## 7.3) Adopted Next-phase TODOs (Tracked)
+
+- [completed] relation-based IP legacy features:
+  - add sequel/prequel structure-derived fields in interim contract (`is_sequel`, `has_sequel`, `prequel_count`)
+  - add prequel performance proxy fields (`prequel_popularity_mean`, `prequel_meanScore_mean`)
+- [pending] studio power features:
+  - derive historical studio strength features with temporal-safe windows
+- [pending] multimodal embedding bridge:
+  - add asset download + embedding extraction stage for image/text/video branches
+- [pending] time-varying tag popularity:
+  - build temporal trend signals for genre/tag-level market cycles
+
 ## 8) Minimal Commands to Reproduce
 
 ```bash
