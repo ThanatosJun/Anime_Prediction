@@ -1,0 +1,106 @@
+{
+  "generated_at_utc": "2026-04-23T06:15:53.354812+00:00",
+  "row_count": 20324,
+  "column_count": 61,
+  "id_duplicate_count": 0,
+  "missing_rate_top20": {
+    "volumes": 1.0,
+    "chapters": 1.0,
+    "nextAiringEpisode": 0.9985239126156269,
+    "hashtag": 0.7813914583743358,
+    "bannerImage": 0.6384077937413895,
+    "trailer_id": 0.6314701830348357,
+    "trailer_thumbnail": 0.6314701830348357,
+    "trailer_site": 0.6314701830348357,
+    "title_english": 0.5226825428065341,
+    "seasonYear": 0.3128813225742964,
+    "season": 0.3128813225742964,
+    "seasonInt": 0.30308994292462116,
+    "averageScore": 0.2093583940169258,
+    "source": 0.1141507577248573,
+    "coverImage_color": 0.08615430033457981,
+    "endDate_day": 0.08467821295020665,
+    "startDate_day": 0.06913009250147609,
+    "endDate_month": 0.061798858492422754,
+    "description": 0.05840385750836449,
+    "idMal": 0.04915370989962606
+  },
+  "numeric_summary": {
+    "popularity": {
+      "count": 20324,
+      "mean": 13845.836695532376,
+      "std": 48171.084570540115,
+      "min": 9.0,
+      "q1": 234.0,
+      "median": 1029.0,
+      "q3": 5557.25,
+      "max": 977273.0
+    },
+    "averageScore": {
+      "count": 16069,
+      "mean": 59.97317816914556,
+      "std": 11.214109457309462,
+      "min": 16.0,
+      "q1": 52.0,
+      "median": 61.0,
+      "q3": 68.0,
+      "max": 91.0
+    },
+    "meanScore": {
+      "count": 20324,
+      "mean": 58.991832316473136,
+      "std": 12.579854939188508,
+      "min": 10.0,
+      "q1": 50.0,
+      "median": 61.0,
+      "q3": 68.0,
+      "max": 91.0
+    },
+    "episodes": {
+      "count": 20163,
+      "mean": 12.004810792044834,
+      "std": 38.33639039032758,
+      "min": 1.0,
+      "q1": 1.0,
+      "median": 2.0,
+      "q3": 12.0,
+      "max": 1818.0
+    },
+    "duration": {
+      "count": 20137,
+      "mean": 24.036350995679594,
+      "std": 25.414419119841487,
+      "min": 1.0,
+      "q1": 5.0,
+      "median": 23.0,
+      "q3": 25.0,
+      "max": 168.0
+    }
+  },
+  "outlier_bounds_iqr": {
+    "popularity": {
+      "lower": -7750.875,
+      "upper": 13542.125,
+      "outlier_count": 3361,
+      "outlier_ratio": 0.1653709899626058
+    },
+    "averageScore": {
+      "lower": 28.0,
+      "upper": 92.0,
+      "outlier_count": 24,
+      "outlier_ratio": 0.0014935590266973676
+    },
+    "episodes": {
+      "lower": -15.5,
+      "upper": 28.5,
+      "outlier_count": 1752,
+      "outlier_ratio": 0.08689183157268264
+    },
+    "duration": {
+      "lower": -25.0,
+      "upper": 55.0,
+      "outlier_count": 2048,
+      "outlier_ratio": 0.10170333217460396
+    }
+  }
+}
