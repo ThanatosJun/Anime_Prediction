@@ -6,6 +6,8 @@ skills/
 datasets/
 .idea/
 data/archive_local/
+data/raw/anilist_anime_data_complete.csv
+data/raw/anilist_anime_data_complete.pkl
 
 # Generated dataset artifacts (reproducible)
 data/interim/*
