@@ -7,12 +7,15 @@
 
 ```text
 Anime_Prediction/
+├── data/
+│   └── raw/                                        # AniList 原始資料集檔案 (csv/xlsx/pkl + 說明)
 ├── docs/                                           # 提案相關文件目錄
 │   ├── A-anime_popularity_prediction_proposal.md   # 🌟 最終定案版：期末研究提案 (主檔)
 │   ├── B-Proposal_Anime_Multimodal_Recommendation.md # 歷史提案 (推薦系統方向草案)
 │   ├── Proposal_Route_C_Anime_Cold_Start_Prediction.md # 提案 C (路線決策脈絡紀錄檔)
 │   ├── Proposal_Route_A_Biometric_Vulnerability.md # 提案 A (生物辨識漏洞相關草案)
 │   └── Proposal_Route_B_Social_Media_Deepfake.md   # 提案 B (社群媒體 Deepfake 相關草案)
+├── fetch_data.py                                   # AniList GraphQL 抓取與匯出腳本
 ├── .github/                                        # GitHub 相關設定與 Skills
 ├── .gitignore                                      # Git 忽略檔案設定 (排除 agents/skills)
 └── README.md                                       # 專案說明文件 (本檔案)
