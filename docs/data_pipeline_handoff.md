@@ -49,6 +49,33 @@ python scripts/run_column_lineage_report.py
 - `data/eda/column_lineage_summary.*`
   - Raw->Interim->Processed column keep/drop/add lineage report.
 
+## 2.1) Processed 6-CSV Mapping
+
+- `data/processed/anilist_anime_data_processed_v1.csv`
+  - Role: tabular master dataset (engineering contract for baseline and diagnostics)
+  - Rows/Columns: `20324` / `38`
+  - Usage: tabular modeling, full feature checks, split policy validation
+- `data/processed/anilist_anime_multimodal_input_v1.csv`
+  - Role: multimodal master dataset (text/image/trailer-ready contract)
+  - Rows/Columns: `20324` / `21`
+  - Usage: single entry point for multimodal branch experiments
+- `data/processed/anilist_anime_multimodal_input_train.csv`
+  - Role: physical train split export
+  - Rows/Columns: `13376` / `21`
+  - Usage: direct train loader input without runtime split filtering
+- `data/processed/anilist_anime_multimodal_input_val.csv`
+  - Role: physical validation split export
+  - Rows/Columns: `2918` / `21`
+  - Usage: hyperparameter tuning and early stopping
+- `data/processed/anilist_anime_multimodal_input_test.csv`
+  - Role: physical test split export
+  - Rows/Columns: `3087` / `21`
+  - Usage: final held-out performance reporting
+- `data/processed/anilist_anime_multimodal_input_holdout_unknown.csv`
+  - Role: temporal-unknown holdout export
+  - Rows/Columns: `943` / `21`
+  - Usage: risk diagnosis only; excluded from train/val/test model fitting
+
 ## 3) Where to Change Rules
 
 - Missing-value policy:
