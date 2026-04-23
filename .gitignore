@@ -12,9 +12,11 @@ data/raw/anilist_anime_data_complete.pkl
 # Generated dataset artifacts (reproducible)
 data/interim/*
 !data/interim/.gitkeep
+!data/interim/*.csv
 
 data/processed/*
 !data/processed/.gitkeep
+!data/processed/*.csv
 
 data/eda/*
 !data/eda/.gitkeep

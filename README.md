@@ -16,6 +16,9 @@ Anime_Prediction/
 ├── docs/                                           # 文件目錄
 │   ├── data_processing_for_paper.md               # 論文處理紀錄 (方法學說明)
 │   ├── data_pipeline_handoff.md                   # 團隊交接指南
+│   ├── handoff_text_model.md                      # 文字分支組員交接文件
+│   ├── handoff_image_model.md                     # 圖片分支組員交接文件
+│   ├── handoff_fusion_model.md                    # Fusion 組員交接文件
 │   └── archive_proposal_versions/                 # 提案階段歷史文件歸檔
 ├── scripts/                                        # 資料流程腳本 (EDA/Cleaning/Outlier)
 │   ├── run_baseline_eda.py
@@ -178,9 +181,15 @@ python scripts/run_column_lineage_report.py
 ## 版控策略
 
 - `data/raw` 保留原始資料來源。
-- `data/interim`、`data/processed` 大型可重建產物不納入版控。
+- `data/interim`、`data/processed` 的 CSV 納入版控，作為團隊交接與結果對齊依據。
 - `data/eda` 保留輕量摘要（`*_summary.md`, `*_summary.json`）便於追蹤品質變化。
 - `data/archive_local` 作為本機長期保存與版本紀錄區，不納入版控。
+
+## 模型分工交接文件
+
+- 文字處理組：`docs/handoff_text_model.md`
+- 圖片處理組：`docs/handoff_image_model.md`
+- Fusion Model 組：`docs/handoff_fusion_model.md`
 
 ## 規則維護入口（給接手成員）
 
