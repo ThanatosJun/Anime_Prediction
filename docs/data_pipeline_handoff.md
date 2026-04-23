@@ -49,6 +49,7 @@ python scripts/run_rq_eda_plots.py
 - Popularity target + temporal split policy:
   - `scripts/build_processed_dataset.py`
   - Update `_add_popularity_quarter_target()` and `_apply_pre_release_temporal_split()`.
+  - Temporal split strategy is chronological + cumulative row ratio (70/15/15 target).
 - Recommendation logic:
   - `scripts/run_decision_eda.py`
   - Update `_missing_strategy()` and `_outlier_strategy()`.

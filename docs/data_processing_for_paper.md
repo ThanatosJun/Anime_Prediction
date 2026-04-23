@@ -107,11 +107,11 @@ It focuses on reproducibility, rationale, and modeling impact.
 ## 5) Pre-release Temporal Split Protocol
 
 - Build quarter index: `quarter_index = release_year * 10 + release_quarter`.
-- Sort unique quarters chronologically.
-- Assign quarter buckets by ratio:
-  - train: 70%
-  - val: 15%
-  - test: 15%
+- Sort quarter groups chronologically.
+- Assign split cut points by **cumulative row count** (not quarter count):
+  - train target: 70%
+  - val target: 15%
+  - test target: 15%
 - Map each sample to `split_pre_release` via its quarter index.
 - Missing quarter info is labeled as `unknown`.
 - Apply unknown policy:
