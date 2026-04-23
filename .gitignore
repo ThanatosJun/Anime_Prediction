@@ -5,6 +5,7 @@ agents/
 skills/
 datasets/
 .idea/
+data/archive_local/
 
 # Generated dataset artifacts (reproducible)
 data/interim/*

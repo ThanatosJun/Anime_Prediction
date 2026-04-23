@@ -19,7 +19,6 @@ EDA_DIR = Path("data/eda")
 
 RAW_PICKLE = RAW_DIR / "anilist_anime_data_complete.pkl"
 RAW_CSV = RAW_DIR / "anilist_anime_data_complete.csv"
-RAW_XLSX = RAW_DIR / "anilist_anime_data_complete.xlsx"
 
 SUMMARY_JSON = EDA_DIR / "baseline_eda_summary.json"
 SUMMARY_MD = EDA_DIR / "baseline_eda_summary.md"
@@ -32,9 +31,7 @@ def _load_raw_dataset() -> pd.DataFrame:
         return pd.read_pickle(RAW_PICKLE)
     if RAW_CSV.exists():
         return pd.read_csv(RAW_CSV)
-    if RAW_XLSX.exists():
-        return pd.read_excel(RAW_XLSX, sheet_name="Sheet1")
-    raise FileNotFoundError("No supported raw dataset found in data/raw.")
+    raise FileNotFoundError("No supported raw dataset found in data/raw (expected PKL or CSV).")
 
 
 def _to_builtin(value):

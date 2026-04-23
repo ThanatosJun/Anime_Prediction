@@ -8,10 +8,11 @@
 ```text
 Anime_Prediction/
 ├── data/
-│   ├── raw/                                        # AniList 原始資料集檔案 (csv/xlsx/pkl + 說明)
+│   ├── raw/                                        # AniList 原始資料集檔案 (csv/pkl + manifest)
 │   ├── interim/                                    # 清理後中間資料 (可重建，不入版控)
 │   ├── processed/                                  # 最終建模資料 (可重建，不入版控)
-│   └── eda/                                        # EDA 摘要輸出 (md/json)
+│   ├── eda/                                        # EDA 摘要輸出 (md/json)
+│   └── archive_local/                              # 本機長期保存區 (不入版控)
 ├── docs/                                           # 提案相關文件目錄
 │   ├── A-anime_popularity_prediction_proposal.md   # 🌟 最終定案版：期末研究提案 (主檔)
 │   ├── B-Proposal_Anime_Multimodal_Recommendation.md # 歷史提案 (推薦系統方向草案)
@@ -21,7 +22,8 @@ Anime_Prediction/
 ├── scripts/                                        # 資料流程腳本 (EDA/Cleaning/Outlier)
 │   ├── run_baseline_eda.py
 │   ├── build_interim_dataset.py
-│   └── build_processed_dataset.py
+│   ├── build_processed_dataset.py
+│   └── generate_raw_manifest.py
 ├── fetch_data.py                                   # AniList GraphQL 抓取與匯出腳本
 ├── .github/                                        # GitHub 相關設定與 Skills
 ├── .gitignore                                      # Git 忽略檔案設定 (排除 agents/skills)
@@ -72,9 +74,18 @@ python scripts/build_processed_dataset.py
 - `data/eda/outlier_handling_summary.json`
 - `data/eda/outlier_handling_summary.md`
 
-## 檔名規範
+### 4) Freeze Raw Snapshot Metadata
 
-- Raw：`anilist_anime_data_complete.*`
+```bash
+python scripts/generate_raw_manifest.py
+```
+
+輸出：
+- `data/raw/raw_manifest.json`
+
+## 檔名規範與格式政策
+
+- Raw（canonical）：`anilist_anime_data_complete.pkl` + `anilist_anime_data_complete.csv`
 - Interim：`anilist_anime_data_interim_YYYYMMDD.*`
 - Processed：`anilist_anime_data_processed_v1.*`
 
@@ -83,6 +94,7 @@ python scripts/build_processed_dataset.py
 - `data/raw` 保留原始資料來源。
 - `data/interim`、`data/processed` 大型可重建產物不納入版控。
 - `data/eda` 保留輕量摘要（`*_summary.md`, `*_summary.json`）便於追蹤品質變化。
+- `data/archive_local` 作為本機長期保存與版本紀錄區，不納入版控。
 
 ## 🎯 最終定案研究任務摘要
 

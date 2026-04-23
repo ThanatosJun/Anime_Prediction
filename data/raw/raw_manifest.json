@@ -1,0 +1,17 @@
+{
+  "snapshot_name": "anilist_raw_frozen_v1",
+  "generated_at_utc": "2026-04-23T07:02:13.230876+00:00",
+  "file_count": 2,
+  "files": [
+    {
+      "path": "data/raw/anilist_anime_data_complete.pkl",
+      "size_bytes": 404050602,
+      "sha256": "f5d7a6b53814310055798dec623a3281aa6c8bfdde87254d7452be330f573967"
+    },
+    {
+      "path": "data/raw/anilist_anime_data_complete.csv",
+      "size_bytes": 433843349,
+      "sha256": "0767917a442407f09e22d77803873a7455188b8b4fd199683c1b774f9215fe8f"
+    }
+  ]
+}

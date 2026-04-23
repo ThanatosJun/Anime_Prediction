@@ -21,7 +21,6 @@ INTERIM_DIR = Path("data/interim")
 
 RAW_PICKLE = RAW_DIR / "anilist_anime_data_complete.pkl"
 RAW_CSV = RAW_DIR / "anilist_anime_data_complete.csv"
-RAW_XLSX = RAW_DIR / "anilist_anime_data_complete.xlsx"
 
 OUTPUT_BASENAME = "anilist_anime_data_interim"
 
@@ -72,9 +71,7 @@ def load_raw_dataset() -> pd.DataFrame:
         return pd.read_pickle(RAW_PICKLE)
     if RAW_CSV.exists():
         return pd.read_csv(RAW_CSV)
-    if RAW_XLSX.exists():
-        return pd.read_excel(RAW_XLSX, sheet_name="Sheet1")
-    raise FileNotFoundError("No supported raw dataset found in data/raw.")
+    raise FileNotFoundError("No supported raw dataset found in data/raw (expected PKL or CSV).")
 
 
 def select_columns(df: pd.DataFrame) -> pd.DataFrame:
