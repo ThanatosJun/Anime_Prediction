@@ -76,6 +76,18 @@ python scripts/run_column_lineage_report.py
   - Rows/Columns: `943` / `21`
   - Usage: risk diagnosis only; excluded from train/val/test model fitting
 
+## 2.2) Why `val` and `test` counts are different
+
+- Split policy is **chronological + quarter-block assignment** (`chronological_cumulative_rows`).
+- The pipeline does **not** split a single quarter across different splits.
+- Because quarter sizes are unequal, exact `15% / 15%` equality is not guaranteed.
+- Current known-time rows: `19381` (`20324 - 943 holdout_unknown`).
+- Current realized ratios on known-time rows:
+  - train: `13376 / 19381` = `69.0%`
+  - val: `2918 / 19381` = `15.1%`
+  - test: `3087 / 19381` = `15.9%`
+- This behavior is expected and preferable for temporal integrity (prevents quarter leakage).
+
 ## 3) Where to Change Rules
 
 - Missing-value policy:
