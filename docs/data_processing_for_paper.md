@@ -1,7 +1,39 @@
 # Data Processing Record for Paper Writing
 
-This document records the data processing decisions in a paper-ready format.
-It focuses on reproducibility, rationale, and modeling impact.
+This document records the data processing and research-scope decisions in a paper-ready format.
+It focuses on reproducibility, rationale, modeling impact, and project scope alignment.
+
+## 0) Core Objective and Scope Definition
+
+- **Primary objective:** predict post-release outcomes (popularity and score) using **pre-release** multimodal signals, including image, text description, and metadata.
+- **Pre-release definition:** the stage before a title is officially broadcast/released/sold.
+- **Current project phase:** data pipeline and evidence layer construction (not final model training report yet).
+
+## 0.1) Domain Evaluation and Final Domain Selection
+
+The team evaluated multiple candidate domains and selected **Anime** as the main domain.
+
+- **A. Anime (selected)**
+  - Main dataset used in this repository: AniList (`20,324` rows snapshot).
+  - Primary targets: popularity and mean score.
+  - Core risk identified: snapshot bias caused by cumulative popularity over time.
+- **B. Airbnb pricing (not selected)**
+  - Short-term prices are highly event/date-driven.
+  - Static snapshot features are insufficient for reliable pre-event fluctuation modeling.
+- **C. Other explored domains (not selected)**
+  - Movie/Game: download/adoption labels are difficult to collect consistently, and/or still contain snapshot-style drift.
+  - YouTube: standardized public metrics provide limited room for meaningful new predictive signal design.
+
+## 0.2) Planned Modeling Architecture (Research Design Layer)
+
+The intended downstream modeling design is a fusion setup:
+
+- **Image branch:** Swin Transformer (or ResNet-50 baseline) for cover/visual features.
+- **Text branch:** Transformer-based encoder (e.g., GPT-2 family style embedding pipeline) for synopsis/description semantics.
+- **Metadata branch:** structured features such as genres, episodes, studio, relation context, and cast-related signals.
+- **Retrieval augmentation (RQ1-related):** use relation/company/sequel links as retrieval context to support prediction.
+
+> Note: this document tracks what is already implemented in the pipeline and what is defined as the next experiment layer. The architecture above is a research design target, while the current repository mainly completes data and evidence readiness.
 
 ## 1) Dataset Scope and Snapshot Control
 
@@ -156,6 +188,21 @@ It focuses on reproducibility, rationale, and modeling impact.
 - For the paper, report both:
   - raw metric behavior (before normalization)
   - quarter-normalized behavior (after target engineering)
+
+## 7.1) Explicit RQ Mapping and Evaluation Plan
+
+- **RQ1:** whether retrieval-based augmentation improves classification accuracy and reduces regression error.
+- **RQ2:** whether transformer-based image semantics provide measurable gain beyond simple tag-style features.
+- **Interpretability plan:**
+  - use SHAP for metadata contribution analysis,
+  - use ablation study (`tabular+text`, `+image`, `+retrieval`) for incremental gain verification.
+
+## 7.2) Scope Boundary and Response to Prior Concerns
+
+- The current stage performs **pre-release** prediction preparation only; it does not include real-time post-release social diffusion signals.
+- Snapshot control is handled by quarter-relative popularity target engineering and chronological split protocol.
+- Relation/studio/cast and multimodal availability are preserved as research-readiness evidence in EDA and lineage outputs.
+- Multimodal model input export is treated as the next concrete deliverable after the baseline tabular contract.
 
 ## 8) Minimal Commands to Reproduce
 
