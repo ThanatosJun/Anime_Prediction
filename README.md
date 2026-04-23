@@ -129,6 +129,11 @@ python scripts/generate_raw_manifest.py
 - 規則建議來源：`scripts/run_decision_eda.py` + `data/eda/decision_eda_summary.*`
 - 規則版本追蹤：`data/interim/*_meta.json`、`data/processed/*_meta.json` 的 `rule_version`
 
+## 論文寫作處理紀錄
+
+- 請直接使用 `docs/data_processing_for_paper.md`。
+- 內容包含：處理階段目的、規則定義、參數、target engineering 公式、時序切分協議、可重現證據與限制說明。
+
 ## 🎯 最終定案研究任務摘要
 
 在動畫正式釋出第一集前 (冷啟動狀態下)，模型僅能取得**開播前的多模態資訊**與**表格元資料**。本研究旨在建立雙軌模型，分別預測開播後第 7 天的 **人氣熱度 (Popularity)** 與 **評價分數 (Score)**，藉此量化分析不同模態 (特別是 PV 影片) 對觀眾預期心理的影響力，並協助串流平台進行版權採購評估與行銷預算分配。
