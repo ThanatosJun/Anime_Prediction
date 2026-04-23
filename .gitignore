@@ -4,6 +4,7 @@
 agents/
 skills/
 datasets/
+.idea/
 
 # Generated dataset artifacts (reproducible)
 data/interim/*
