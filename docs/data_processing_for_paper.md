@@ -50,8 +50,11 @@ It focuses on reproducibility, rationale, and modeling impact.
 - **Outputs:** `data/eda/rq_eda_summary.json/.md`.
 - **Current evidence tracked:**
   - snapshot mitigation proxy (`corr(release_year, popularity_raw)` vs `corr(release_year, popularity_quarter_pct)`)
+  - absolute correlation reduction after quarter normalization
   - RQ1 proxy readiness (metadata/relation coverage + effective split distribution)
+  - popularity class balance by model split
   - RQ2 proxy readiness (text/image/trailer source coverage)
+  - multimodal source coverage by split (train/val/test/holdout_unknown)
 
 ## 3) Explicit Rules Used in Current Version
 

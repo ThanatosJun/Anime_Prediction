@@ -31,6 +31,7 @@ python scripts/run_rq_eda.py
   - Quarter-normalized popularity label distribution and pre-release temporal split summary.
 - `data/eda/rq_eda_summary.*`
   - RQ-aligned readiness signals and snapshot-control evidence.
+  - Also includes class balance by split and split-wise multimodal coverage.
 
 ## 3) Where to Change Rules
 
