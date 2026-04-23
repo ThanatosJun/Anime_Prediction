@@ -64,6 +64,14 @@ It focuses on reproducibility, rationale, and modeling impact.
   - popularity bucket balance by split
   - multimodal coverage by split
 
+### Stage G: Holdout Unknown Diagnostic (`scripts/run_holdout_unknown_diagnostic.py`)
+- **Purpose:** quantify the risk profile of excluded temporal-unknown samples.
+- **Outputs:** `data/eda/holdout_unknown_diagnostic.json/.md`.
+- **Current evidence tracked:**
+  - holdout size and ratio in the full dataset
+  - temporal field missing profile
+  - distribution gaps vs model-split population for key targets/features
+
 ## 3) Explicit Rules Used in Current Version
 
 ### 3.1 Missing-value rules (interim)

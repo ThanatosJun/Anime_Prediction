@@ -14,6 +14,7 @@ python scripts/build_interim_dataset.py
 python scripts/build_processed_dataset.py
 python scripts/run_rq_eda.py
 python scripts/run_rq_eda_plots.py
+python scripts/run_holdout_unknown_diagnostic.py
 ```
 
 ## 2) What Each Output Means
@@ -37,6 +38,8 @@ python scripts/run_rq_eda_plots.py
   - Paper-ready figures for snapshot control, split balance, and multimodal coverage.
 - `data/eda/figures/rq_figure_notes.md`
   - Figure-level interpretation notes for writing.
+- `data/eda/holdout_unknown_diagnostic.*`
+  - Holdout unknown composition and distribution-gap diagnostics.
 
 ## 3) Where to Change Rules
 
@@ -56,6 +59,9 @@ python scripts/run_rq_eda_plots.py
 - RQ-oriented evidence layer:
   - `scripts/run_rq_eda.py`
   - Update snapshot/retrieval/multimodal proxy metrics.
+- Holdout risk diagnostic:
+  - `scripts/run_holdout_unknown_diagnostic.py`
+  - Update temporal-missing and distribution-gap checks.
 
 ## 4) Common Update Scenarios
 
@@ -90,5 +96,6 @@ python scripts/run_rq_eda_plots.py
 - Processed metadata includes `unknown_split_policy`.
 - RQ summary exists (`rq_eda_summary.json/.md`).
 - RQ figure files and figure notes exist under `data/eda/figures/`.
+- Holdout diagnostic outputs exist (`holdout_unknown_diagnostic.json/.md`).
 - Pipeline runs without manual edits from a clean shell session.
 
