@@ -15,6 +15,7 @@ python scripts/build_processed_dataset.py
 python scripts/run_rq_eda.py
 python scripts/run_rq_eda_plots.py
 python scripts/run_holdout_unknown_diagnostic.py
+python scripts/run_column_lineage_report.py
 ```
 
 ## 2) What Each Output Means
@@ -40,6 +41,8 @@ python scripts/run_holdout_unknown_diagnostic.py
   - Figure-level interpretation notes for writing.
 - `data/eda/holdout_unknown_diagnostic.*`
   - Holdout unknown composition and distribution-gap diagnostics.
+- `data/eda/column_lineage_summary.*`
+  - Raw->Interim->Processed column keep/drop/add lineage report.
 
 ## 3) Where to Change Rules
 
@@ -62,6 +65,9 @@ python scripts/run_holdout_unknown_diagnostic.py
 - Holdout risk diagnostic:
   - `scripts/run_holdout_unknown_diagnostic.py`
   - Update temporal-missing and distribution-gap checks.
+- Column lineage report:
+  - `scripts/run_column_lineage_report.py`
+  - Update stage-wise keep/drop/add interpretation for paper traceability.
 
 ## 4) Common Update Scenarios
 
@@ -97,5 +103,6 @@ python scripts/run_holdout_unknown_diagnostic.py
 - RQ summary exists (`rq_eda_summary.json/.md`).
 - RQ figure files and figure notes exist under `data/eda/figures/`.
 - Holdout diagnostic outputs exist (`holdout_unknown_diagnostic.json/.md`).
+- Column lineage outputs exist (`column_lineage_summary.json/.md`).
 - Pipeline runs without manual edits from a clean shell session.
 

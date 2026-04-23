@@ -43,7 +43,8 @@ python scripts/build_interim_dataset.py && ^
 python scripts/build_processed_dataset.py && ^
 python scripts/run_rq_eda.py && ^
 python scripts/run_rq_eda_plots.py && ^
-python scripts/run_holdout_unknown_diagnostic.py
+python scripts/run_holdout_unknown_diagnostic.py && ^
+python scripts/run_column_lineage_report.py
 ```
 
 ### 1) Baseline EDA
@@ -143,6 +144,16 @@ python scripts/run_holdout_unknown_diagnostic.py
 - `data/eda/holdout_unknown_diagnostic.json`
 - `data/eda/holdout_unknown_diagnostic.md`
 
+### 9) Column Lineage Report
+
+```bash
+python scripts/run_column_lineage_report.py
+```
+
+輸出：
+- `data/eda/column_lineage_summary.json`
+- `data/eda/column_lineage_summary.md`
+
 ## 檔名規範與格式政策
 
 - Raw（canonical）：`anilist_anime_data_complete.pkl` + `anilist_anime_data_complete.csv`
@@ -165,6 +176,7 @@ python scripts/run_holdout_unknown_diagnostic.py
 - RQ 導向可行性與 snapshot 緩解證據：`scripts/run_rq_eda.py` + `data/eda/rq_eda_summary.*`
 - 論文圖表輸出：`scripts/run_rq_eda_plots.py` + `data/eda/figures/*`
 - holdout 風險診斷：`scripts/run_holdout_unknown_diagnostic.py` + `data/eda/holdout_unknown_diagnostic.*`
+- 欄位血緣對照：`scripts/run_column_lineage_report.py` + `data/eda/column_lineage_summary.*`
 - 規則版本追蹤：`data/interim/*_meta.json`、`data/processed/*_meta.json` 的 `rule_version`
 
 ## 論文寫作處理紀錄

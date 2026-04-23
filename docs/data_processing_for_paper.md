@@ -72,6 +72,14 @@ It focuses on reproducibility, rationale, and modeling impact.
   - temporal field missing profile
   - distribution gaps vs model-split population for key targets/features
 
+### Stage H: Column Lineage Report (`scripts/run_column_lineage_report.py`)
+- **Purpose:** provide explicit raw->interim->processed column-level transformation evidence.
+- **Outputs:** `data/eda/column_lineage_summary.json/.md`.
+- **Current evidence tracked:**
+  - stage-wise column counts
+  - keep/drop/add sets across each stage
+  - derived-column origin mapping to transformation functions
+
 ## 3) Explicit Rules Used in Current Version
 
 ### 3.1 Missing-value rules (interim)
@@ -137,6 +145,8 @@ It focuses on reproducibility, rationale, and modeling impact.
   - `data/eda/target_engineering_summary.*`
   - `data/eda/outlier_handling_summary.*`
   - `data/eda/rq_eda_summary.*`
+  - `data/eda/holdout_unknown_diagnostic.*`
+  - `data/eda/column_lineage_summary.*`
 
 ## 7) Current Limitations and Paper Notes
 
@@ -155,4 +165,8 @@ python scripts/run_baseline_eda.py
 python scripts/run_decision_eda.py
 python scripts/build_interim_dataset.py
 python scripts/build_processed_dataset.py
+python scripts/run_rq_eda.py
+python scripts/run_rq_eda_plots.py
+python scripts/run_holdout_unknown_diagnostic.py
+python scripts/run_column_lineage_report.py
 ```
