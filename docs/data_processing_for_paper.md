@@ -121,12 +121,13 @@ The intended downstream modeling design is a fusion setup:
   - distribution gaps vs model-split population for key targets/features
 
 ### Stage I: Column Lineage Report (`scripts/run_column_lineage_report.py`)
-- **Purpose:** provide explicit raw->interim->processed column-level transformation evidence.
+- **Purpose:** provide explicit raw->interim->processed->multimodal column-level transformation evidence.
 - **Outputs:** `data/eda/column_lineage_summary.json/.md`.
 - **Current evidence tracked:**
   - stage-wise column counts
   - keep/drop/add sets across each stage
   - derived-column origin mapping to transformation functions
+  - multimodal reintroduced fields and availability-flag derivation reasons
 
 ## 3) Explicit Rules Used in Current Version
 

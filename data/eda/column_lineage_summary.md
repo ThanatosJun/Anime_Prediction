@@ -1,7 +1,7 @@
 # Column Lineage Summary
 
-- Generated at (UTC): `2026-04-23T08:57:29.382461+00:00`
-- Column counts: raw=`61`, interim=`25`, processed=`33`
+- Generated at (UTC): `2026-04-23T15:54:38.277650+00:00`
+- Column counts: raw=`61`, interim=`25`, processed=`33`, multimodal_input=`21`
 
 ## Raw -> Interim
 
@@ -27,6 +27,30 @@
 - `release_year`: derived in processed (`_derive_release_quarter`)
 - `split_pre_release`: derived in processed (`_apply_pre_release_temporal_split`)
 - `split_pre_release_effective`: derived in processed (`_apply_unknown_split_policy`)
+
+## Processed -> Multimodal Input
+
+- Kept columns: `11`
+- Dropped columns: `22`
+- Added columns: `10`
+
+### Added in Multimodal Input
+- `bannerImage`: reintroduced from raw as optional image modality for multimodal training
+- `coverImage_medium`: reintroduced from raw for image encoder input in multimodal training
+- `description`: reintroduced from raw for text encoder input in multimodal training
+- `has_banner_image`: derived in multimodal export (`_with_availability_flags`)
+- `has_cover_image`: derived in multimodal export (`_with_availability_flags`)
+- `has_text_description`: derived in multimodal export (`_with_availability_flags`)
+- `has_trailer`: derived in multimodal export (`_with_availability_flags`)
+- `trailer_id`: reintroduced from raw as trailer source key for optional video branch
+- `trailer_site`: reintroduced from raw as trailer platform metadata
+- `trailer_thumbnail`: reintroduced from raw as trailer preview image field
+
+## Raw -> Multimodal Direct View
+
+- Kept from raw in multimodal stage: `11`
+- Dropped from raw in multimodal stage: `50`
+- Added by multimodal stage: `10`
 
 ## Raw -> Processed Direct View
 

@@ -1,9 +1,10 @@
 {
-  "generated_at_utc": "2026-04-23T08:57:29.382461+00:00",
+  "generated_at_utc": "2026-04-23T15:54:38.277650+00:00",
   "stage_column_counts": {
     "raw": 61,
     "interim": 25,
-    "processed": 33
+    "processed": 33,
+    "multimodal_input": 21
   },
   "raw_to_interim": {
     "kept": [
@@ -193,6 +194,136 @@
       "split_pre_release_effective"
     ]
   },
+  "processed_to_multimodal": {
+    "kept": [
+      "id",
+      "is_model_split",
+      "meanScore",
+      "popularity",
+      "popularity_quarter_bucket",
+      "popularity_quarter_pct",
+      "release_quarter",
+      "release_year",
+      "split_pre_release_effective",
+      "title_english",
+      "title_romaji"
+    ],
+    "dropped": [
+      "averageScore",
+      "countryOfOrigin",
+      "duration",
+      "episodes",
+      "favourites",
+      "format",
+      "genres",
+      "isAdult",
+      "release_date",
+      "release_quarter_key",
+      "season",
+      "seasonYear",
+      "source",
+      "split_pre_release",
+      "startDate_day",
+      "startDate_month",
+      "startDate_year",
+      "status",
+      "studios",
+      "title_native",
+      "trending",
+      "type"
+    ],
+    "added": [
+      "bannerImage",
+      "coverImage_medium",
+      "description",
+      "has_banner_image",
+      "has_cover_image",
+      "has_text_description",
+      "has_trailer",
+      "trailer_id",
+      "trailer_site",
+      "trailer_thumbnail"
+    ]
+  },
+  "raw_to_multimodal": {
+    "kept": [
+      "bannerImage",
+      "coverImage_medium",
+      "description",
+      "id",
+      "meanScore",
+      "popularity",
+      "title_english",
+      "title_romaji",
+      "trailer_id",
+      "trailer_site",
+      "trailer_thumbnail"
+    ],
+    "dropped": [
+      "airingSchedule",
+      "averageScore",
+      "chapters",
+      "characters",
+      "countryOfOrigin",
+      "coverImage_color",
+      "coverImage_extraLarge",
+      "coverImage_large",
+      "duration",
+      "endDate_day",
+      "endDate_month",
+      "endDate_year",
+      "episodes",
+      "externalLinks",
+      "favourites",
+      "format",
+      "genres",
+      "hashtag",
+      "idMal",
+      "isAdult",
+      "isFavourite",
+      "isLicensed",
+      "isLocked",
+      "nextAiringEpisode",
+      "rankings",
+      "recommendations",
+      "relations",
+      "reviews",
+      "season",
+      "seasonInt",
+      "seasonYear",
+      "siteUrl",
+      "source",
+      "staff",
+      "startDate_day",
+      "startDate_month",
+      "startDate_year",
+      "stats_scoreDistribution",
+      "stats_statusDistribution",
+      "status",
+      "streamingEpisodes",
+      "studios",
+      "synonyms",
+      "tags",
+      "title_native",
+      "title_userPreferred",
+      "trending",
+      "type",
+      "updatedAt",
+      "volumes"
+    ],
+    "added": [
+      "has_banner_image",
+      "has_cover_image",
+      "has_text_description",
+      "has_trailer",
+      "is_model_split",
+      "popularity_quarter_bucket",
+      "popularity_quarter_pct",
+      "release_quarter",
+      "release_year",
+      "split_pre_release_effective"
+    ]
+  },
   "known_derived_fields": {
     "release_date": "derived in interim (`add_release_date`)",
     "release_year": "derived in processed (`_derive_release_quarter`)",
@@ -202,7 +333,11 @@
     "popularity_quarter_bucket": "derived in processed (`_add_popularity_quarter_target`)",
     "split_pre_release": "derived in processed (`_apply_pre_release_temporal_split`)",
     "split_pre_release_effective": "derived in processed (`_apply_unknown_split_policy`)",
-    "is_model_split": "derived in processed (`_apply_unknown_split_policy`)"
+    "is_model_split": "derived in processed (`_apply_unknown_split_policy`)",
+    "has_text_description": "derived in multimodal export (`_with_availability_flags`)",
+    "has_cover_image": "derived in multimodal export (`_with_availability_flags`)",
+    "has_banner_image": "derived in multimodal export (`_with_availability_flags`)",
+    "has_trailer": "derived in multimodal export (`_with_availability_flags`)"
   },
   "raw_drop_reasons": {
     "airingSchedule": "nested schedule nodes; not required for current pre-release baseline target engineering",
@@ -242,5 +377,17 @@
     "trailer_thumbnail": "media URL field; excluded from baseline tabular contract",
     "updatedAt": "platform update timestamp; can encode non-stationary platform behavior",
     "volumes": "manga-oriented field; 100% missing for this anime-focused pipeline"
+  },
+  "multimodal_add_reasons": {
+    "bannerImage": "reintroduced from raw as optional image modality for multimodal training",
+    "coverImage_medium": "reintroduced from raw for image encoder input in multimodal training",
+    "description": "reintroduced from raw for text encoder input in multimodal training",
+    "has_banner_image": "derived in multimodal export (`_with_availability_flags`)",
+    "has_cover_image": "derived in multimodal export (`_with_availability_flags`)",
+    "has_text_description": "derived in multimodal export (`_with_availability_flags`)",
+    "has_trailer": "derived in multimodal export (`_with_availability_flags`)",
+    "trailer_id": "reintroduced from raw as trailer source key for optional video branch",
+    "trailer_site": "reintroduced from raw as trailer platform metadata",
+    "trailer_thumbnail": "reintroduced from raw as trailer preview image field"
   }
 }
