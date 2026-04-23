@@ -1,0 +1,60 @@
+{
+  "generated_at_utc": "2026-04-23T09:38:05.504394+00:00",
+  "row_count": 20324,
+  "column_count": 21,
+  "feature_contract": {
+    "join_key": "id",
+    "target_columns": [
+      "id",
+      "release_year",
+      "release_quarter",
+      "split_pre_release_effective",
+      "is_model_split",
+      "popularity",
+      "meanScore",
+      "popularity_quarter_pct",
+      "popularity_quarter_bucket"
+    ],
+    "raw_multimodal_columns": [
+      "id",
+      "title_romaji",
+      "title_english",
+      "description",
+      "coverImage_medium",
+      "bannerImage",
+      "trailer_id",
+      "trailer_site",
+      "trailer_thumbnail"
+    ],
+    "availability_flags": [
+      "has_text_description",
+      "has_cover_image",
+      "has_banner_image",
+      "has_trailer"
+    ]
+  },
+  "availability_ratios": {
+    "has_text_description": 0.9415961424916355,
+    "has_cover_image": 1.0,
+    "has_banner_image": 0.3615922062586105,
+    "has_trailer": 0.36852981696516435
+  },
+  "split_counts": [
+    {
+      "split": "train",
+      "count": 13376
+    },
+    {
+      "split": "test",
+      "count": 3087
+    },
+    {
+      "split": "val",
+      "count": 2918
+    },
+    {
+      "split": "holdout_unknown",
+      "count": 943
+    }
+  ]
+}

@@ -22,6 +22,7 @@ Anime_Prediction/
 │   ├── run_decision_eda.py
 │   ├── build_interim_dataset.py
 │   ├── build_processed_dataset.py
+│   ├── export_multimodal_inputs.py
 │   └── generate_raw_manifest.py
 ├── fetch_data.py                                   # AniList GraphQL 抓取與匯出腳本
 ├── .github/                                        # GitHub 相關設定與 Skills
@@ -39,6 +40,7 @@ python scripts/run_baseline_eda.py && ^
 python scripts/run_decision_eda.py && ^
 python scripts/build_interim_dataset.py && ^
 python scripts/build_processed_dataset.py && ^
+python scripts/export_multimodal_inputs.py && ^
 python scripts/run_rq_eda.py && ^
 python scripts/run_rq_eda_plots.py && ^
 python scripts/run_holdout_unknown_diagnostic.py && ^
@@ -110,7 +112,22 @@ python scripts/generate_raw_manifest.py
 輸出：
 - `data/raw/raw_manifest.json`
 
-### 6) RQ-oriented EDA
+### 6) Export Multimodal Inputs (Feature Contract + Split Files)
+
+```bash
+python scripts/export_multimodal_inputs.py
+```
+
+輸出：
+- `data/processed/anilist_anime_multimodal_input_v1.csv`
+- `data/processed/anilist_anime_multimodal_input_train.csv`
+- `data/processed/anilist_anime_multimodal_input_val.csv`
+- `data/processed/anilist_anime_multimodal_input_test.csv`
+- `data/processed/anilist_anime_multimodal_input_holdout_unknown.csv`
+- `data/eda/multimodal_input_summary.json`
+- `data/eda/multimodal_input_summary.md`
+
+### 7) RQ-oriented EDA
 
 ```bash
 python scripts/run_rq_eda.py
@@ -120,7 +137,7 @@ python scripts/run_rq_eda.py
 - `data/eda/rq_eda_summary.json`
 - `data/eda/rq_eda_summary.md`
 
-### 7) RQ Figure Generation (Paper-ready)
+### 8) RQ Figure Generation (Paper-ready)
 
 ```bash
 python scripts/run_rq_eda_plots.py
@@ -132,7 +149,7 @@ python scripts/run_rq_eda_plots.py
 - `data/eda/figures/rq_multimodal_coverage_by_split.png`
 - `data/eda/figures/rq_figure_notes.md`
 
-### 8) Holdout Unknown Diagnostic
+### 9) Holdout Unknown Diagnostic
 
 ```bash
 python scripts/run_holdout_unknown_diagnostic.py
@@ -142,7 +159,7 @@ python scripts/run_holdout_unknown_diagnostic.py
 - `data/eda/holdout_unknown_diagnostic.json`
 - `data/eda/holdout_unknown_diagnostic.md`
 
-### 9) Column Lineage Report
+### 10) Column Lineage Report
 
 ```bash
 python scripts/run_column_lineage_report.py
@@ -170,6 +187,7 @@ python scripts/run_column_lineage_report.py
 - 缺值處理與補值規則：`scripts/build_interim_dataset.py`（`MISSING_RULES`）
 - 異常值閾值與 clipping 設定：`scripts/build_processed_dataset.py`（`CLIP_COLUMNS`）
 - 分類標籤與時序切分策略：`scripts/build_processed_dataset.py`（`_add_popularity_quarter_target`, `_apply_pre_release_temporal_split`）
+- 多模態輸入匯出與 split 分檔：`scripts/export_multimodal_inputs.py`
 - 規則建議來源：`scripts/run_decision_eda.py` + `data/eda/decision_eda_summary.*`
 - RQ 導向可行性與 snapshot 緩解證據：`scripts/run_rq_eda.py` + `data/eda/rq_eda_summary.*`
 - 論文圖表輸出：`scripts/run_rq_eda_plots.py` + `data/eda/figures/*`
