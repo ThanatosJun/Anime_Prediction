@@ -1,0 +1,79 @@
+{
+  "input_file": "data/interim/anilist_anime_data_interim_20260423.csv",
+  "row_count": 20324,
+  "column_count": 25,
+  "non_negative": {
+    "episodes": {
+      "negative_to_zero_count": 0
+    },
+    "duration": {
+      "negative_to_zero_count": 0
+    },
+    "averageScore": {
+      "negative_to_zero_count": 0
+    },
+    "meanScore": {
+      "negative_to_zero_count": 0
+    },
+    "popularity": {
+      "negative_to_zero_count": 0
+    },
+    "favourites": {
+      "negative_to_zero_count": 0
+    },
+    "trending": {
+      "negative_to_zero_count": 0
+    }
+  },
+  "percentile_clipping": {
+    "episodes": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 1.0,
+      "upper_bound": 104.0,
+      "clipped_count": 190
+    },
+    "duration": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 1.0,
+      "upper_bound": 115.0,
+      "clipped_count": 187
+    },
+    "averageScore": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 30.0,
+      "upper_bound": 83.0,
+      "clipped_count": 325
+    },
+    "meanScore": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 30.0,
+      "upper_bound": 83.0,
+      "clipped_count": 388
+    },
+    "popularity": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 25.0,
+      "upper_bound": 231528.90000000037,
+      "clipped_count": 386
+    },
+    "favourites": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 0.0,
+      "upper_bound": 7852.550000000007,
+      "clipped_count": 204
+    },
+    "trending": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 0.0,
+      "upper_bound": 6.0,
+      "clipped_count": 190
+    }
+  }
+}
