@@ -4,3 +4,16 @@
 agents/
 skills/
 datasets/
+
+# Generated dataset artifacts (reproducible)
+data/interim/*
+!data/interim/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
+
+data/eda/*
+!data/eda/.gitkeep
+!data/eda/README.md
+!data/eda/*_summary.md
+!data/eda/*_summary.json
