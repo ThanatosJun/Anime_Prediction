@@ -1,0 +1,396 @@
+{
+  "generated_at_utc": "2026-04-23T07:29:41.287713+00:00",
+  "row_count": 20324,
+  "column_count": 61,
+  "decision_rules": {
+    "missing_policy": {
+      "id": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "idMal": {
+        "missing_ratio": 0.04915370989962606,
+        "recommended_strategy": "keep"
+      },
+      "title_romaji": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "title_english": {
+        "missing_ratio": 0.5226825428065341,
+        "recommended_strategy": "fill"
+      },
+      "title_native": {
+        "missing_ratio": 0.008216886439677228,
+        "recommended_strategy": "keep"
+      },
+      "title_userPreferred": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "type": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "format": {
+        "missing_ratio": 4.92029128124385e-05,
+        "recommended_strategy": "keep"
+      },
+      "status": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "description": {
+        "missing_ratio": 0.05840385750836449,
+        "recommended_strategy": "keep"
+      },
+      "startDate_year": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "startDate_month": {
+        "missing_ratio": 0.04644754969494194,
+        "recommended_strategy": "keep"
+      },
+      "startDate_day": {
+        "missing_ratio": 0.06913009250147609,
+        "recommended_strategy": "keep"
+      },
+      "endDate_year": {
+        "missing_ratio": 0.012300728203109623,
+        "recommended_strategy": "keep"
+      },
+      "endDate_month": {
+        "missing_ratio": 0.061798858492422754,
+        "recommended_strategy": "keep"
+      },
+      "endDate_day": {
+        "missing_ratio": 0.08467821295020665,
+        "recommended_strategy": "keep"
+      },
+      "season": {
+        "missing_ratio": 0.3128813225742964,
+        "recommended_strategy": "fill"
+      },
+      "seasonYear": {
+        "missing_ratio": 0.3128813225742964,
+        "recommended_strategy": "fill"
+      },
+      "seasonInt": {
+        "missing_ratio": 0.30308994292462116,
+        "recommended_strategy": "fill"
+      },
+      "episodes": {
+        "missing_ratio": 0.007921668962802598,
+        "recommended_strategy": "keep"
+      },
+      "duration": {
+        "missing_ratio": 0.009200944695925998,
+        "recommended_strategy": "keep"
+      },
+      "chapters": {
+        "missing_ratio": 1.0,
+        "recommended_strategy": "drop"
+      },
+      "volumes": {
+        "missing_ratio": 1.0,
+        "recommended_strategy": "drop"
+      },
+      "countryOfOrigin": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "isLicensed": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "source": {
+        "missing_ratio": 0.1141507577248573,
+        "recommended_strategy": "keep"
+      },
+      "hashtag": {
+        "missing_ratio": 0.7813914583743358,
+        "recommended_strategy": "fill"
+      },
+      "trailer_id": {
+        "missing_ratio": 0.6314701830348357,
+        "recommended_strategy": "fill"
+      },
+      "trailer_site": {
+        "missing_ratio": 0.6314701830348357,
+        "recommended_strategy": "fill"
+      },
+      "trailer_thumbnail": {
+        "missing_ratio": 0.6314701830348357,
+        "recommended_strategy": "fill"
+      },
+      "updatedAt": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "coverImage_extraLarge": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "coverImage_large": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "coverImage_medium": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "coverImage_color": {
+        "missing_ratio": 0.08615430033457981,
+        "recommended_strategy": "keep"
+      },
+      "bannerImage": {
+        "missing_ratio": 0.6384077937413895,
+        "recommended_strategy": "fill"
+      },
+      "genres": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "synonyms": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "tags": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "averageScore": {
+        "missing_ratio": 0.2093583940169258,
+        "recommended_strategy": "fill"
+      },
+      "meanScore": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "popularity": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "favourites": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "trending": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "rankings": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "isFavourite": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "isAdult": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "isLocked": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "siteUrl": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "externalLinks": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "streamingEpisodes": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "relations": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "characters": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "staff": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "studios": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "nextAiringEpisode": {
+        "missing_ratio": 0.9985239126156269,
+        "recommended_strategy": "drop"
+      },
+      "airingSchedule": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "recommendations": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "reviews": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "stats_scoreDistribution": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      },
+      "stats_statusDistribution": {
+        "missing_ratio": 0.0,
+        "recommended_strategy": "keep"
+      }
+    },
+    "outlier_policy": {
+      "episodes": {
+        "q1": 1.0,
+        "q3": 12.0,
+        "iqr": 11.0,
+        "lower_bound": -15.5,
+        "upper_bound": 28.5,
+        "outlier_ratio": 0.08689183157268264,
+        "recommended_strategy": "winsorize_p1_p99"
+      },
+      "duration": {
+        "q1": 5.0,
+        "q3": 25.0,
+        "iqr": 20.0,
+        "lower_bound": -25.0,
+        "upper_bound": 55.0,
+        "outlier_ratio": 0.10170333217460396,
+        "recommended_strategy": "clip_p1_p99"
+      },
+      "averageScore": {
+        "q1": 52.0,
+        "q3": 68.0,
+        "iqr": 16.0,
+        "lower_bound": 28.0,
+        "upper_bound": 92.0,
+        "outlier_ratio": 0.0014935590266973676,
+        "recommended_strategy": "retain"
+      },
+      "meanScore": {
+        "q1": 50.0,
+        "q3": 68.0,
+        "iqr": 18.0,
+        "lower_bound": 23.0,
+        "upper_bound": 95.0,
+        "outlier_ratio": 0.0012300728203109624,
+        "recommended_strategy": "retain"
+      },
+      "popularity": {
+        "q1": 234.0,
+        "q3": 5557.25,
+        "iqr": 5323.25,
+        "lower_bound": -7750.875,
+        "upper_bound": 13542.125,
+        "outlier_ratio": 0.1653709899626058,
+        "recommended_strategy": "clip_p1_p99"
+      },
+      "favourites": {
+        "q1": 1.0,
+        "q3": 64.0,
+        "iqr": 63.0,
+        "lower_bound": -93.5,
+        "upper_bound": 158.5,
+        "outlier_ratio": 0.1652725841369809,
+        "recommended_strategy": "clip_p1_p99"
+      },
+      "trending": {
+        "q1": 0.0,
+        "q3": 0.0,
+        "iqr": 0.0,
+        "lower_bound": 0.0,
+        "upper_bound": 0.0,
+        "outlier_ratio": 0.09579807124581775,
+        "recommended_strategy": "winsorize_p1_p99"
+      }
+    },
+    "correlation_profile": {
+      "episodes": {
+        "popularity": 0.05003406693105933,
+        "averageScore": 0.09770218767609681
+      },
+      "duration": {
+        "popularity": 0.08411294863366227,
+        "averageScore": 0.260145664380285
+      },
+      "meanScore": {
+        "popularity": 0.34013060234800113,
+        "averageScore": 0.9713205270890001
+      },
+      "favourites": {
+        "popularity": 0.8635627643781054,
+        "averageScore": 0.2906763463101651
+      },
+      "trending": {
+        "popularity": 0.6562765211323012,
+        "averageScore": 0.245707362264052
+      },
+      "seasonYear": {
+        "popularity": 0.1732473372070323,
+        "averageScore": 0.22880583502974464
+      }
+    },
+    "grouped_impact": {
+      "format_to_popularity_top10": [
+        {
+          "format": "TV",
+          "count": 4559,
+          "median_popularity": 12197.0,
+          "mean_popularity": 44981.46325948673
+        },
+        {
+          "format": "OVA",
+          "count": 3770,
+          "median_popularity": 1473.0,
+          "mean_popularity": 4722.749336870026
+        },
+        {
+          "format": "MOVIE",
+          "count": 3242,
+          "median_popularity": 652.5,
+          "mean_popularity": 9639.949413942011
+        },
+        {
+          "format": "ONA",
+          "count": 3029,
+          "median_popularity": 475.0,
+          "mean_popularity": 4427.3251898316275
+        },
+        {
+          "format": "MUSIC",
+          "count": 2654,
+          "median_popularity": 156.0,
+          "mean_popularity": 466.8036925395629
+        },
+        {
+          "format": "SPECIAL",
+          "count": 1770,
+          "median_popularity": 1289.5,
+          "mean_popularity": 4139.299435028249
+        },
+        {
+          "format": "TV_SHORT",
+          "count": 1299,
+          "median_popularity": 387.0,
+          "mean_popularity": 4079.107775211701
+        },
+        {
+          "format": null,
+          "count": 1,
+          "median_popularity": 227.0,
+          "mean_popularity": 227.0
+        }
+      ]
+    }
+  }
+}

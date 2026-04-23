@@ -1,0 +1,250 @@
+{
+  "rule_version": "decision_eda_v3",
+  "input_file": "data/interim/anilist_anime_data_interim_20260424.csv",
+  "row_count": 20324,
+  "column_count": 38,
+  "clip_config": {
+    "episodes": [
+      0.01,
+      0.99
+    ],
+    "duration": [
+      0.01,
+      0.99
+    ],
+    "averageScore": [
+      0.005,
+      0.995
+    ],
+    "meanScore": [
+      0.005,
+      0.995
+    ],
+    "popularity": [
+      0.01,
+      0.99
+    ],
+    "favourites": [
+      0.01,
+      0.99
+    ],
+    "trending": [
+      0.01,
+      0.95
+    ]
+  },
+  "non_negative": {
+    "episodes": {
+      "negative_to_zero_count": 0
+    },
+    "duration": {
+      "negative_to_zero_count": 0
+    },
+    "averageScore": {
+      "negative_to_zero_count": 0
+    },
+    "meanScore": {
+      "negative_to_zero_count": 0
+    },
+    "popularity": {
+      "negative_to_zero_count": 0
+    },
+    "favourites": {
+      "negative_to_zero_count": 0
+    },
+    "trending": {
+      "negative_to_zero_count": 0
+    }
+  },
+  "percentile_clipping": {
+    "episodes": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 1.0,
+      "upper_bound": 104.0,
+      "clipped_count": 190
+    },
+    "duration": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 1.0,
+      "upper_bound": 115.0,
+      "clipped_count": 187
+    },
+    "averageScore": {
+      "lower_quantile": 0.005,
+      "upper_quantile": 0.995,
+      "lower_bound": 28.0,
+      "upper_bound": 85.0,
+      "clipped_count": 177
+    },
+    "meanScore": {
+      "lower_quantile": 0.005,
+      "upper_quantile": 0.995,
+      "lower_bound": 27.0,
+      "upper_bound": 85.0,
+      "clipped_count": 173
+    },
+    "popularity": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 25.0,
+      "upper_bound": 231528.90000000037,
+      "clipped_count": 386
+    },
+    "favourites": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.99,
+      "lower_bound": 0.0,
+      "upper_bound": 7852.550000000007,
+      "clipped_count": 204
+    },
+    "trending": {
+      "lower_quantile": 0.01,
+      "upper_quantile": 0.95,
+      "lower_bound": 0.0,
+      "upper_bound": 1.0,
+      "clipped_count": 831
+    }
+  },
+  "popularity_quarter_target": {
+    "available": true,
+    "bucket_counts": [
+      {
+        "bucket": "top_75_100",
+        "count": 4972
+      },
+      {
+        "bucket": "warm_25_50",
+        "count": 4880
+      },
+      {
+        "bucket": "hot_50_75",
+        "count": 4800
+      },
+      {
+        "bucket": "cold_0_25",
+        "count": 4729
+      },
+      {
+        "bucket": "nan",
+        "count": 943
+      }
+    ],
+    "largest_quarter_groups": [
+      {
+        "release_quarter_key": "<NA>",
+        "count": 943
+      },
+      {
+        "release_quarter_key": "2021Q1",
+        "count": 249
+      },
+      {
+        "release_quarter_key": "2021Q4",
+        "count": 243
+      },
+      {
+        "release_quarter_key": "2016Q4",
+        "count": 239
+      },
+      {
+        "release_quarter_key": "2022Q3",
+        "count": 236
+      },
+      {
+        "release_quarter_key": "2021Q3",
+        "count": 235
+      },
+      {
+        "release_quarter_key": "2023Q4",
+        "count": 233
+      },
+      {
+        "release_quarter_key": "2021Q2",
+        "count": 228
+      },
+      {
+        "release_quarter_key": "2020Q4",
+        "count": 226
+      },
+      {
+        "release_quarter_key": "2017Q2",
+        "count": 224
+      },
+      {
+        "release_quarter_key": "2024Q4",
+        "count": 222
+      },
+      {
+        "release_quarter_key": "2022Q1",
+        "count": 215
+      }
+    ]
+  },
+  "pre_release_split": {
+    "strategy": "chronological_cumulative_rows",
+    "train_quarters": 269,
+    "val_quarters": 14,
+    "test_quarters": 16,
+    "target_ratios": {
+      "train": 0.7,
+      "val": 0.15,
+      "test": 0.15
+    },
+    "split_counts": [
+      {
+        "split": "train",
+        "count": 13376
+      },
+      {
+        "split": "test",
+        "count": 3087
+      },
+      {
+        "split": "val",
+        "count": 2918
+      },
+      {
+        "split": "unknown",
+        "count": 943
+      }
+    ]
+  },
+  "unknown_split_policy": {
+    "policy": "exclude_unknown_from_model_splits",
+    "excluded_unknown_count": 943,
+    "effective_split_counts": [
+      {
+        "split": "train",
+        "count": 13376
+      },
+      {
+        "split": "test",
+        "count": 3087
+      },
+      {
+        "split": "val",
+        "count": 2918
+      },
+      {
+        "split": "holdout_unknown",
+        "count": 943
+      }
+    ],
+    "model_split_counts": [
+      {
+        "split": "train",
+        "count": 13376
+      },
+      {
+        "split": "test",
+        "count": 3087
+      },
+      {
+        "split": "val",
+        "count": 2918
+      }
+    ]
+  }
+}

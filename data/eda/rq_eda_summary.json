@@ -1,0 +1,152 @@
+{
+  "generated_at_utc": "2026-04-23T19:05:39.042129+00:00",
+  "rows_raw": 20324,
+  "rows_processed": 20324,
+  "coverage": {
+    "description_missing_ratio": 0.05840385750836449,
+    "coverImage_medium_missing_ratio": 0.0,
+    "trailer_id_missing_ratio": 0.6314701830348357,
+    "studios_missing_ratio": 0.0,
+    "genres_missing_ratio": 0.0
+  },
+  "snapshot_control": {
+    "corr_release_year_vs_popularity_raw": 0.1529367822712231,
+    "corr_release_year_vs_popularity_quarter_pct": -0.0431365302302453,
+    "absolute_corr_reduction": 0.10980025204097779
+  },
+  "statistical_tests": {
+    "bucket_balance_permutation": {
+      "available": true,
+      "method": "permutation_test_max_tvd",
+      "rounds": 400,
+      "observed_stat": 0.005934000000495085,
+      "p_value": 0.9925187032418953,
+      "per_split_tvd": {
+        "test": 0.005579421013640715,
+        "train": 0.002582168411375152,
+        "val": 0.005934000000495085
+      }
+    },
+    "multimodal_coverage_permutation": {
+      "text_available": {
+        "available": true,
+        "method": "permutation_test_max_mean_gap",
+        "rounds": 400,
+        "observed_stat": 0.05221452763084111,
+        "p_value": 0.0024937655860349127,
+        "split_means": {
+          "test": 0.9115646258503401,
+          "train": 0.9586572966507177,
+          "val": 0.9064427690198766
+        }
+      },
+      "cover_available": {
+        "available": true,
+        "method": "permutation_test_max_mean_gap",
+        "rounds": 400,
+        "observed_stat": 0.0,
+        "p_value": 1.0,
+        "split_means": {
+          "test": 1.0,
+          "train": 1.0,
+          "val": 1.0
+        }
+      },
+      "banner_available": {
+        "available": true,
+        "method": "permutation_test_max_mean_gap",
+        "rounds": 400,
+        "observed_stat": 0.19077861057091605,
+        "p_value": 0.0024937655860349127,
+        "split_means": {
+          "test": 0.47003563330093945,
+          "train": 0.3208732057416268,
+          "val": 0.5116518163125429
+        }
+      },
+      "trailer_available": {
+        "available": true,
+        "method": "permutation_test_max_mean_gap",
+        "rounds": 400,
+        "observed_stat": 0.5551406538919965,
+        "p_value": 0.0024937655860349127,
+        "split_means": {
+          "test": 0.7719468739876904,
+          "train": 0.21680622009569378,
+          "val": 0.6901987662782728
+        }
+      }
+    },
+    "snapshot_reduction_bootstrap": {
+      "available": true,
+      "method": "bootstrap_ci_abs_corr_reduction",
+      "rounds": 400,
+      "ci95_lower": 0.08283803976023395,
+      "ci95_upper": 0.11862055148152072,
+      "mean_reduction": 0.10088636940962376
+    }
+  },
+  "rq1_retrieval_proxy": {
+    "metadata_relation_coverage": {
+      "studios_available_ratio": 1.0,
+      "genres_available_ratio": 1.0,
+      "studios_non_empty_ratio": 0.8137669750049203,
+      "genres_non_empty_ratio": 0.8686282227907892
+    },
+    "split_distribution": {
+      "train": 13376,
+      "test": 3087,
+      "val": 2918,
+      "holdout_unknown": 943
+    },
+    "popularity_bucket_balance_by_split": {
+      "test": {
+        "cold_0_25": 0.24813735017816652,
+        "hot_50_75": 0.2491091674765144,
+        "top_75_100": 0.2520246193715581,
+        "warm_25_50": 0.25072886297376096
+      },
+      "train": {
+        "cold_0_25": 0.24222488038277512,
+        "hot_50_75": 0.24686004784688995,
+        "top_75_100": 0.258747009569378,
+        "warm_25_50": 0.25216806220095694
+      },
+      "val": {
+        "cold_0_25": 0.24777244688142563,
+        "hot_50_75": 0.24982864976010966,
+        "top_75_100": 0.25119945167923236,
+        "warm_25_50": 0.25119945167923236
+      }
+    }
+  },
+  "rq2_multimodal_proxy": {
+    "multimodal_source_coverage": {
+      "text_description_available_ratio": 0.9415961424916355,
+      "image_cover_available_ratio": 1.0,
+      "trailer_id_available_ratio": 0.3685298169651643
+    },
+    "multimodal_coverage_by_split": {
+      "holdout_unknown": {
+        "text_description_available_ratio": 0.9066808059384942,
+        "image_cover_available_ratio": 1.0,
+        "trailer_id_available_ratio": 0.2046659597030753
+      },
+      "test": {
+        "text_description_available_ratio": 0.9115646258503401,
+        "image_cover_available_ratio": 1.0,
+        "trailer_id_available_ratio": 0.7719468739876904
+      },
+      "train": {
+        "text_description_available_ratio": 0.9586572966507177,
+        "image_cover_available_ratio": 1.0,
+        "trailer_id_available_ratio": 0.21680622009569378
+      },
+      "val": {
+        "text_description_available_ratio": 0.9064427690198766,
+        "image_cover_available_ratio": 1.0,
+        "trailer_id_available_ratio": 0.6901987662782728
+      }
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "generated_at_utc": "2026-04-23T19:05:54.843789+00:00",
+  "total_rows": 20324,
+  "holdout_unknown_rows": 943,
+  "holdout_unknown_ratio": 0.0463983467821295,
+  "split_counts": [
+    {
+      "split": "train",
+      "count": 13376
+    },
+    {
+      "split": "test",
+      "count": 3087
+    },
+    {
+      "split": "val",
+      "count": 2918
+    },
+    {
+      "split": "holdout_unknown",
+      "count": 943
+    }
+  ],
+  "temporal_missing_focus": {
+    "release_year": 0.0,
+    "release_quarter": 1.0,
+    "release_quarter_key": 1.0,
+    "seasonYear": 0.0,
+    "startDate_year": 0.0,
+    "startDate_month": 1.0
+  },
+  "distribution_gap_vs_model_split": {
+    "popularity": {
+      "holdout_mean": 356.2725344644751,
+      "model_mean": 12882.86912955988,
+      "mean_gap": -12526.596595095405,
+      "holdout_median": 173.0,
+      "model_median": 1165.0,
+      "median_gap": -992.0
+    },
+    "averageScore": {
+      "holdout_mean": 42.96076352067868,
+      "model_mean": 58.0891078891698,
+      "mean_gap": -15.12834436849112,
+      "holdout_median": 42.0,
+      "model_median": 59.0,
+      "median_gap": -17.0
+    },
+    "episodes": {
+      "holdout_mean": 3.576882290562036,
+      "model_mean": 10.845622000928744,
+      "mean_gap": -7.268739710366708,
+      "holdout_median": 1.0,
+      "model_median": 2.0,
+      "median_gap": -1.0
+    },
+    "duration": {
+      "holdout_mean": 14.109225874867445,
+      "model_mean": 24.319617150817813,
+      "mean_gap": -10.210391275950368,
+      "holdout_median": 7.0,
+      "model_median": 23.0,
+      "median_gap": -16.0
+    },
+    "favourites": {
+      "holdout_mean": 1.7327677624602333,
+      "model_mean": 286.3392601000981,
+      "mean_gap": -284.60649233763786,
+      "holdout_median": 0.0,
+      "model_median": 11.0,
+      "median_gap": -11.0
+    },
+    "trending": {
+      "holdout_mean": 0.003181336161187699,
+      "model_mean": 0.10030442185645735,
+      "mean_gap": -0.09712308569526966,
+      "holdout_median": 0.0,
+      "model_median": 0.0,
+      "median_gap": 0.0
+    }
+  },
+  "policy_note": "holdout_unknown samples are excluded from model train/val/test."
+}

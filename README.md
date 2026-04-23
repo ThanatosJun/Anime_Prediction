@@ -7,20 +7,212 @@
 
 ```text
 Anime_Prediction/
-├── docs/                                           # 提案相關文件目錄
-│   ├── A-anime_popularity_prediction_proposal.md   # 🌟 最終定案版：期末研究提案 (主檔)
-│   ├── B-Proposal_Anime_Multimodal_Recommendation.md # 歷史提案 (推薦系統方向草案)
-│   ├── Proposal_Route_C_Anime_Cold_Start_Prediction.md # 提案 C (路線決策脈絡紀錄檔)
-│   ├── Proposal_Route_A_Biometric_Vulnerability.md # 提案 A (生物辨識漏洞相關草案)
-│   └── Proposal_Route_B_Social_Media_Deepfake.md   # 提案 B (社群媒體 Deepfake 相關草案)
+├── data/
+│   ├── raw/                                        # AniList 原始資料集檔案 (csv/pkl + manifest)
+│   ├── interim/                                    # 清理後中間資料 (可重建；交接用 CSV 納入版控)
+│   ├── processed/                                  # 最終建模資料 (可重建；建模用 CSV 納入版控)
+│   ├── eda/                                        # EDA 摘要輸出 (md/json)
+│   └── archive_local/                              # 本機長期保存區 (不入版控)
+├── docs/                                           # 文件目錄
+│   ├── data_processing_for_paper.md               # 論文處理紀錄 (方法學說明)
+│   ├── data_pipeline_handoff.md                   # 團隊交接指南
+│   ├── handoff_text_model.md                      # 文字分支組員交接文件
+│   ├── handoff_image_model.md                     # 圖片分支組員交接文件
+│   ├── handoff_fusion_model.md                    # Fusion 組員交接文件
+│   └── archive_proposal_versions/                 # 提案階段歷史文件歸檔
+├── scripts/                                        # 資料流程腳本 (EDA/Cleaning/Outlier)
+│   ├── run_baseline_eda.py
+│   ├── run_decision_eda.py
+│   ├── build_interim_dataset.py
+│   ├── build_processed_dataset.py
+│   ├── export_multimodal_inputs.py
+│   └── generate_raw_manifest.py
+├── fetch_data.py                                   # AniList GraphQL 抓取與匯出腳本
 ├── .github/                                        # GitHub 相關設定與 Skills
 ├── .gitignore                                      # Git 忽略檔案設定 (排除 agents/skills)
 └── README.md                                       # 專案說明文件 (本檔案)
 ```
 
+## Dataset Processing Workflow
+
+### Quick Rebuild (Team Handoff Friendly)
+
+```bash
+python scripts/generate_raw_manifest.py && \
+python scripts/run_baseline_eda.py && \
+python scripts/run_decision_eda.py && \
+python scripts/build_interim_dataset.py && \
+python scripts/build_processed_dataset.py && \
+python scripts/export_multimodal_inputs.py && \
+python scripts/run_rq_eda.py && \
+python scripts/run_rq_eda_plots.py && \
+python scripts/run_holdout_unknown_diagnostic.py && \
+python scripts/run_column_lineage_report.py
+```
+
+### 1) Baseline EDA
+
+```bash
+python scripts/run_baseline_eda.py
+```
+
+輸出：
+- `data/eda/baseline_eda_summary.json`
+- `data/eda/baseline_eda_summary.md`
+
+### 2) Decision EDA (Rule Recommendation Layer)
+
+```bash
+python scripts/run_decision_eda.py
+```
+
+輸出：
+- `data/eda/decision_eda_summary.json`
+- `data/eda/decision_eda_summary.md`
+
+### 3) Build Interim Dataset
+
+```bash
+python scripts/build_interim_dataset.py
+```
+
+主要處理：
+- 保留建模核心欄位
+- 型別統一（數值欄位 coercion）
+- 以 `id` 去重
+- 缺值補值（如 `episodes`, `duration`, `averageScore`）
+
+輸出：
+- `data/interim/anilist_anime_data_interim_YYYYMMDD.csv`
+- `data/interim/anilist_anime_data_interim_YYYYMMDD_meta.json`
+
+### 4) Build Processed Dataset (Outlier Handling)
+
+```bash
+python scripts/build_processed_dataset.py
+```
+
+主要處理：
+- 非負值約束（負值裁切為 0）
+- 關鍵數值欄位 percentile clipping (P1-P99)
+- 生成同季度 `popularity` 百分比分類標籤（`popularity_quarter_pct`, `popularity_quarter_bucket`）
+- 生成 pre-release 時序切分欄位（`split_pre_release`: train/val/test/unknown）
+
+輸出：
+- `data/processed/anilist_anime_data_processed_v1.csv`
+- `data/processed/anilist_anime_data_processed_v1_meta.json`
+- `data/eda/outlier_handling_summary.json`
+- `data/eda/outlier_handling_summary.md`
+- `data/eda/target_engineering_summary.json`
+- `data/eda/target_engineering_summary.md`
+
+### 5) Freeze Raw Snapshot Metadata
+
+```bash
+python scripts/generate_raw_manifest.py
+```
+
+輸出：
+- `data/raw/raw_manifest.json`
+
+### 6) Export Multimodal Inputs (Feature Contract + Split Files)
+
+```bash
+python scripts/export_multimodal_inputs.py
+```
+
+輸出：
+- `data/processed/anilist_anime_multimodal_input_v1.csv`
+- `data/processed/anilist_anime_multimodal_input_train.csv`
+- `data/processed/anilist_anime_multimodal_input_val.csv`
+- `data/processed/anilist_anime_multimodal_input_test.csv`
+- `data/processed/anilist_anime_multimodal_input_holdout_unknown.csv`
+- `data/eda/multimodal_input_summary.json`
+- `data/eda/multimodal_input_summary.md`
+
+### 7) RQ-oriented EDA
+
+```bash
+python scripts/run_rq_eda.py
+```
+
+輸出：
+- `data/eda/rq_eda_summary.json`
+- `data/eda/rq_eda_summary.md`
+
+### 8) RQ Figure Generation (Paper-ready)
+
+```bash
+python scripts/run_rq_eda_plots.py
+```
+
+輸出：
+- `data/eda/figures/rq_snapshot_control.png`
+- `data/eda/figures/rq_split_bucket_balance.png`
+- `data/eda/figures/rq_multimodal_coverage_by_split.png`
+- `data/eda/figures/rq_figure_notes.md`
+
+### 9) Holdout Unknown Diagnostic
+
+```bash
+python scripts/run_holdout_unknown_diagnostic.py
+```
+
+輸出：
+- `data/eda/holdout_unknown_diagnostic.json`
+- `data/eda/holdout_unknown_diagnostic.md`
+
+### 10) Column Lineage Report
+
+```bash
+python scripts/run_column_lineage_report.py
+```
+
+輸出：
+- `data/eda/column_lineage_summary.json`
+- `data/eda/column_lineage_summary.md`
+
+## 檔名規範與格式政策
+
+- Raw（canonical）：`anilist_anime_data_complete.pkl` + `anilist_anime_data_complete.csv`
+- Interim：`anilist_anime_data_interim_YYYYMMDD.*`
+- Processed：`anilist_anime_data_processed_v1.*`
+
+## 版控策略
+
+- `data/raw` 保留原始資料來源。
+- `data/raw` 的大型原始 `csv/pkl` 以本機保存為主；版控以 `raw_manifest.json` 與描述文件追蹤快照一致性。
+- `data/interim`、`data/processed` 的 CSV 納入版控，作為團隊交接與結果對齊依據。
+- `data/eda` 保留輕量摘要（`*_summary.md`, `*_summary.json`）便於追蹤品質變化。
+- `data/archive_local` 作為本機長期保存與版本紀錄區，不納入版控。
+
+## 模型分工交接文件
+
+- 文字處理組：`docs/handoff_text_model.md`
+- 圖片處理組：`docs/handoff_image_model.md`
+- Fusion Model 組：`docs/handoff_fusion_model.md`
+
+## 規則維護入口（給接手成員）
+
+- 缺值處理與補值規則：`scripts/build_interim_dataset.py`（`MISSING_RULES`）
+- 異常值閾值與 clipping 設定：`scripts/build_processed_dataset.py`（`CLIP_COLUMNS`）
+- 分類標籤與時序切分策略：`scripts/build_processed_dataset.py`（`_add_popularity_quarter_target`, `_apply_pre_release_temporal_split`）
+- 多模態輸入匯出與 split 分檔：`scripts/export_multimodal_inputs.py`
+- 規則建議來源：`scripts/run_decision_eda.py` + `data/eda/decision_eda_summary.*`
+- RQ 導向可行性與 snapshot 緩解證據：`scripts/run_rq_eda.py` + `data/eda/rq_eda_summary.*`
+- 論文圖表輸出：`scripts/run_rq_eda_plots.py` + `data/eda/figures/*`
+- holdout 風險診斷：`scripts/run_holdout_unknown_diagnostic.py` + `data/eda/holdout_unknown_diagnostic.*`
+- 欄位血緣對照：`scripts/run_column_lineage_report.py` + `data/eda/column_lineage_summary.*`
+- 規則版本追蹤：`data/interim/*_meta.json`、`data/processed/*_meta.json` 的 `rule_version`
+
+## 論文寫作處理紀錄
+
+- 請直接使用 `docs/data_processing_for_paper.md`。
+- 內容包含：處理階段目的、規則定義、參數、target engineering 公式、時序切分協議、可重現證據與限制說明。
+
 ## 🎯 最終定案研究任務摘要
 
-在動畫正式釋出第一集前 (冷啟動狀態下)，模型僅能取得**開播前的多模態資訊**與**表格元資料**。本研究旨在建立雙軌模型，分別預測開播後第 7 天的 **人氣熱度 (Popularity)** 與 **評價分數 (Score)**，藉此量化分析不同模態 (特別是 PV 影片) 對觀眾預期心理的影響力，並協助串流平台進行版權採購評估與行銷預算分配。
+在動畫正式釋出第一集前 (冷啟動狀態下)，模型僅能取得**開播前的多模態資訊**與**表格元資料**。本研究以 **Popularity** 與 **Mean Score** 作為兩個核心目標，兩者皆採迴歸設定，用於支援平台與 IP 合作方的前置決策評估。現階段不再以「開播後第 7 天」作為固定目標定義，而是以同一資料快照下可用的 post-release 指標進行流程驗證與建模設計。
 
 ### 🔑 核心研究特徵 (Input Features)
 - **文字 (Text)**：劇情大綱 (Synopsis)
