@@ -13,6 +13,7 @@ python scripts/run_decision_eda.py
 python scripts/build_interim_dataset.py
 python scripts/build_processed_dataset.py
 python scripts/run_rq_eda.py
+python scripts/run_rq_eda_plots.py
 ```
 
 ## 2) What Each Output Means
@@ -32,6 +33,10 @@ python scripts/run_rq_eda.py
 - `data/eda/rq_eda_summary.*`
   - RQ-aligned readiness signals and snapshot-control evidence.
   - Also includes class balance by split and split-wise multimodal coverage.
+- `data/eda/figures/*.png`
+  - Paper-ready figures for snapshot control, split balance, and multimodal coverage.
+- `data/eda/figures/rq_figure_notes.md`
+  - Figure-level interpretation notes for writing.
 
 ## 3) Where to Change Rules
 
@@ -83,5 +88,6 @@ python scripts/run_rq_eda.py
 - Processed metadata includes `popularity_quarter_target` and `pre_release_split`.
 - Processed metadata includes `unknown_split_policy`.
 - RQ summary exists (`rq_eda_summary.json/.md`).
+- RQ figure files and figure notes exist under `data/eda/figures/`.
 - Pipeline runs without manual edits from a clean shell session.
 

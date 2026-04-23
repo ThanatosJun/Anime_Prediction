@@ -56,6 +56,14 @@ It focuses on reproducibility, rationale, and modeling impact.
   - RQ2 proxy readiness (text/image/trailer source coverage)
   - multimodal source coverage by split (train/val/test/holdout_unknown)
 
+### Stage F: RQ Figure Generation (`scripts/run_rq_eda_plots.py`)
+- **Purpose:** convert RQ EDA indicators into direct paper figures.
+- **Outputs:** `data/eda/figures/*.png` + `data/eda/figures/rq_figure_notes.md`.
+- **Current figure set:**
+  - snapshot bias proxy (absolute correlation before/after quarter normalization)
+  - popularity bucket balance by split
+  - multimodal coverage by split
+
 ## 3) Explicit Rules Used in Current Version
 
 ### 3.1 Missing-value rules (interim)

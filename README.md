@@ -41,7 +41,8 @@ python scripts/run_baseline_eda.py && ^
 python scripts/run_decision_eda.py && ^
 python scripts/build_interim_dataset.py && ^
 python scripts/build_processed_dataset.py && ^
-python scripts/run_rq_eda.py
+python scripts/run_rq_eda.py && ^
+python scripts/run_rq_eda_plots.py
 ```
 
 ### 1) Baseline EDA
@@ -119,6 +120,18 @@ python scripts/run_rq_eda.py
 - `data/eda/rq_eda_summary.json`
 - `data/eda/rq_eda_summary.md`
 
+### 7) RQ Figure Generation (Paper-ready)
+
+```bash
+python scripts/run_rq_eda_plots.py
+```
+
+輸出：
+- `data/eda/figures/rq_snapshot_control.png`
+- `data/eda/figures/rq_split_bucket_balance.png`
+- `data/eda/figures/rq_multimodal_coverage_by_split.png`
+- `data/eda/figures/rq_figure_notes.md`
+
 ## 檔名規範與格式政策
 
 - Raw（canonical）：`anilist_anime_data_complete.pkl` + `anilist_anime_data_complete.csv`
@@ -139,6 +152,7 @@ python scripts/run_rq_eda.py
 - 分類標籤與時序切分策略：`scripts/build_processed_dataset.py`（`_add_popularity_quarter_target`, `_apply_pre_release_temporal_split`）
 - 規則建議來源：`scripts/run_decision_eda.py` + `data/eda/decision_eda_summary.*`
 - RQ 導向可行性與 snapshot 緩解證據：`scripts/run_rq_eda.py` + `data/eda/rq_eda_summary.*`
+- 論文圖表輸出：`scripts/run_rq_eda_plots.py` + `data/eda/figures/*`
 - 規則版本追蹤：`data/interim/*_meta.json`、`data/processed/*_meta.json` 的 `rule_version`
 
 ## 論文寫作處理紀錄
