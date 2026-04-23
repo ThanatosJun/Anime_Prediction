@@ -26,6 +26,8 @@ python scripts/build_processed_dataset.py
   - Applied cleaning rule version and missing-value policy.
 - `data/processed/anilist_anime_data_processed_v1_meta.json`
   - Applied outlier thresholds, clip configuration, and rule version.
+- `data/eda/target_engineering_summary.*`
+  - Quarter-normalized popularity label distribution and pre-release temporal split summary.
 
 ## 3) Where to Change Rules
 
@@ -35,6 +37,9 @@ python scripts/build_processed_dataset.py
 - Outlier policy:
   - `scripts/build_processed_dataset.py`
   - Update `CLIP_COLUMNS` and logic in `_clip_by_percentile()`.
+- Popularity target + temporal split policy:
+  - `scripts/build_processed_dataset.py`
+  - Update `_add_popularity_quarter_target()` and `_apply_pre_release_temporal_split()`.
 - Recommendation logic:
   - `scripts/run_decision_eda.py`
   - Update `_missing_strategy()` and `_outlier_strategy()`.
@@ -57,11 +62,17 @@ python scripts/build_processed_dataset.py
 2. Rebuild processed dataset.
 3. Compare `outlier_handling_summary.*` before/after counts and bounds.
 
+### D. Quarterly popularity class definitions need adjustment
+1. Update bucket labels or thresholds in `_add_popularity_quarter_target()`.
+2. Rebuild processed dataset.
+3. Check `target_engineering_summary.*` for class distribution drift.
+
 ## 5) Verification Checklist Before Handoff
 
 - Raw fingerprint exists and matches current files (`raw_manifest.json`).
 - Decision summary exists (`decision_eda_summary.json/.md`).
 - Interim metadata includes `rule_version` and `applied_missing_rules`.
 - Processed metadata includes `rule_version` and `clip_config`.
+- Processed metadata includes `popularity_quarter_target` and `pre_release_split`.
 - Pipeline runs without manual edits from a clean shell session.
 

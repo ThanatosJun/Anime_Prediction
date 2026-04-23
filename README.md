@@ -88,12 +88,16 @@ python scripts/build_processed_dataset.py
 主要處理：
 - 非負值約束（負值裁切為 0）
 - 關鍵數值欄位 percentile clipping (P1-P99)
+- 生成同季度 `popularity` 百分比分類標籤（`popularity_quarter_pct`, `popularity_quarter_bucket`）
+- 生成 pre-release 時序切分欄位（`split_pre_release`: train/val/test/unknown）
 
 輸出：
 - `data/processed/anilist_anime_data_processed_v1.csv`
 - `data/processed/anilist_anime_data_processed_v1_meta.json`
 - `data/eda/outlier_handling_summary.json`
 - `data/eda/outlier_handling_summary.md`
+- `data/eda/target_engineering_summary.json`
+- `data/eda/target_engineering_summary.md`
 
 ### 5) Freeze Raw Snapshot Metadata
 
@@ -121,6 +125,7 @@ python scripts/generate_raw_manifest.py
 
 - 缺值處理與補值規則：`scripts/build_interim_dataset.py`（`MISSING_RULES`）
 - 異常值閾值與 clipping 設定：`scripts/build_processed_dataset.py`（`CLIP_COLUMNS`）
+- 分類標籤與時序切分策略：`scripts/build_processed_dataset.py`（`_add_popularity_quarter_target`, `_apply_pre_release_temporal_split`）
 - 規則建議來源：`scripts/run_decision_eda.py` + `data/eda/decision_eda_summary.*`
 - 規則版本追蹤：`data/interim/*_meta.json`、`data/processed/*_meta.json` 的 `rule_version`
 
