@@ -12,6 +12,7 @@ python scripts/run_baseline_eda.py
 python scripts/run_decision_eda.py
 python scripts/build_interim_dataset.py
 python scripts/build_processed_dataset.py
+python scripts/export_multimodal_inputs.py
 python scripts/run_rq_eda.py
 python scripts/run_rq_eda_plots.py
 python scripts/run_holdout_unknown_diagnostic.py
@@ -30,11 +31,15 @@ python scripts/run_column_lineage_report.py
   - Applied cleaning rule version and missing-value policy.
 - `data/processed/anilist_anime_data_processed_v1_meta.json`
   - Applied outlier thresholds, clip configuration, and rule version.
+- `data/processed/anilist_anime_multimodal_input_v1.csv` and split files
+  - Multimodal-ready feature contract export with `train/val/test/holdout_unknown` physical files.
+- `data/eda/multimodal_input_summary.*`
+  - Feature contract summary and modality coverage ratios for downstream model stages.
 - `data/eda/target_engineering_summary.*`
   - Quarter-normalized popularity label distribution and pre-release temporal split summary.
 - `data/eda/rq_eda_summary.*`
   - RQ-aligned readiness signals and snapshot-control evidence.
-  - Also includes class balance by split and split-wise multimodal coverage.
+  - Also includes class balance by split, split-wise multimodal coverage, and permutation/bootstrap statistical tests.
 - `data/eda/figures/*.png`
   - Paper-ready figures for snapshot control, split balance, and multimodal coverage.
 - `data/eda/figures/rq_figure_notes.md`
@@ -56,12 +61,15 @@ python scripts/run_column_lineage_report.py
   - `scripts/build_processed_dataset.py`
   - Update `_add_popularity_quarter_target()` and `_apply_pre_release_temporal_split()`.
   - Temporal split strategy is chronological + cumulative row ratio (70/15/15 target).
+- Multimodal feature export contract:
+  - `scripts/export_multimodal_inputs.py`
+  - Update selected raw modality columns and exported split file contract.
 - Recommendation logic:
   - `scripts/run_decision_eda.py`
   - Update `_missing_strategy()` and `_outlier_strategy()`.
 - RQ-oriented evidence layer:
   - `scripts/run_rq_eda.py`
-  - Update snapshot/retrieval/multimodal proxy metrics.
+  - Update snapshot/retrieval/multimodal proxy metrics and statistical test settings.
 - Holdout risk diagnostic:
   - `scripts/run_holdout_unknown_diagnostic.py`
   - Update temporal-missing and distribution-gap checks.
@@ -100,6 +108,8 @@ python scripts/run_column_lineage_report.py
 - Processed metadata includes `rule_version` and `clip_config`.
 - Processed metadata includes `popularity_quarter_target` and `pre_release_split`.
 - Processed metadata includes `unknown_split_policy`.
+- Multimodal input export files exist (full + split files).
+- Multimodal input summary exists (`multimodal_input_summary.json/.md`).
 - RQ summary exists (`rq_eda_summary.json/.md`).
 - RQ figure files and figure notes exist under `data/eda/figures/`.
 - Holdout diagnostic outputs exist (`holdout_unknown_diagnostic.json/.md`).

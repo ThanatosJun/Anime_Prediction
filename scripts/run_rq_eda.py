@@ -12,6 +12,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 RAW_DIR = Path("data/raw")
@@ -24,6 +25,9 @@ PROCESSED_CSV = PROCESSED_DIR / "anilist_anime_data_processed_v1.csv"
 
 RQ_SUMMARY_JSON = EDA_DIR / "rq_eda_summary.json"
 RQ_SUMMARY_MD = EDA_DIR / "rq_eda_summary.md"
+PERMUTATION_ROUNDS = 400
+BOOTSTRAP_ROUNDS = 400
+RNG_SEED = 42
 
 
 def _load_raw() -> pd.DataFrame:
@@ -107,6 +111,139 @@ def _multimodal_coverage_by_split(raw_df: pd.DataFrame, processed_df: pd.DataFra
     return result
 
 
+def _multimodal_split_frame(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> pd.DataFrame:
+    required_cols = {"id", "split_pre_release_effective"}
+    if not required_cols.issubset(processed_df.columns) or "id" not in raw_df.columns:
+        return pd.DataFrame()
+    raw_subset = raw_df[["id", "description", "coverImage_medium", "bannerImage", "trailer_id"]].copy()
+    merged = processed_df[["id", "split_pre_release_effective"]].merge(raw_subset, on="id", how="left")
+    merged["text_available"] = merged["description"].notna().astype(int)
+    merged["cover_available"] = merged["coverImage_medium"].notna().astype(int)
+    merged["banner_available"] = merged["bannerImage"].notna().astype(int)
+    merged["trailer_available"] = merged["trailer_id"].notna().astype(int)
+    return merged
+
+
+def _bucket_balance_permutation_test(processed_df: pd.DataFrame) -> dict:
+    required_cols = {"split_pre_release_effective", "popularity_quarter_bucket"}
+    if not required_cols.issubset(processed_df.columns):
+        return {"available": False}
+
+    subset = processed_df[
+        processed_df["split_pre_release_effective"].isin(["train", "val", "test"])
+        & processed_df["popularity_quarter_bucket"].notna()
+    ][["split_pre_release_effective", "popularity_quarter_bucket"]].copy()
+    if subset.empty:
+        return {"available": False}
+
+    rng = np.random.default_rng(RNG_SEED)
+
+    def _compute_max_tvd(frame: pd.DataFrame) -> tuple[float, dict]:
+        counts = pd.crosstab(frame["split_pre_release_effective"], frame["popularity_quarter_bucket"])
+        row_ratios = counts.div(counts.sum(axis=1), axis=0)
+        global_ratio = counts.sum(axis=0) / counts.values.sum()
+        tvd = 0.5 * (row_ratios.sub(global_ratio, axis=1).abs().sum(axis=1))
+        return float(tvd.max()), {str(k): float(v) for k, v in tvd.to_dict().items()}
+
+    observed, per_split_tvd = _compute_max_tvd(subset)
+    split_values = subset["split_pre_release_effective"].to_numpy(copy=True)
+
+    extreme = 0
+    for _ in range(PERMUTATION_ROUNDS):
+        permuted = subset.copy()
+        permuted["split_pre_release_effective"] = rng.permutation(split_values)
+        stat, _ = _compute_max_tvd(permuted)
+        if stat >= observed:
+            extreme += 1
+    p_value = (extreme + 1) / (PERMUTATION_ROUNDS + 1)
+    return {
+        "available": True,
+        "method": "permutation_test_max_tvd",
+        "rounds": PERMUTATION_ROUNDS,
+        "observed_stat": observed,
+        "p_value": p_value,
+        "per_split_tvd": per_split_tvd,
+    }
+
+
+def _coverage_gap_permutation_test(multimodal_frame: pd.DataFrame, col_name: str) -> dict:
+    if multimodal_frame.empty or col_name not in multimodal_frame.columns:
+        return {"available": False}
+    subset = multimodal_frame[multimodal_frame["split_pre_release_effective"].isin(["train", "val", "test"])].copy()
+    if subset.empty:
+        return {"available": False}
+
+    means = subset.groupby("split_pre_release_effective")[col_name].mean()
+    observed = float(means.max() - means.min())
+    split_values = subset["split_pre_release_effective"].to_numpy(copy=True)
+    rng = np.random.default_rng(RNG_SEED)
+
+    extreme = 0
+    for _ in range(PERMUTATION_ROUNDS):
+        permuted = subset.copy()
+        permuted["split_pre_release_effective"] = rng.permutation(split_values)
+        perm_means = permuted.groupby("split_pre_release_effective")[col_name].mean()
+        stat = float(perm_means.max() - perm_means.min())
+        if stat >= observed:
+            extreme += 1
+
+    p_value = (extreme + 1) / (PERMUTATION_ROUNDS + 1)
+    return {
+        "available": True,
+        "method": "permutation_test_max_mean_gap",
+        "rounds": PERMUTATION_ROUNDS,
+        "observed_stat": observed,
+        "p_value": p_value,
+        "split_means": {str(k): float(v) for k, v in means.to_dict().items()},
+    }
+
+
+def _snapshot_bootstrap_ci(processed_df: pd.DataFrame) -> dict:
+    required_cols = {"release_year", "popularity", "popularity_quarter_pct"}
+    if not required_cols.issubset(processed_df.columns):
+        return {"available": False}
+    subset = processed_df[list(required_cols)].dropna()
+    if subset.empty:
+        return {"available": False}
+
+    rng = np.random.default_rng(RNG_SEED)
+    reductions = []
+    for _ in range(BOOTSTRAP_ROUNDS):
+        idx = rng.integers(0, len(subset), len(subset))
+        sample = subset.iloc[idx]
+        raw_corr = _corr_safe(sample["release_year"], sample["popularity"])
+        norm_corr = _corr_safe(sample["release_year"], sample["popularity_quarter_pct"])
+        if raw_corr is None or norm_corr is None:
+            continue
+        reductions.append(abs(raw_corr) - abs(norm_corr))
+
+    if not reductions:
+        return {"available": False}
+    lower, upper = np.percentile(reductions, [2.5, 97.5])
+    return {
+        "available": True,
+        "method": "bootstrap_ci_abs_corr_reduction",
+        "rounds": BOOTSTRAP_ROUNDS,
+        "ci95_lower": float(lower),
+        "ci95_upper": float(upper),
+        "mean_reduction": float(np.mean(reductions)),
+    }
+
+
+def _statistical_tests(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
+    multimodal_frame = _multimodal_split_frame(raw_df, processed_df)
+    return {
+        "bucket_balance_permutation": _bucket_balance_permutation_test(processed_df),
+        "multimodal_coverage_permutation": {
+            "text_available": _coverage_gap_permutation_test(multimodal_frame, "text_available"),
+            "cover_available": _coverage_gap_permutation_test(multimodal_frame, "cover_available"),
+            "banner_available": _coverage_gap_permutation_test(multimodal_frame, "banner_available"),
+            "trailer_available": _coverage_gap_permutation_test(multimodal_frame, "trailer_available"),
+        },
+        "snapshot_reduction_bootstrap": _snapshot_bootstrap_ci(processed_df),
+    }
+
+
 def build_summary(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
     coverage = {
         "description_missing_ratio": _missing_ratio(raw_df, "description"),
@@ -160,6 +297,7 @@ def build_summary(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
         "rows_processed": int(len(processed_df)),
         "coverage": coverage,
         "snapshot_control": snapshot_control,
+        "statistical_tests": _statistical_tests(raw_df, processed_df),
         "rq1_retrieval_proxy": rq1_proxy,
         "rq2_multimodal_proxy": rq2_proxy,
     }
@@ -185,6 +323,28 @@ def write_outputs(summary: dict) -> None:
         f"- Corr(release_year, popularity_quarter_pct): `{sc.get('corr_release_year_vs_popularity_quarter_pct')}`"
     )
     lines.append(f"- Absolute correlation reduction: `{sc.get('absolute_corr_reduction')}`")
+
+    lines.extend(["", "## Statistical Test Layer", ""])
+    tests = summary.get("statistical_tests", {})
+    bucket_test = tests.get("bucket_balance_permutation", {})
+    if bucket_test.get("available"):
+        lines.append(
+            "- Bucket balance permutation test "
+            f"(max TVD): stat=`{bucket_test.get('observed_stat')}`, p=`{bucket_test.get('p_value')}`"
+        )
+    snapshot_ci = tests.get("snapshot_reduction_bootstrap", {})
+    if snapshot_ci.get("available"):
+        lines.append(
+            "- Snapshot reduction bootstrap CI95: "
+            f"[`{snapshot_ci.get('ci95_lower')}`, `{snapshot_ci.get('ci95_upper')}`], "
+            f"mean=`{snapshot_ci.get('mean_reduction')}`"
+        )
+    modality_tests = tests.get("multimodal_coverage_permutation", {})
+    for key, value in modality_tests.items():
+        if value.get("available"):
+            lines.append(
+                f"- Coverage permutation `{key}`: stat=`{value.get('observed_stat')}`, p=`{value.get('p_value')}`"
+            )
 
     lines.extend(["", "## RQ1 Proxy (Retrieval/Metadata Readiness)", ""])
     rq1 = summary["rq1_retrieval_proxy"]

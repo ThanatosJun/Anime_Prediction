@@ -77,7 +77,18 @@ The intended downstream modeling design is a fusion setup:
   - chronological pre-release split assignment (`train/val/test/unknown`)
   - unknown split policy: move `unknown` to `holdout_unknown` (excluded from model splits)
 
-### Stage E: RQ-oriented EDA (`scripts/run_rq_eda.py`)
+### Stage E: Multimodal Input Export (`scripts/export_multimodal_inputs.py`)
+- **Purpose:** preserve text/image/trailer fields for multimodal modeling while keeping split-aligned targets.
+- **Outputs:**
+  - `data/processed/anilist_anime_multimodal_input_v1.csv`
+  - `data/processed/anilist_anime_multimodal_input_{train|val|test|holdout_unknown}.csv`
+  - `data/eda/multimodal_input_summary.json/.md`
+- **Current evidence tracked:**
+  - feature contract (join key, target columns, raw modality columns)
+  - modality availability flags and ratios
+  - physical split row counts
+
+### Stage F: RQ-oriented EDA (`scripts/run_rq_eda.py`)
 - **Purpose:** provide paper-level evidence tied to RQ concerns.
 - **Outputs:** `data/eda/rq_eda_summary.json/.md`.
 - **Current evidence tracked:**
@@ -87,8 +98,12 @@ The intended downstream modeling design is a fusion setup:
   - popularity class balance by model split
   - RQ2 proxy readiness (text/image/trailer source coverage)
   - multimodal source coverage by split (train/val/test/holdout_unknown)
+  - statistical test layer:
+    - permutation test for split bucket balance shift
+    - permutation tests for multimodal coverage gap across splits
+    - bootstrap CI for snapshot-correlation reduction
 
-### Stage F: RQ Figure Generation (`scripts/run_rq_eda_plots.py`)
+### Stage G: RQ Figure Generation (`scripts/run_rq_eda_plots.py`)
 - **Purpose:** convert RQ EDA indicators into direct paper figures.
 - **Outputs:** `data/eda/figures/*.png` + `data/eda/figures/rq_figure_notes.md`.
 - **Current figure set:**
@@ -96,7 +111,7 @@ The intended downstream modeling design is a fusion setup:
   - popularity bucket balance by split
   - multimodal coverage by split
 
-### Stage G: Holdout Unknown Diagnostic (`scripts/run_holdout_unknown_diagnostic.py`)
+### Stage H: Holdout Unknown Diagnostic (`scripts/run_holdout_unknown_diagnostic.py`)
 - **Purpose:** quantify the risk profile of excluded temporal-unknown samples.
 - **Outputs:** `data/eda/holdout_unknown_diagnostic.json/.md`.
 - **Current evidence tracked:**
@@ -104,7 +119,7 @@ The intended downstream modeling design is a fusion setup:
   - temporal field missing profile
   - distribution gaps vs model-split population for key targets/features
 
-### Stage H: Column Lineage Report (`scripts/run_column_lineage_report.py`)
+### Stage I: Column Lineage Report (`scripts/run_column_lineage_report.py`)
 - **Purpose:** provide explicit raw->interim->processed column-level transformation evidence.
 - **Outputs:** `data/eda/column_lineage_summary.json/.md`.
 - **Current evidence tracked:**
@@ -173,6 +188,7 @@ The intended downstream modeling design is a fusion setup:
   - interim metadata: `rule_version`, `applied_missing_rules`
   - processed metadata: `rule_version`, `clip_config`, `popularity_quarter_target`, `pre_release_split`
 - Decision evidence:
+  - `data/eda/multimodal_input_summary.*`
   - `data/eda/decision_eda_summary.*`
   - `data/eda/target_engineering_summary.*`
   - `data/eda/outlier_handling_summary.*`

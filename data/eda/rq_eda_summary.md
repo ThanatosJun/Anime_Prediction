@@ -1,6 +1,6 @@
 # RQ-oriented EDA Summary
 
-- Generated at (UTC): `2026-04-23T08:32:08.980843+00:00`
+- Generated at (UTC): `2026-04-23T09:38:07.773428+00:00`
 - Raw rows: `20324`
 - Processed rows: `20324`
 
@@ -9,6 +9,15 @@
 - Corr(release_year, popularity_raw): `0.1529367822712231`
 - Corr(release_year, popularity_quarter_pct): `-0.046774356538458246`
 - Absolute correlation reduction: `0.10616242573276485`
+
+## Statistical Test Layer
+
+- Bucket balance permutation test (max TVD): stat=`0.005934000000495085`, p=`0.9925187032418953`
+- Snapshot reduction bootstrap CI95: [`0.0885708825502303`, `0.12215550704813904`], mean=`0.1064216371334734`
+- Coverage permutation `text_available`: stat=`0.05221452763084111`, p=`0.0024937655860349127`
+- Coverage permutation `cover_available`: stat=`0.0`, p=`1.0`
+- Coverage permutation `banner_available`: stat=`0.19077861057091605`, p=`0.0024937655860349127`
+- Coverage permutation `trailer_available`: stat=`0.5551406538919965`, p=`0.0024937655860349127`
 
 ## RQ1 Proxy (Retrieval/Metadata Readiness)
 

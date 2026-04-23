@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-04-23T08:32:08.980843+00:00",
+  "generated_at_utc": "2026-04-23T09:38:07.773428+00:00",
   "rows_raw": 20324,
   "rows_processed": 20324,
   "coverage": {
@@ -13,6 +13,78 @@
     "corr_release_year_vs_popularity_raw": 0.1529367822712231,
     "corr_release_year_vs_popularity_quarter_pct": -0.046774356538458246,
     "absolute_corr_reduction": 0.10616242573276485
+  },
+  "statistical_tests": {
+    "bucket_balance_permutation": {
+      "available": true,
+      "method": "permutation_test_max_tvd",
+      "rounds": 400,
+      "observed_stat": 0.005934000000495085,
+      "p_value": 0.9925187032418953,
+      "per_split_tvd": {
+        "test": 0.005579421013640715,
+        "train": 0.002582168411375152,
+        "val": 0.005934000000495085
+      }
+    },
+    "multimodal_coverage_permutation": {
+      "text_available": {
+        "available": true,
+        "method": "permutation_test_max_mean_gap",
+        "rounds": 400,
+        "observed_stat": 0.05221452763084111,
+        "p_value": 0.0024937655860349127,
+        "split_means": {
+          "test": 0.9115646258503401,
+          "train": 0.9586572966507177,
+          "val": 0.9064427690198766
+        }
+      },
+      "cover_available": {
+        "available": true,
+        "method": "permutation_test_max_mean_gap",
+        "rounds": 400,
+        "observed_stat": 0.0,
+        "p_value": 1.0,
+        "split_means": {
+          "test": 1.0,
+          "train": 1.0,
+          "val": 1.0
+        }
+      },
+      "banner_available": {
+        "available": true,
+        "method": "permutation_test_max_mean_gap",
+        "rounds": 400,
+        "observed_stat": 0.19077861057091605,
+        "p_value": 0.0024937655860349127,
+        "split_means": {
+          "test": 0.47003563330093945,
+          "train": 0.3208732057416268,
+          "val": 0.5116518163125429
+        }
+      },
+      "trailer_available": {
+        "available": true,
+        "method": "permutation_test_max_mean_gap",
+        "rounds": 400,
+        "observed_stat": 0.5551406538919965,
+        "p_value": 0.0024937655860349127,
+        "split_means": {
+          "test": 0.7719468739876904,
+          "train": 0.21680622009569378,
+          "val": 0.6901987662782728
+        }
+      }
+    },
+    "snapshot_reduction_bootstrap": {
+      "available": true,
+      "method": "bootstrap_ci_abs_corr_reduction",
+      "rounds": 400,
+      "ci95_lower": 0.0885708825502303,
+      "ci95_upper": 0.12215550704813904,
+      "mean_reduction": 0.1064216371334734
+    }
   },
   "rq1_retrieval_proxy": {
     "metadata_relation_coverage": {
