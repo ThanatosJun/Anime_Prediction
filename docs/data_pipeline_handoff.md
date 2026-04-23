@@ -12,6 +12,7 @@ python scripts/run_baseline_eda.py
 python scripts/run_decision_eda.py
 python scripts/build_interim_dataset.py
 python scripts/build_processed_dataset.py
+python scripts/run_rq_eda.py
 ```
 
 ## 2) What Each Output Means
@@ -28,6 +29,8 @@ python scripts/build_processed_dataset.py
   - Applied outlier thresholds, clip configuration, and rule version.
 - `data/eda/target_engineering_summary.*`
   - Quarter-normalized popularity label distribution and pre-release temporal split summary.
+- `data/eda/rq_eda_summary.*`
+  - RQ-aligned readiness signals and snapshot-control evidence.
 
 ## 3) Where to Change Rules
 
@@ -43,6 +46,9 @@ python scripts/build_processed_dataset.py
 - Recommendation logic:
   - `scripts/run_decision_eda.py`
   - Update `_missing_strategy()` and `_outlier_strategy()`.
+- RQ-oriented evidence layer:
+  - `scripts/run_rq_eda.py`
+  - Update snapshot/retrieval/multimodal proxy metrics.
 
 ## 4) Common Update Scenarios
 
@@ -74,5 +80,7 @@ python scripts/build_processed_dataset.py
 - Interim metadata includes `rule_version` and `applied_missing_rules`.
 - Processed metadata includes `rule_version` and `clip_config`.
 - Processed metadata includes `popularity_quarter_target` and `pre_release_split`.
+- Processed metadata includes `unknown_split_policy`.
+- RQ summary exists (`rq_eda_summary.json/.md`).
 - Pipeline runs without manual edits from a clean shell session.
 

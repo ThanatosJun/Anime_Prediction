@@ -43,6 +43,15 @@ It focuses on reproducibility, rationale, and modeling impact.
   - percentile clipping with explicit `CLIP_COLUMNS`
   - quarter-normalized popularity target engineering
   - chronological pre-release split assignment (`train/val/test/unknown`)
+  - unknown split policy: move `unknown` to `holdout_unknown` (excluded from model splits)
+
+### Stage E: RQ-oriented EDA (`scripts/run_rq_eda.py`)
+- **Purpose:** provide paper-level evidence tied to RQ concerns.
+- **Outputs:** `data/eda/rq_eda_summary.json/.md`.
+- **Current evidence tracked:**
+  - snapshot mitigation proxy (`corr(release_year, popularity_raw)` vs `corr(release_year, popularity_quarter_pct)`)
+  - RQ1 proxy readiness (metadata/relation coverage + effective split distribution)
+  - RQ2 proxy readiness (text/image/trailer source coverage)
 
 ## 3) Explicit Rules Used in Current Version
 
@@ -94,6 +103,9 @@ It focuses on reproducibility, rationale, and modeling impact.
   - test: 15%
 - Map each sample to `split_pre_release` via its quarter index.
 - Missing quarter info is labeled as `unknown`.
+- Apply unknown policy:
+  - `unknown` -> `holdout_unknown` in `split_pre_release_effective`
+  - exclude `holdout_unknown` from train/val/test model splits
 
 ## 6) Reproducibility Evidence
 
@@ -105,6 +117,7 @@ It focuses on reproducibility, rationale, and modeling impact.
   - `data/eda/decision_eda_summary.*`
   - `data/eda/target_engineering_summary.*`
   - `data/eda/outlier_handling_summary.*`
+  - `data/eda/rq_eda_summary.*`
 
 ## 7) Current Limitations and Paper Notes
 
