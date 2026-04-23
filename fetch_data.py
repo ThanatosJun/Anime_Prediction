@@ -1,11 +1,15 @@
 """
 AniList Anime Data Scraper 
 
-This script fetches all anime data from AniList using their GraphQL API
+This script fetches anime data from AniList using their GraphQL API
 and creates a pandas DataFrame with all available attributes.
 
 This version overcomes the 5,000 anime limitation by using year-based
 filtering to retrieve all anime in batches, with proper FuzzyDateInt handling.
+
+Note: The year-based filtering (startDate_greater / startDate_lesser) means
+that media entries with missing/unknown startDate or with start dates outside
+the configured year ranges will not be retrieved.
 """
 
 import argparse

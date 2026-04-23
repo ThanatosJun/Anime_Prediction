@@ -80,7 +80,7 @@ def _clip_by_percentile(df: pd.DataFrame) -> dict:
         lower = float(clean.quantile(q_low))
         upper = float(clean.quantile(q_high))
         clipped = series.clip(lower=lower, upper=upper)
-        changed_count = int((series != clipped).fillna(False).sum())
+        changed_count = int((series.notna() & clipped.notna() & series.ne(clipped)).sum())
         df[col] = clipped
         stats[col] = {
             "lower_quantile": q_low,

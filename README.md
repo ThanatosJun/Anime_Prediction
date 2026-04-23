@@ -38,15 +38,15 @@ Anime_Prediction/
 ### Quick Rebuild (Team Handoff Friendly)
 
 ```bash
-python scripts/generate_raw_manifest.py && ^
-python scripts/run_baseline_eda.py && ^
-python scripts/run_decision_eda.py && ^
-python scripts/build_interim_dataset.py && ^
-python scripts/build_processed_dataset.py && ^
-python scripts/export_multimodal_inputs.py && ^
-python scripts/run_rq_eda.py && ^
-python scripts/run_rq_eda_plots.py && ^
-python scripts/run_holdout_unknown_diagnostic.py && ^
+python scripts/generate_raw_manifest.py && \
+python scripts/run_baseline_eda.py && \
+python scripts/run_decision_eda.py && \
+python scripts/build_interim_dataset.py && \
+python scripts/build_processed_dataset.py && \
+python scripts/export_multimodal_inputs.py && \
+python scripts/run_rq_eda.py && \
+python scripts/run_rq_eda_plots.py && \
+python scripts/run_holdout_unknown_diagnostic.py && \
 python scripts/run_column_lineage_report.py
 ```
 
