@@ -9,8 +9,8 @@
 Anime_Prediction/
 ├── data/
 │   ├── raw/                                        # AniList 原始資料集檔案 (csv/pkl + manifest)
-│   ├── interim/                                    # 清理後中間資料 (可重建，不入版控)
-│   ├── processed/                                  # 最終建模資料 (可重建，不入版控)
+│   ├── interim/                                    # 清理後中間資料 (可重建；交接用 CSV 納入版控)
+│   ├── processed/                                  # 最終建模資料 (可重建；建模用 CSV 納入版控)
 │   ├── eda/                                        # EDA 摘要輸出 (md/json)
 │   └── archive_local/                              # 本機長期保存區 (不入版控)
 ├── docs/                                           # 文件目錄
@@ -181,6 +181,7 @@ python scripts/run_column_lineage_report.py
 ## 版控策略
 
 - `data/raw` 保留原始資料來源。
+- `data/raw` 的大型原始 `csv/pkl` 以本機保存為主；版控以 `raw_manifest.json` 與描述文件追蹤快照一致性。
 - `data/interim`、`data/processed` 的 CSV 納入版控，作為團隊交接與結果對齊依據。
 - `data/eda` 保留輕量摘要（`*_summary.md`, `*_summary.json`）便於追蹤品質變化。
 - `data/archive_local` 作為本機長期保存與版本紀錄區，不納入版控。

@@ -14,7 +14,6 @@ The dataset is available in three formats:
 - **Pickle** (`anilist_anime_data_complete.pkl`): Python pickle format for efficient loading in Python applications
 
 ## Column Descriptions
-a
 ### Basic Information
 
 | Column | Description |

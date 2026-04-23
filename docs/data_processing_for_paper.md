@@ -61,7 +61,7 @@ The intended downstream modeling design is a fusion setup:
 
 ### Stage C: Interim Dataset (`scripts/build_interim_dataset.py`)
 - **Output:** `data/interim/anilist_anime_data_interim_YYYYMMDD.csv` + metadata json.
-- **Current rule version:** `decision_eda_v1` (interim cleaning layer).
+- **Current rule version:** `decision_eda_v2_relation_features` (interim cleaning + relation-feature layer).
 - **Operations:**
   - keep model-relevant columns only
   - enforce numeric dtypes
@@ -70,7 +70,7 @@ The intended downstream modeling design is a fusion setup:
 
 ### Stage D: Processed Dataset (`scripts/build_processed_dataset.py`)
 - **Output:** `data/processed/anilist_anime_data_processed_v1.csv` + metadata json.
-- **Current rule version:** `decision_eda_v2` (processed + target layer).
+- **Current rule version:** `decision_eda_v3` (processed + target layer).
 - **Operations:**
   - non-negative constraints for key numeric features
   - percentile clipping with explicit `CLIP_COLUMNS`
@@ -242,6 +242,7 @@ python scripts/run_baseline_eda.py
 python scripts/run_decision_eda.py
 python scripts/build_interim_dataset.py
 python scripts/build_processed_dataset.py
+python scripts/export_multimodal_inputs.py
 python scripts/run_rq_eda.py
 python scripts/run_rq_eda_plots.py
 python scripts/run_holdout_unknown_diagnostic.py
