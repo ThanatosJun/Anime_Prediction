@@ -5,7 +5,8 @@ It focuses on reproducibility, rationale, modeling impact, and project scope ali
 
 ## 0) Core Objective and Scope Definition
 
-- **Primary objective:** predict post-release outcomes (popularity and score) using **pre-release** multimodal signals, including image, text description, and metadata.
+- **Primary objective:** predict post-release outcomes (popularity and mean score) using **pre-release** multimodal signals, including image, text description, and metadata.
+- **Target protocol (current decision):** both primary targets are treated as regression tasks; no fixed `Day7` target constraint in the current scope.
 - **Pre-release definition:** the stage before a title is officially broadcast/released/sold.
 - **Current project phase:** data pipeline and evidence layer construction (not final model training report yet).
 
@@ -154,7 +155,7 @@ The intended downstream modeling design is a fusion setup:
   - fallback from `startDate_month` if `season` is missing.
 - Combine as `release_quarter_key` (e.g., `2021Q3`).
 
-### 4.2 Relative popularity target
+### 4.2 Relative popularity target (auxiliary feature / diagnostic layer)
 - Compute within-quarter percentile rank:
   - `popularity_quarter_pct = rank(popularity within release_quarter_key, pct=True)`
 - Bucket definition:
@@ -207,7 +208,7 @@ The intended downstream modeling design is a fusion setup:
 
 ## 7.1) Explicit RQ Mapping and Evaluation Plan
 
-- **RQ1:** whether retrieval-based augmentation improves classification accuracy and reduces regression error.
+- **RQ1:** whether retrieval-based augmentation improves regression performance on popularity and mean score targets.
 - **RQ2:** whether transformer-based image semantics provide measurable gain beyond simple tag-style features.
 - **Interpretability plan:**
   - use SHAP for metadata contribution analysis,
@@ -216,9 +217,9 @@ The intended downstream modeling design is a fusion setup:
 ## 7.2) Scope Boundary and Response to Prior Concerns
 
 - The current stage performs **pre-release** prediction preparation only; it does not include real-time post-release social diffusion signals.
-- Snapshot control is handled by quarter-relative popularity target engineering and chronological split protocol.
+- Snapshot control is handled by quarter-relative popularity engineering and chronological split protocol.
 - Relation/studio/cast and multimodal availability are preserved as research-readiness evidence in EDA and lineage outputs.
-- Multimodal model input export is treated as the next concrete deliverable after the baseline tabular contract.
+- The popularity bucket fields (`popularity_quarter_pct`, `popularity_quarter_bucket`) are used as auxiliary diagnostics and control features, not as the final statement of target definition.
 
 ## 8) Minimal Commands to Reproduce
 
