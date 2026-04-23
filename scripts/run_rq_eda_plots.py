@@ -98,6 +98,10 @@ def _plot_multimodal_coverage(summary: dict) -> None:
 
 def _write_figure_notes(summary: dict) -> None:
     sc = summary.get("snapshot_control", {})
+    tests = summary.get("statistical_tests", {})
+    bucket_test = tests.get("bucket_balance_permutation", {})
+    snapshot_ci = tests.get("snapshot_reduction_bootstrap", {})
+    modality_tests = tests.get("multimodal_coverage_permutation", {})
     lines = [
         "# RQ Figure Notes",
         "",
@@ -105,16 +109,42 @@ def _write_figure_notes(summary: dict) -> None:
         f"- File: `{PLOT_SNAPSHOT.as_posix()}`",
         "- Meaning: compare absolute correlation between release year and target before/after quarter normalization.",
         f"- Observed reduction: `{sc.get('absolute_corr_reduction')}`",
+    ]
+    if snapshot_ci.get("available"):
+        lines.append(
+            "- Statistical support: bootstrap CI95 for reduction = "
+            f"[`{snapshot_ci.get('ci95_lower')}`, `{snapshot_ci.get('ci95_upper')}`], "
+            f"mean=`{snapshot_ci.get('mean_reduction')}`."
+        )
+    lines.extend([
         "",
         "## Figure 2: Split Bucket Balance",
         f"- File: `{PLOT_SPLIT_BALANCE.as_posix()}`",
         "- Meaning: verify whether popularity bucket classes remain balanced across train/val/test.",
+    ])
+    if bucket_test.get("available"):
+        lines.append(
+            "- Statistical support: permutation test (max TVD) "
+            f"stat=`{bucket_test.get('observed_stat')}`, p=`{bucket_test.get('p_value')}`."
+        )
+    lines.extend([
         "",
         "## Figure 3: Multimodal Coverage by Split",
         f"- File: `{PLOT_MODALITY.as_posix()}`",
         "- Meaning: show text/image/trailer availability mismatch between splits for RQ2 risk discussion.",
         "",
-    ]
+        "### Statistical Support for Coverage Gaps",
+    ])
+    for key in ["text_available", "cover_available", "banner_available", "trailer_available"]:
+        metric = modality_tests.get(key, {})
+        if metric.get("available"):
+            lines.append(
+                f"- `{key}` permutation: stat=`{metric.get('observed_stat')}`, "
+                f"p=`{metric.get('p_value')}`."
+            )
+    lines.extend([
+        "",
+    ])
     FIG_NOTES.write_text("\n".join(lines), encoding="utf-8")
 
 
