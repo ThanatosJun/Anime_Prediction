@@ -172,25 +172,47 @@ def _add_popularity_quarter_target(df: pd.DataFrame) -> dict:
 def _apply_pre_release_temporal_split(df: pd.DataFrame) -> dict:
     known = df[df["release_year"].notna() & df["release_quarter"].notna()].copy()
     known["quarter_index"] = known["release_year"].astype(int) * 10 + known["release_quarter"].astype(int)
-    unique_quarters = sorted(known["quarter_index"].dropna().unique().tolist())
-
-    if not unique_quarters:
+    quarter_counts = (
+        known.groupby("quarter_index", as_index=False)
+        .size()
+        .sort_values("quarter_index")
+        .reset_index(drop=True)
+    )
+    if quarter_counts.empty:
         df["split_pre_release"] = "unknown"
-        return {"train_quarters": 0, "val_quarters": 0, "test_quarters": 0}
+        return {
+            "strategy": "chronological_cumulative_rows",
+            "train_quarters": 0,
+            "val_quarters": 0,
+            "test_quarters": 0,
+        }
 
-    total = len(unique_quarters)
-    train_n = max(1, int(total * SPLIT_RATIOS["train"]))
-    val_n = max(1, int(total * SPLIT_RATIOS["val"]))
-    if train_n + val_n >= total:
-        val_n = 1
-        train_n = max(1, total - 2)
-    test_n = max(1, total - train_n - val_n)
-    if train_n + val_n + test_n > total:
-        test_n = total - train_n - val_n
+    total_rows = int(quarter_counts["size"].sum())
+    quarter_counts["cumsum_rows"] = quarter_counts["size"].cumsum()
+    quarter_counts["cumsum_ratio"] = quarter_counts["cumsum_rows"] / max(total_rows, 1)
 
-    train_quarters = set(unique_quarters[:train_n])
-    val_quarters = set(unique_quarters[train_n : train_n + val_n])
-    test_quarters = set(unique_quarters[train_n + val_n :])
+    train_cut = SPLIT_RATIOS["train"]
+    val_cut = SPLIT_RATIOS["train"] + SPLIT_RATIOS["val"]
+
+    train_mask = quarter_counts["cumsum_ratio"] <= train_cut
+    if not train_mask.any():
+        train_mask.iloc[0] = True
+    train_end_idx = quarter_counts[train_mask].index.max()
+
+    val_mask = (quarter_counts.index > train_end_idx) & (quarter_counts["cumsum_ratio"] <= val_cut)
+    if not val_mask.any() and train_end_idx + 1 < len(quarter_counts):
+        val_mask.iloc[train_end_idx + 1] = True
+    val_end_idx = quarter_counts[val_mask].index.max() if val_mask.any() else train_end_idx
+
+    train_quarters = set(quarter_counts.loc[:train_end_idx, "quarter_index"].tolist())
+    val_quarters = set(quarter_counts.loc[train_end_idx + 1 : val_end_idx, "quarter_index"].tolist())
+    test_quarters = set(quarter_counts.loc[val_end_idx + 1 :, "quarter_index"].tolist())
+
+    if not test_quarters and val_quarters:
+        # Keep chronological integrity while ensuring non-empty test split.
+        last_val = max(val_quarters)
+        val_quarters.remove(last_val)
+        test_quarters.add(last_val)
 
     df["split_pre_release"] = "unknown"
     df.loc[known.index, "split_pre_release"] = "test"
@@ -205,9 +227,11 @@ def _apply_pre_release_temporal_split(df: pd.DataFrame) -> dict:
     )
 
     return {
+        "strategy": "chronological_cumulative_rows",
         "train_quarters": len(train_quarters),
         "val_quarters": len(val_quarters),
         "test_quarters": len(test_quarters),
+        "target_ratios": SPLIT_RATIOS,
         "split_counts": [
             {"split": str(row["split"]), "count": int(row["count"])}
             for _, row in split_counts.iterrows()

@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-04-23T08:05:51.662201+00:00",
+  "generated_at_utc": "2026-04-23T08:32:08.980843+00:00",
   "rows_raw": 20324,
   "rows_processed": 20324,
   "coverage": {
@@ -22,29 +22,29 @@
       "genres_non_empty_ratio": 0.8686282227907892
     },
     "split_distribution": {
-      "test": 9110,
-      "val": 5440,
-      "train": 4831,
+      "train": 13376,
+      "test": 3087,
+      "val": 2918,
       "holdout_unknown": 943
     },
     "popularity_bucket_balance_by_split": {
       "test": {
-        "cold_0_25": 0.24785949506037322,
-        "hot_50_75": 0.24939626783754115,
-        "top_75_100": 0.25170142700329307,
-        "warm_25_50": 0.25104281009879253
+        "cold_0_25": 0.24813735017816652,
+        "hot_50_75": 0.2491091674765144,
+        "top_75_100": 0.2520246193715581,
+        "warm_25_50": 0.25072886297376096
       },
       "train": {
-        "cold_0_25": 0.23369902711653903,
-        "hot_50_75": 0.24259987580211137,
-        "top_75_100": 0.26950941833988823,
-        "warm_25_50": 0.25419167874146137
+        "cold_0_25": 0.24222488038277512,
+        "hot_50_75": 0.24686004784688995,
+        "top_75_100": 0.258747009569378,
+        "warm_25_50": 0.25216806220095694
       },
       "val": {
-        "cold_0_25": 0.24669117647058825,
-        "hot_50_75": 0.24926470588235294,
-        "top_75_100": 0.253125,
-        "warm_25_50": 0.2509191176470588
+        "cold_0_25": 0.24777244688142563,
+        "hot_50_75": 0.24982864976010966,
+        "top_75_100": 0.25119945167923236,
+        "warm_25_50": 0.25119945167923236
       }
     }
   },
@@ -61,19 +61,19 @@
         "trailer_id_available_ratio": 0.2046659597030753
       },
       "test": {
-        "text_description_available_ratio": 0.9237102085620198,
+        "text_description_available_ratio": 0.9115646258503401,
         "image_cover_available_ratio": 1.0,
-        "trailer_id_available_ratio": 0.6647639956092206
+        "trailer_id_available_ratio": 0.7719468739876904
       },
       "train": {
-        "text_description_available_ratio": 0.9507348375077623,
+        "text_description_available_ratio": 0.9586572966507177,
         "image_cover_available_ratio": 1.0,
-        "trailer_id_available_ratio": 0.04160629269302422
+        "trailer_id_available_ratio": 0.21680622009569378
       },
       "val": {
-        "text_description_available_ratio": 0.9694852941176471,
+        "text_description_available_ratio": 0.9064427690198766,
         "image_cover_available_ratio": 1.0,
-        "trailer_id_available_ratio": 0.19117647058823528
+        "trailer_id_available_ratio": 0.6901987662782728
       }
     }
   }

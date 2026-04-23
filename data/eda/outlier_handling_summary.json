@@ -179,21 +179,27 @@
     ]
   },
   "pre_release_split": {
-    "train_quarters": 209,
-    "val_quarters": 44,
-    "test_quarters": 46,
+    "strategy": "chronological_cumulative_rows",
+    "train_quarters": 269,
+    "val_quarters": 14,
+    "test_quarters": 16,
+    "target_ratios": {
+      "train": 0.7,
+      "val": 0.15,
+      "test": 0.15
+    },
     "split_counts": [
       {
+        "split": "train",
+        "count": 13376
+      },
+      {
         "split": "test",
-        "count": 9110
+        "count": 3087
       },
       {
         "split": "val",
-        "count": 5440
-      },
-      {
-        "split": "train",
-        "count": 4831
+        "count": 2918
       },
       {
         "split": "unknown",
@@ -206,16 +212,16 @@
     "excluded_unknown_count": 943,
     "effective_split_counts": [
       {
+        "split": "train",
+        "count": 13376
+      },
+      {
         "split": "test",
-        "count": 9110
+        "count": 3087
       },
       {
         "split": "val",
-        "count": 5440
-      },
-      {
-        "split": "train",
-        "count": 4831
+        "count": 2918
       },
       {
         "split": "holdout_unknown",
@@ -224,16 +230,16 @@
     ],
     "model_split_counts": [
       {
+        "split": "train",
+        "count": 13376
+      },
+      {
         "split": "test",
-        "count": 9110
+        "count": 3087
       },
       {
         "split": "val",
-        "count": 5440
-      },
-      {
-        "split": "train",
-        "count": 4831
+        "count": 2918
       }
     ]
   }

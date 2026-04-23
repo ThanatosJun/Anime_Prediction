@@ -12,19 +12,19 @@
 
 ## Temporal Pre-release Split
 
-- Train quarters: `209`
-- Val quarters: `44`
-- Test quarters: `46`
-- `test` rows: 9110
-- `val` rows: 5440
-- `train` rows: 4831
+- Train quarters: `269`
+- Val quarters: `14`
+- Test quarters: `16`
+- `train` rows: 13376
+- `test` rows: 3087
+- `val` rows: 2918
 - `unknown` rows: 943
 
 ## Unknown Split Policy
 
 - Policy: `exclude_unknown_from_model_splits`
 - Excluded unknown rows from model splits: `943`
-- Effective `test` rows: 9110
-- Effective `val` rows: 5440
-- Effective `train` rows: 4831
+- Effective `train` rows: 13376
+- Effective `test` rows: 3087
+- Effective `val` rows: 2918
 - Effective `holdout_unknown` rows: 943
