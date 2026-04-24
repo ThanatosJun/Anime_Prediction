@@ -10,6 +10,12 @@ data:
     val:   0.1
     test:  0.1
   image_size: 224             # resize 目標尺寸（swin-base 標準輸入）
+  image_dir: data/image
+  log_path: data/fetch_log.csv
+  split_csv:
+    train: data/processed/anilist_anime_multimodal_input_train.csv
+    val:   data/processed/anilist_anime_multimodal_input_val.csv
+    test:  data/processed/anilist_anime_multimodal_input_test.csv
 
 # ── Debug ─────────────────────────────────────────────────────────────────────
 debug:

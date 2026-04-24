@@ -184,8 +184,9 @@ embed_url(url)
 ### step4：輸出 embedding
 - 儲存為**單一 parquet 檔**：`data/processed/image_embeddings.parquet`
 - 欄位：`idx`、`coverImage_emb`（768 維）、`bannerImage_emb`（768 維）
+    - `idx` 為 **AniList 動畫 ID**（來自 CSV 的 `id` 欄位），**不是** DataFrame 的 row index
 - 讀取：`np.array(df["coverImage_emb"].tolist())` → shape `(N, 768)`
-- 可直接用 `idx` 和原本 CSV merge
+- 可直接用 `idx` 和原本 CSV 以 `id` 欄位 merge
 
 ## 各 Function 設計簡介和說明
 

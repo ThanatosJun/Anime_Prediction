@@ -41,8 +41,8 @@ def getImage(config: dict) -> None:
     csv_path   = data_cfg['csv_path']
     image_cols = data_cfg['image_columns']
     ratio      = data_cfg['fetch_ratio']
-    image_dir  = 'data/image'
-    log_path   = 'data/fetch_log.csv'
+    image_dir  = data_cfg['image_dir']
+    log_path   = data_cfg['log_path']
 
     make_image_dir(image_dir)
 

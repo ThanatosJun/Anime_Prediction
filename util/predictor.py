@@ -36,8 +36,8 @@ def save_embeddings(df: pd.DataFrame, path: str) -> None:
 
 
 def predict(model, config: dict, device) -> None:
-    image_dir  = 'data/image'
-    test_df    = pd.read_csv('data/processed/anilist_anime_multimodal_input_test.csv')
+    image_dir  = config['data']['image_dir']
+    test_df    = pd.read_csv(config['data']['split_csv']['test'])
     transform  = get_transform_original(config['data']['image_size'])
     batch_size = config['training']['batch_size']
 

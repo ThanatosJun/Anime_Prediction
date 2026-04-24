@@ -136,13 +136,14 @@ def train(config: dict) -> None:
     transform_aug  = get_transform_aug(config)
 
     # datasets
-    image_dir  = 'data/image'
+    image_dir  = config['data']['image_dir']
     image_col  = config['data']['image_columns'][0]
     batch_size = config['training']['batch_size']
+    split_csv  = config['data']['split_csv']
 
-    train_df = pd.read_csv('data/processed/anilist_anime_multimodal_input_train.csv')
-    val_df   = pd.read_csv('data/processed/anilist_anime_multimodal_input_val.csv')
-    test_df  = pd.read_csv('data/processed/anilist_anime_multimodal_input_test.csv')
+    train_df = pd.read_csv(split_csv['train'])
+    val_df   = pd.read_csv(split_csv['val'])
+    test_df  = pd.read_csv(split_csv['test'])
 
     train_loader = get_dataloader(
         AnimeImageDataset(train_df, image_dir, image_col, transform_orig, transform_aug),
@@ -182,7 +183,7 @@ def train(config: dict) -> None:
 
         if epoch % val_interval == 0:
             val_loss   = validate(model, val_loader, loss_fn, device)
-            cosine_sim = evaluate_similarity(model, test_loader, device)
+            cosine_sim = evaluate_similarity(model, val_loader, device)
 
             log_metrics(writer, {
                 'train_loss': train_loss,
@@ -199,4 +200,6 @@ def train(config: dict) -> None:
             ckpt_path = os.path.join(checkpoint_dir, f'epoch_{epoch}.pt')
             save_checkpoint(model, optimizer, epoch, ckpt_path)
 
+    test_cosine_sim = evaluate_similarity(model, test_loader, device)
+    log_metrics(writer, {'test_cosine_sim': test_cosine_sim}, epochs)
     close_writer(writer)
