@@ -2,8 +2,10 @@ import os
 
 import torch
 import torch.nn.functional as F
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+import torch.utils.scheduler as lr_scheduler
 
 from src.model import get_embedding
 
@@ -123,13 +125,18 @@ def train(config: dict) -> None:
         else 'cpu'
     )
 
-    # model & optimizer
+    # model, optimizer & scheduler
     model = load_model(config).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config['training']['learning_rate'],
         weight_decay=config['training']['weight_decay'],
     )
+    epochs        = config['training']['epochs']
+    warmup_epochs = config['training']['warmup_epochs']
+    warmup    = LinearLR(optimizer, start_factor=1e-3, end_factor=1.0, total_iters=warmup_epochs)
+    cosine    = CosineAnnealingLR(optimizer, T_max=epochs - warmup_epochs)
+    scheduler = SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[warmup_epochs])
 
     # transforms
     transform_orig = get_transform_original(config['data']['image_size'])
@@ -170,7 +177,6 @@ def train(config: dict) -> None:
     writer = init_writer(log_dir)
 
     # hyperparams
-    epochs               = config['training']['epochs']
     val_interval         = config['training']['val_interval']
     checkpoint_interval  = config['training']['checkpoint_interval']
     tau                  = config['training']['tau']
@@ -199,6 +205,8 @@ def train(config: dict) -> None:
         if epoch % checkpoint_interval == 0:
             ckpt_path = os.path.join(checkpoint_dir, f'epoch_{epoch}.pt')
             save_checkpoint(model, optimizer, epoch, ckpt_path)
+
+        scheduler.step()
 
     test_cosine_sim = evaluate_similarity(model, test_loader, device)
     log_metrics(writer, {'test_cosine_sim': test_cosine_sim}, epochs)

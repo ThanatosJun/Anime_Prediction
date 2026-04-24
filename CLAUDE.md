@@ -108,7 +108,11 @@ load_config() → load_model(config)
     _forward_orig(orig) → torch.no_grad() → orig_emb（anchor）
     _forward_aug(aug)   → grad            → aug_emb
     infonce_loss(aug_emb, orig_emb, tau)  → loss
-    backprop → optimizer.step()
+    backprop → optimizer.step() → scheduler.step()
+
+    scheduler（Warmup + Cosine Annealing）：
+        epoch 1 ~ warmup_epochs   : lr 從 0 線性升到 learning_rate
+        epoch warmup_epochs ~ end : lr cosine decay 到 ~0
 
 每 val_interval epoch：
     validate() → _val_step → infonce_loss（no backprop）→ avg val_loss
@@ -289,10 +293,12 @@ TensorBoard：
 
 主流程：
 - `train(config)` → 組裝所有模組，執行完整訓練迴圈
-    - 每 `val_interval` epoch：`train_one_epoch` → `validate` → `log_metrics`
+    - 建立 scheduler：`LinearLR`（warmup）→ `CosineAnnealingLR`（cosine decay），以 `SequentialLR` 串接
+    - 每 epoch：`train_one_epoch` → `scheduler.step()`
+    - 每 `val_interval` epoch：`validate` → `evaluate_similarity`（val set）→ `log_metrics`
     - val loss 改善 → `save_best`
     - 每 `checkpoint_interval` epoch → `save_checkpoint`
-    - 結束時 → `close_writer`
+    - 訓練結束：`evaluate_similarity`（test set）→ `log_metrics` → `close_writer`
 
 ### util/predictor.py
 - `predict_one_col(model, loader, device)` → `torch.no_grad()` inference，回傳 `{idx: embedding}` dict
