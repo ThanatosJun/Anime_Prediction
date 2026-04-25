@@ -52,7 +52,10 @@ class EmbeddingGenerator:
         # Load model
         print(f"Loading model: {model_name}")
         self.model = SentenceTransformer(model_name, device=self.device)
-        self.embedding_dim = self.model.get_sentence_embedding_dimension()
+        if hasattr(self.model, "get_embedding_dimension"):
+            self.embedding_dim = self.model.get_embedding_dimension()
+        else:
+            self.embedding_dim = self.model.get_sentence_embedding_dimension()
         print(f"Model loaded on {self.device}. Embedding dimension: {self.embedding_dim}")
 
     def _resolve_device(self, requested_device: str) -> str:

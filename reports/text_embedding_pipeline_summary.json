@@ -1,0 +1,57 @@
+{
+  "timestamp_utc": "2026-04-25T00:10:28.748221+00:00",
+  "config_path": "src/text_branch/configs/embedding_config.yaml",
+  "data_dir": "data/processed",
+  "splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "text_column": "description",
+  "id_column": "id",
+  "target_columns": [
+    "popularity",
+    "meanScore"
+  ],
+  "sample_size": 0,
+  "model_info": {
+    "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    "embedding_dim": 384,
+    "device": "cpu",
+    "batch_size": 16,
+    "random_seed": 42
+  },
+  "preprocessing": {
+    "lowercase": true,
+    "remove_urls": true,
+    "remove_extra_whitespace": true,
+    "min_length": 10,
+    "max_length": 512
+  },
+  "split_stats": [
+    {
+      "split": "train",
+      "input_rows": 13376,
+      "encoded_rows": 12783,
+      "dropped_rows": 593,
+      "retention_rate": 0.9556668660287081,
+      "output_path": "artifacts/text_embeddings_train.parquet"
+    },
+    {
+      "split": "val",
+      "input_rows": 2918,
+      "encoded_rows": 2637,
+      "dropped_rows": 281,
+      "retention_rate": 0.9037011651816312,
+      "output_path": "artifacts/text_embeddings_val.parquet"
+    },
+    {
+      "split": "test",
+      "input_rows": 3087,
+      "encoded_rows": 2808,
+      "dropped_rows": 279,
+      "retention_rate": 0.9096209912536443,
+      "output_path": "artifacts/text_embeddings_test.parquet"
+    }
+  ]
+}
