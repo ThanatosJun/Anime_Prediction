@@ -3,7 +3,7 @@
 - Rule version: `decision_eda_v3`
 - Input file: `data/interim/anilist_anime_data_interim_20260426.csv`
 - Output rows: `20324`
-- Output columns: `39`
+- Output columns: `42`
 
 ## Non-negative Enforcement
 

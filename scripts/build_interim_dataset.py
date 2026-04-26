@@ -43,11 +43,13 @@ KEEP_COLUMNS = [
     "favourites",
     "trending",
     "source",
+    "is_source_missing",
     "countryOfOrigin",
     "isAdult",
     "startDate_year",
     "startDate_month",
     "startDate_day",
+    "is_startDate_day_missing",
     "genres",
     "studios",
     "is_sequel",
@@ -56,6 +58,7 @@ KEEP_COLUMNS = [
     "prequel_popularity_mean",
     "prequel_meanScore_mean",
     "voice_actor_names",
+    "is_title_native_imputed",
 ]
 
 NUMERIC_COLUMNS = [
@@ -80,8 +83,11 @@ MISSING_RULES = {
     "duration": {"method": "format_median_then_global_median"},
     "averageScore": {"method": "meanScore_then_global_median"},
     "season": {"method": "startDate_month_to_season"},
+    "source": {"method": "fill_unknown_source_with_missing_flag"},
     "seasonYear": {"method": "startDate_year"},
     "title_english": {"method": "title_romaji"},
+    "title_native": {"method": "title_romaji_then_unknown_with_missing_flag"},
+    "startDate_day": {"method": "fill_mid_month_day_15_with_missing_flag"},
     "prequel_count": {"method": "fill_zero_when_no_prequel_match"},
     "prequel_popularity_mean": {"method": "fill_zero_when_no_prequel_match"},
     "prequel_meanScore_mean": {"method": "fill_zero_when_no_prequel_match"},
@@ -265,6 +271,23 @@ def impute_missing_values(df: pd.DataFrame) -> pd.DataFrame:
             df["averageScore"] = df["averageScore"].fillna(score_source)
         df["averageScore"] = df["averageScore"].fillna(df["averageScore"].median())
 
+    if "source" in df.columns:
+        source_missing = df["source"].isna()
+        df["is_source_missing"] = source_missing.astype(bool)
+        df["source"] = df["source"].fillna("UNKNOWN_SOURCE")
+
+    if "title_native" in df.columns:
+        native_missing_before = df["title_native"].isna()
+        if "title_romaji" in df.columns:
+            df["title_native"] = df["title_native"].fillna(df["title_romaji"])
+        df["title_native"] = df["title_native"].fillna("UNKNOWN_TITLE_NATIVE")
+        df["is_title_native_imputed"] = native_missing_before.astype(bool)
+
+    if "startDate_day" in df.columns:
+        day_missing = df["startDate_day"].isna()
+        df["startDate_day"] = df["startDate_day"].fillna(15)
+        df["is_startDate_day_missing"] = day_missing.astype(bool)
+
     if "season" in df.columns and "startDate_month" in df.columns:
         month_vals = pd.to_numeric(df["startDate_month"], errors="coerce")
         month_to_season = pd.Series(pd.NA, index=df.index, dtype="object")
@@ -285,6 +308,10 @@ def impute_missing_values(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
     for col in ["is_sequel", "has_sequel"]:
+        if col in df.columns:
+            df[col] = df[col].fillna(False).astype(bool)
+
+    for col in ["is_source_missing", "is_title_native_imputed", "is_startDate_day_missing"]:
         if col in df.columns:
             df[col] = df[col].fillna(False).astype(bool)
 

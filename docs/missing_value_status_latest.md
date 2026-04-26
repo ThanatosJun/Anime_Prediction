@@ -18,25 +18,19 @@ Reference runtime outputs (local, ignored by git):
 
 ### Full data (missing)
 - `voice_actor_names`: `8426` (`41.4584%`)
-- `source`: `2320` (`11.4151%`)
-- `release_date`: `1406` (`6.9179%`)
-- `startDate_day`: `1405` (`6.9130%`)
 - `startDate_month`: `944` (`4.6448%`)
+- `release_date`: `944` (`4.6448%`)
 - `release_quarter_key`: `943` (`4.6398%`)
 - `release_quarter`: `943` (`4.6398%`)
 - `popularity_quarter_pct`: `943` (`4.6398%`)
 - `popularity_quarter_bucket`: `943` (`4.6398%`)
 - `season`: `943` (`4.6398%`)
-- `title_native`: `167` (`0.8217%`)
 - `format`: `1` (`0.0049%`)
 
 ### Without holdout_unknown (missing)
 - `voice_actor_names`: `7543` (`38.9196%`)
-- `source`: `2102` (`10.8457%`)
-- `release_date`: `463` (`2.3889%`)
-- `startDate_day`: `463` (`2.3889%`)
-- `title_native`: `146` (`0.7533%`)
 - `startDate_month`: `1` (`0.0052%`)
+- `release_date`: `1` (`0.0052%`)
 
 ## multimodal_input_v1
 
