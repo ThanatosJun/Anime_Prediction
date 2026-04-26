@@ -26,6 +26,7 @@ EDA_DIR = Path("data/eda")
 
 PROCESSED_CSV = PROCESSED_DIR / "anilist_anime_data_processed_v1.csv"
 PROCESSED_META = PROCESSED_DIR / "anilist_anime_data_processed_v1_meta.json"
+PROCESSED_SPLIT_TEMPLATE = "anilist_anime_data_processed_v1_{split}.csv"
 OUTLIER_SUMMARY_JSON = EDA_DIR / "outlier_handling_summary.json"
 OUTLIER_SUMMARY_MD = EDA_DIR / "outlier_handling_summary.md"
 TARGET_SUMMARY_JSON = EDA_DIR / "target_engineering_summary.json"
@@ -357,6 +358,19 @@ def _write_target_summary(summary: dict) -> None:
     TARGET_SUMMARY_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _write_processed_split_files(df: pd.DataFrame) -> list[str]:
+    written_files: list[str] = []
+    if "split_pre_release_effective" not in df.columns:
+        return written_files
+
+    for split_name, group in df.groupby("split_pre_release_effective", dropna=False):
+        name = "unknown" if pd.isna(split_name) else str(split_name)
+        out_path = PROCESSED_DIR / PROCESSED_SPLIT_TEMPLATE.format(split=name)
+        group.to_csv(out_path, index=False)
+        written_files.append(str(out_path))
+    return written_files
+
+
 def main() -> None:
     input_file = _latest_interim_csv()
     df = pd.read_csv(input_file)
@@ -370,6 +384,7 @@ def main() -> None:
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     df.to_csv(PROCESSED_CSV, index=False)
+    split_files = _write_processed_split_files(df)
 
     meta = {
         "rule_version": RULE_VERSION,
@@ -393,6 +408,8 @@ def main() -> None:
     print(f"Wrote {OUTLIER_SUMMARY_MD}")
     print(f"Wrote {TARGET_SUMMARY_JSON}")
     print(f"Wrote {TARGET_SUMMARY_MD}")
+    for path in split_files:
+        print(f"Wrote {path}")
 
 
 if __name__ == "__main__":
