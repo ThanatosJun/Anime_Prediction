@@ -27,19 +27,14 @@ Anime_Prediction/
 │   └── fussion_branch/                             # Fusion 模型分支 (RAG + MLP)
 ├── docs/                                           # 文件目錄
 │   ├── fussion_pipeline/fussion_pipeline.md        # Fusion 架構設計文件
-│   ├── data_processing_for_paper.md               # 論文處理紀錄 (方法學說明)
-│   ├── data_pipeline_handoff.md                   # 團隊交接指南
-│   ├── handoff_text_model.md                      # 文字分支組員交接文件
-│   ├── handoff_image_model.md                     # 圖片分支組員交接文件
-│   ├── handoff_fusion_model.md                    # Fusion 組員交接文件
+│   ├── pipeline/                                   # pipeline、論文方法、外部轉換相關文件
+│   ├── handoff/                                    # 各模型分支交接文件
+│   ├── reports/                                    # 進度、缺值狀態、簡報大綱
 │   └── archive_proposal_versions/                 # 提案階段歷史文件歸檔
-├── scripts/                                        # 資料流程腳本 (EDA/Cleaning/Outlier)
-│   ├── run_baseline_eda.py
-│   ├── run_decision_eda.py
-│   ├── build_interim_dataset.py
-│   ├── build_processed_dataset.py
-│   ├── export_multimodal_inputs.py
-│   └── generate_raw_manifest.py
+├── scripts/                                        # 資料流程腳本
+│   ├── pipeline/                                   # 主資料建置流程
+│   ├── eda/                                        # 分析與報表腳本
+│   └── external/    
 ├── qdrant_db/                                      # 本機 Qdrant 向量資料庫 (不入版控)
 ├── results/                                        # 模型訓練結果 / checkpoint (不入版控)
 ├── fetch_data.py                                   # AniList GraphQL 抓取與匯出腳本
@@ -55,22 +50,22 @@ Anime_Prediction/
 ### Quick Rebuild (Team Handoff Friendly)
 
 ```bash
-python scripts/generate_raw_manifest.py && \
-python scripts/run_baseline_eda.py && \
-python scripts/run_decision_eda.py && \
-python scripts/build_interim_dataset.py && \
-python scripts/build_processed_dataset.py && \
-python scripts/export_multimodal_inputs.py && \
-python scripts/run_rq_eda.py && \
-python scripts/run_rq_eda_plots.py && \
-python scripts/run_holdout_unknown_diagnostic.py && \
-python scripts/run_column_lineage_report.py
+python scripts/pipeline/generate_raw_manifest.py && \
+python scripts/eda/run_baseline_eda.py && \
+python scripts/eda/run_decision_eda.py && \
+python scripts/pipeline/build_interim_dataset.py && \
+python scripts/pipeline/build_processed_dataset.py && \
+python scripts/pipeline/export_multimodal_inputs.py && \
+python scripts/eda/run_rq_eda.py && \
+python scripts/eda/run_rq_eda_plots.py && \
+python scripts/eda/run_holdout_unknown_diagnostic.py && \
+python scripts/eda/run_column_lineage_report.py
 ```
 
 ### 1) Baseline EDA
 
 ```bash
-python scripts/run_baseline_eda.py
+python scripts/eda/run_baseline_eda.py
 ```
 
 輸出：
@@ -80,7 +75,7 @@ python scripts/run_baseline_eda.py
 ### 2) Decision EDA (Rule Recommendation Layer)
 
 ```bash
-python scripts/run_decision_eda.py
+python scripts/eda/run_decision_eda.py
 ```
 
 輸出：
@@ -90,7 +85,7 @@ python scripts/run_decision_eda.py
 ### 3) Build Interim Dataset
 
 ```bash
-python scripts/build_interim_dataset.py
+python scripts/pipeline/build_interim_dataset.py
 ```
 
 主要處理：
@@ -106,7 +101,7 @@ python scripts/build_interim_dataset.py
 ### 4) Build Processed Dataset (Outlier Handling)
 
 ```bash
-python scripts/build_processed_dataset.py
+python scripts/pipeline/build_processed_dataset.py
 ```
 
 主要處理：
@@ -126,7 +121,7 @@ python scripts/build_processed_dataset.py
 ### 5) Freeze Raw Snapshot Metadata
 
 ```bash
-python scripts/generate_raw_manifest.py
+python scripts/pipeline/generate_raw_manifest.py
 ```
 
 輸出：
@@ -135,7 +130,7 @@ python scripts/generate_raw_manifest.py
 ### 6) Export Multimodal Inputs (Feature Contract + Split Files)
 
 ```bash
-python scripts/export_multimodal_inputs.py
+python scripts/pipeline/export_multimodal_inputs.py
 ```
 
 輸出：
@@ -150,7 +145,7 @@ python scripts/export_multimodal_inputs.py
 ### 7) RQ-oriented EDA
 
 ```bash
-python scripts/run_rq_eda.py
+python scripts/eda/run_rq_eda.py
 ```
 
 輸出：
@@ -160,7 +155,7 @@ python scripts/run_rq_eda.py
 ### 8) RQ Figure Generation (Paper-ready)
 
 ```bash
-python scripts/run_rq_eda_plots.py
+python scripts/eda/run_rq_eda_plots.py
 ```
 
 輸出：
@@ -172,7 +167,7 @@ python scripts/run_rq_eda_plots.py
 ### 9) Holdout Unknown Diagnostic
 
 ```bash
-python scripts/run_holdout_unknown_diagnostic.py
+python scripts/eda/run_holdout_unknown_diagnostic.py
 ```
 
 輸出：
@@ -182,7 +177,7 @@ python scripts/run_holdout_unknown_diagnostic.py
 ### 10) Column Lineage Report
 
 ```bash
-python scripts/run_column_lineage_report.py
+python scripts/eda/run_column_lineage_report.py
 ```
 
 輸出：
@@ -240,26 +235,28 @@ python -m src.fussion_branch.run_rag
 
 ## 模型分工交接文件
 
-- 文字處理組：`docs/handoff_text_model.md`
-- 圖片處理組：`docs/handoff_image_model.md`
-- Fusion Model 組：`docs/handoff_fusion_model.md`
+- 文件總索引：`docs/README.md`
+- 腳本總索引：`scripts/README.md`
+- 文字處理組：`docs/handoff/handoff_text_model.md`
+- 圖片處理組：`docs/handoff/handoff_image_model.md`
+- Fusion Model 組：`docs/handoff/handoff_fusion_model.md`
 
 ## 規則維護入口（給接手成員）
 
-- 缺值處理與補值規則：`scripts/build_interim_dataset.py`（`MISSING_RULES`）
-- 異常值閾值與 clipping 設定：`scripts/build_processed_dataset.py`（`CLIP_COLUMNS`）
-- 分類標籤與時序切分策略：`scripts/build_processed_dataset.py`（`_add_popularity_quarter_target`, `_apply_pre_release_temporal_split`）
-- 多模態輸入匯出與 split 分檔：`scripts/export_multimodal_inputs.py`
-- 規則建議來源：`scripts/run_decision_eda.py` + `data/eda/decision_eda_summary.*`
-- RQ 導向可行性與 snapshot 緩解證據：`scripts/run_rq_eda.py` + `data/eda/rq_eda_summary.*`
-- 論文圖表輸出：`scripts/run_rq_eda_plots.py` + `data/eda/figures/*`
-- holdout 風險診斷：`scripts/run_holdout_unknown_diagnostic.py` + `data/eda/holdout_unknown_diagnostic.*`
-- 欄位血緣對照：`scripts/run_column_lineage_report.py` + `data/eda/column_lineage_summary.*`
+- 缺值處理與補值規則：`scripts/pipeline/build_interim_dataset.py`（`MISSING_RULES`）
+- 異常值閾值與 clipping 設定：`scripts/pipeline/build_processed_dataset.py`（`CLIP_COLUMNS`）
+- 分類標籤與時序切分策略：`scripts/pipeline/build_processed_dataset.py`（`_add_popularity_quarter_target`, `_apply_pre_release_temporal_split`）
+- 多模態輸入匯出與 split 分檔：`scripts/pipeline/export_multimodal_inputs.py`
+- 規則建議來源：`scripts/eda/run_decision_eda.py` + `data/eda/decision_eda_summary.*`
+- RQ 導向可行性與 snapshot 緩解證據：`scripts/eda/run_rq_eda.py` + `data/eda/rq_eda_summary.*`
+- 論文圖表輸出：`scripts/eda/run_rq_eda_plots.py` + `data/eda/figures/*`
+- holdout 風險診斷：`scripts/eda/run_holdout_unknown_diagnostic.py` + `data/eda/holdout_unknown_diagnostic.*`
+- 欄位血緣對照：`scripts/eda/run_column_lineage_report.py` + `data/eda/column_lineage_summary.*`
 - 規則版本追蹤：`data/interim/*_meta.json`、`data/processed/*_meta.json` 的 `rule_version`
 
 ## 論文寫作處理紀錄
 
-- 請直接使用 `docs/data_processing_for_paper.md`。
+- 請直接使用 `docs/pipeline/data_processing_for_paper.md`。
 - 內容包含：處理階段目的、規則定義、參數、target engineering 公式、時序切分協議、可重現證據與限制說明。
 
 ## 🎯 最終定案研究任務摘要

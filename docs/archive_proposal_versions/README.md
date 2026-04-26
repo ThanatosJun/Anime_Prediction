@@ -21,9 +21,10 @@
 **請勿參考此目錄中的文件進行開發或研究**
 
 目前有效的專案文件為：
-- `README.md` (專案主入口)
-- `docs/data_processing_for_paper.md` (論文處理紀錄)
-- `docs/data_pipeline_handoff.md` (團隊交接指南)
+- `README.md`（專案主入口）
+- `docs/README.md`（文件索引）
+- `docs/pipeline/data_processing_for_paper.md`（論文處理紀錄）
+- `docs/pipeline/data_pipeline_handoff.md`（團隊交接指南）
 - `data/eda/` 下的所有 EDA 摘要文件
 
 ---
