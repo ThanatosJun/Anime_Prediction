@@ -79,6 +79,7 @@ MISSING_RULES = {
     "episodes": {"method": "format_median_then_global_median"},
     "duration": {"method": "format_median_then_global_median"},
     "averageScore": {"method": "meanScore_then_global_median"},
+    "season": {"method": "startDate_month_to_season"},
     "seasonYear": {"method": "startDate_year"},
     "title_english": {"method": "title_romaji"},
     "prequel_count": {"method": "fill_zero_when_no_prequel_match"},
@@ -263,6 +264,15 @@ def impute_missing_values(df: pd.DataFrame) -> pd.DataFrame:
         if score_source is not None:
             df["averageScore"] = df["averageScore"].fillna(score_source)
         df["averageScore"] = df["averageScore"].fillna(df["averageScore"].median())
+
+    if "season" in df.columns and "startDate_month" in df.columns:
+        month_vals = pd.to_numeric(df["startDate_month"], errors="coerce")
+        month_to_season = pd.Series(pd.NA, index=df.index, dtype="object")
+        month_to_season = month_to_season.mask(month_vals.between(1, 3), "WINTER")
+        month_to_season = month_to_season.mask(month_vals.between(4, 6), "SPRING")
+        month_to_season = month_to_season.mask(month_vals.between(7, 9), "SUMMER")
+        month_to_season = month_to_season.mask(month_vals.between(10, 12), "FALL")
+        df["season"] = df["season"].fillna(month_to_season)
 
     if "seasonYear" in df.columns and "startDate_year" in df.columns:
         df["seasonYear"] = df["seasonYear"].fillna(df["startDate_year"])
