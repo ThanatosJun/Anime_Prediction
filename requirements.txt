@@ -1,0 +1,29 @@
+# ── Deep Learning ─────────────────────────────────────────────────────────────
+# PyTorch: install separately with CUDA 12.8 support (RTX 5070 Ti / Blackwell)
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+torch
+torchvision
+tensorboard
+
+# ── Hugging Face ──────────────────────────────────────────────────────────────
+transformers
+sentence-transformers
+
+# ── Data / ML ─────────────────────────────────────────────────────────────────
+pandas
+numpy
+scikit-learn
+scipy
+pyarrow
+
+# ── Image ─────────────────────────────────────────────────────────────────────
+Pillow
+
+# ── Vector Database ───────────────────────────────────────────────────────────
+qdrant-client
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+requests
+tqdm
+PyYAML
+matplotlib

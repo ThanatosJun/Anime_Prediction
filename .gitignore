@@ -30,3 +30,7 @@ data/eda/*
 !data/eda/figures/
 !data/eda/figures/*.png
 !data/eda/figures/*.md
+data/image
+qdrant_db/
+results/
+.exp/

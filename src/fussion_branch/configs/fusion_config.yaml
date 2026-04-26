@@ -1,0 +1,35 @@
+# ── Data ──────────────────────────────────────────────────────────────────────
+data:
+  fusion_meta_dir:   data/fussion
+  text_emb_dir:      artifacts
+  rag_features_dir:  artifacts
+  image_emb_path:    .exp/image_embedding/image_embeddings.parquet   # 1024-dim Swin-base; zeros if missing
+  meta_encoder_path: artifacts/meta_encoder.json
+  top_studios:       50          # top-K most-common studios kept in multi-hot
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model:
+  hidden_dims: [512, 256, 128]   # 3 layers; gradual compression from 1310-dim input
+  dropout:     0.4               # slightly higher dropout for deeper network + small dataset
+
+# ── Training ──────────────────────────────────────────────────────────────────
+training:
+  batch_size:               256
+  epochs:                   100
+  learning_rate:            1.0e-3
+  weight_decay:             1.0e-4
+  early_stopping_patience:  15
+  grad_clip:                1.0
+  device:                   cuda   # cuda / cpu
+
+# ── Targets ───────────────────────────────────────────────────────────────────
+targets:
+  popularity:
+    log_transform: true            # log1p before standardize (skewed target)
+  meanScore:
+    log_transform: false
+
+# ── Output ────────────────────────────────────────────────────────────────────
+output:
+  results_dir: results/fusion
+  run_id:      "01"

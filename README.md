@@ -11,9 +11,22 @@ Anime_Prediction/
 │   ├── raw/                                        # AniList 原始資料集檔案 (csv/pkl + manifest)
 │   ├── interim/                                    # 清理後中間資料 (可重建；交接用 CSV 納入版控)
 │   ├── processed/                                  # 最終建模資料 (可重建；建模用 CSV 納入版控)
+│   ├── fussion/                                    # Fusion 分支用資料
+│   │   ├── fusion_meta_{train,val,test}.csv        # Pre-release metadata (28 欄)
+│   │   └── fusion_data_exploration.ipynb           # 欄位確認探索筆記本
+│   ├── image/                                      # 下載後的封面圖 (不入版控)
 │   ├── eda/                                        # EDA 摘要輸出 (md/json)
 │   └── archive_local/                              # 本機長期保存區 (不入版控)
+├── artifacts/                                      # 模型中間產出 (embeddings / RAG features)
+│   ├── text_embeddings_{train,val,test}.parquet    # 文字 embedding (384-dim, all-MiniLM-L6-v2)
+│   ├── rag_features_{train,val,test}.parquet       # RAG 召回特徵
+│   └── sparse_encoder.json                         # Genre + Studio sparse vocab
+├── src/
+│   ├── text_branch/                                # 文字 embedding 分支
+│   ├── image_branch/                               # 圖片 embedding 分支 (Swin Transformer)
+│   └── fussion_branch/                             # Fusion 模型分支 (RAG + MLP)
 ├── docs/                                           # 文件目錄
+│   ├── fussion_pipeline/fussion_pipeline.md        # Fusion 架構設計文件
 │   ├── data_processing_for_paper.md               # 論文處理紀錄 (方法學說明)
 │   ├── data_pipeline_handoff.md                   # 團隊交接指南
 │   ├── handoff_text_model.md                      # 文字分支組員交接文件
@@ -27,9 +40,13 @@ Anime_Prediction/
 │   ├── build_processed_dataset.py
 │   ├── export_multimodal_inputs.py
 │   └── generate_raw_manifest.py
+├── qdrant_db/                                      # 本機 Qdrant 向量資料庫 (不入版控)
+├── results/                                        # 模型訓練結果 / checkpoint (不入版控)
 ├── fetch_data.py                                   # AniList GraphQL 抓取與匯出腳本
+├── requirements.txt                                # Python 套件需求
+├── CLAUDE.md                                       # Claude Code 開發說明
 ├── .github/                                        # GitHub 相關設定與 Skills
-├── .gitignore                                      # Git 忽略檔案設定 (排除 agents/skills)
+├── .gitignore                                      # Git 忽略檔案設定
 └── README.md                                       # 專案說明文件 (本檔案)
 ```
 
@@ -185,6 +202,41 @@ python scripts/run_column_lineage_report.py
 - `data/interim`、`data/processed` 的 CSV 納入版控，作為團隊交接與結果對齊依據。
 - `data/eda` 保留輕量摘要（`*_summary.md`, `*_summary.json`）便於追蹤品質變化。
 - `data/archive_local` 作為本機長期保存與版本紀錄區，不納入版控。
+
+## Multimodal Fusion Pipeline
+
+### Text Branch
+
+```bash
+python -m src.text_branch.run_text_embedding_pipeline
+```
+
+輸出：`artifacts/text_embeddings_{train,val,test}.parquet`（384-dim，all-MiniLM-L6-v2）
+
+### Image Branch
+
+```bash
+python -m src.image_branch.run_fetch    # 下載封面圖
+python -m src.image_branch.run_train    # Fine-tune Swin Transformer
+python -m src.image_branch.run_predict  # 推論 → parquet
+```
+
+Config：`src/image_branch/configs/image_process_config.yaml`
+輸出：`data/processed/image_embeddings.parquet`（768-dim，Swin-base）
+
+### Fusion Branch（RAG + MLP）
+
+```bash
+# Step 1: 建立 Qdrant collection + 查詢 rag_features
+python -m src.fussion_branch.run_rag
+
+# Step 2: 訓練 Fusion MLP（待實作）
+# python -m src.fussion_branch.run_train
+```
+
+設計詳見：`docs/fussion_pipeline/fussion_pipeline.md`
+
+---
 
 ## 模型分工交接文件
 
