@@ -14,11 +14,9 @@ Anime_Prediction/
 │   ├── eda/                                        # EDA 摘要輸出 (md/json)
 │   └── archive_local/                              # 本機長期保存區 (不入版控)
 ├── docs/                                           # 文件目錄
-│   ├── data_processing_for_paper.md               # 論文處理紀錄 (方法學說明)
-│   ├── data_pipeline_handoff.md                   # 團隊交接指南
-│   ├── handoff_text_model.md                      # 文字分支組員交接文件
-│   ├── handoff_image_model.md                     # 圖片分支組員交接文件
-│   ├── handoff_fusion_model.md                    # Fusion 組員交接文件
+│   ├── pipeline/                                   # pipeline、論文方法、外部轉換相關文件
+│   ├── handoff/                                    # 各模型分支交接文件
+│   ├── reports/                                    # 進度、缺值狀態、簡報大綱
 │   └── archive_proposal_versions/                 # 提案階段歷史文件歸檔
 ├── scripts/                                        # 資料流程腳本 (EDA/Cleaning/Outlier)
 │   ├── run_baseline_eda.py
@@ -190,9 +188,9 @@ python scripts/run_column_lineage_report.py
 
 - 文件總索引：`docs/README.md`
 - 腳本總索引：`scripts/README.md`
-- 文字處理組：`docs/handoff_text_model.md`
-- 圖片處理組：`docs/handoff_image_model.md`
-- Fusion Model 組：`docs/handoff_fusion_model.md`
+- 文字處理組：`docs/handoff/handoff_text_model.md`
+- 圖片處理組：`docs/handoff/handoff_image_model.md`
+- Fusion Model 組：`docs/handoff/handoff_fusion_model.md`
 
 ## 規則維護入口（給接手成員）
 
@@ -209,7 +207,7 @@ python scripts/run_column_lineage_report.py
 
 ## 論文寫作處理紀錄
 
-- 請直接使用 `docs/data_processing_for_paper.md`。
+- 請直接使用 `docs/pipeline/data_processing_for_paper.md`。
 - 內容包含：處理階段目的、規則定義、參數、target engineering 公式、時序切分協議、可重現證據與限制說明。
 
 ## 🎯 最終定案研究任務摘要

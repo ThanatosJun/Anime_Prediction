@@ -58,4 +58,4 @@ python scripts/run_column_lineage_report.py
 
 - 新增腳本時，檔名使用 `verb_object.py`（例如 `run_xxx.py`, `build_xxx.py`）。
 - 每支腳本應至少包含：用途、主要輸入、主要輸出、是否可重入（idempotent）。
-- 任何新輸出檔案，請同步更新 `docs/data_pipeline_handoff.md` 與本索引。
+- 任何新輸出檔案，請同步更新 `docs/pipeline/data_pipeline_handoff.md` 與本索引。

@@ -4,7 +4,7 @@ Transform external anime datasets into project-compatible processed/multimodal c
 Usage example:
 python scripts/transform_external_dataset.py ^
   --input-csv data/external/new_snapshot.csv ^
-  --mapping-json docs/external_schema_mapping_example.json ^
+  --mapping-json docs/pipeline/external_schema_mapping_example.json ^
   --output-prefix external_v1
 """
 

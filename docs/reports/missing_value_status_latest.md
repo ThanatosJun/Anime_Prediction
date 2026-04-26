@@ -1,22 +1,22 @@
-# Missing Value Status (Latest Snapshot)
+# 缺值狀態（最新快照）
 
-Generated from:
+資料來源：
 - `data/processed/anilist_anime_data_processed_v1.csv`
 - `data/processed/anilist_anime_multimodal_input_v1.csv`
 
-Reference script:
+參考腳本：
 - `scripts/run_missing_value_report.py`
 
-Reference runtime outputs (local, ignored by git):
+執行期輸出參考（本機檔案，未納入版控）：
 - `data/eda/missing_value_report.json`
 - `data/eda/missing_value_report.md`
 
 ## processed_v1
 
-- Full rows: `20324`
-- Without holdout (`is_model_split == True`) rows: `19381`
+- 全部資料筆數：`20324`
+- 排除 holdout 後（`is_model_split == True`）筆數：`19381`
 
-### Full data (missing)
+### 全資料缺值
 - `voice_actor_names`: `8426` (`41.4584%`)
 - `startDate_month`: `944` (`4.6448%`)
 - `release_date`: `944` (`4.6448%`)
@@ -27,17 +27,17 @@ Reference runtime outputs (local, ignored by git):
 - `season`: `943` (`4.6398%`)
 - `format`: `1` (`0.0049%`)
 
-### Without holdout_unknown (missing)
+### 排除 holdout_unknown 後缺值
 - `voice_actor_names`: `7543` (`38.9196%`)
 - `startDate_month`: `1` (`0.0052%`)
 - `release_date`: `1` (`0.0052%`)
 
 ## multimodal_input_v1
 
-- Full rows: `20324`
-- Without holdout (`is_model_split == True`) rows: `19381`
+- 全部資料筆數：`20324`
+- 排除 holdout 後（`is_model_split == True`）筆數：`19381`
 
-### Full data (missing)
+### 全資料缺值
 - `bannerImage`: `12975` (`63.8408%`)
 - `trailer_site`: `12834` (`63.1470%`)
 - `trailer_id`: `12834` (`63.1470%`)
@@ -48,7 +48,7 @@ Reference runtime outputs (local, ignored by git):
 - `popularity_quarter_bucket`: `943` (`4.6398%`)
 - `popularity_quarter_pct`: `943` (`4.6398%`)
 
-### Without holdout_unknown (missing)
+### 排除 holdout_unknown 後缺值
 - `bannerImage`: `12145` (`62.6645%`)
 - `trailer_site`: `12084` (`62.3497%`)
 - `trailer_id`: `12084` (`62.3497%`)

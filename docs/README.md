@@ -4,29 +4,28 @@
 
 ## 1) 新成員第一次接手（建議閱讀順序）
 
-1. `data_pipeline_handoff.md`：資料流程全貌與重建順序。
+1. `pipeline/data_pipeline_handoff.md`：資料流程全貌與重建順序。
 2. `../scripts/README.md`：每支腳本用途、輸入輸出、常用指令。
-3. `handoff_text_model.md` / `handoff_image_model.md` / `handoff_fusion_model.md`：分組交接與任務切分。
+3. `handoff/handoff_text_model.md` / `handoff/handoff_image_model.md` / `handoff/handoff_fusion_model.md`：分組交接與任務切分。
 
 ## 2) 依任務找文件
 
 - **重跑資料流程 / 改規則**
-  - `data_pipeline_handoff.md`
+  - `pipeline/data_pipeline_handoff.md`
   - `../scripts/README.md`
 - **論文方法章與處理細節**
-  - `data_processing_for_paper.md`
+  - `pipeline/data_processing_for_paper.md`
 - **簡報與專案進度**
-  - `a4_final_project_progress_dataset_slides_outline.md`
-  - `missing_value_status_latest.md`
+  - `reports/missing_value_status_latest.md`
 - **外部資料轉換**
-  - `external_dataset_transform_flow.md`
-  - `external_schema_mapping_example.json`
+  - `pipeline/external_dataset_transform_flow.md`
+  - `pipeline/external_schema_mapping_example.json`
 
 ## 3) 分支模型交接文件
 
-- 文字：`handoff_text_model.md`
-- 圖片：`handoff_image_model.md`
-- 融合：`handoff_fusion_model.md`
+- 文字：`handoff/handoff_text_model.md`
+- 圖片：`handoff/handoff_image_model.md`
+- 融合：`handoff/handoff_fusion_model.md`
 
 ## 4) 歷史提案與歸檔
 
