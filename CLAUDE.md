@@ -132,6 +132,7 @@ load_config() → load_model(config)
     evaluate_similarity() → avg cosine_similarity(orig_emb, aug_emb)
     結束 → close_writer()
 ```
+![alt text](image-1.png)
 
 ---
 
