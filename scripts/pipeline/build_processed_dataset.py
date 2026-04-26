@@ -52,7 +52,7 @@ def _latest_interim_csv() -> Path:
     candidates = sorted(INTERIM_DIR.glob("anilist_anime_data_interim_*.csv"))
     if not candidates:
         raise FileNotFoundError(
-            "No interim CSV found. Run scripts/build_interim_dataset.py first."
+            "No interim CSV found. Run scripts/pipeline/build_interim_dataset.py first."
         )
     return candidates[-1]
 

@@ -28,7 +28,7 @@ FIG_NOTES = FIG_DIR / "rq_figure_notes.md"
 
 def _load_summary() -> dict:
     if not RQ_SUMMARY_JSON.exists():
-        raise FileNotFoundError("RQ summary not found. Run scripts/run_rq_eda.py first.")
+        raise FileNotFoundError("RQ summary not found. Run scripts/eda/run_rq_eda.py first.")
     return json.loads(RQ_SUMMARY_JSON.read_text(encoding="utf-8"))
 
 

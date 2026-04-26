@@ -44,12 +44,12 @@
 
 ## 2) 處理階段與產物
 
-### Stage A：Baseline EDA（`scripts/run_baseline_eda.py`）
+### Stage A：Baseline EDA（`scripts/eda/run_baseline_eda.py`）
 - **目的：** 在規則決策前完成描述性盤點。
 - **輸出：** `data/eda/baseline_eda_summary.json/.md`
 - **主要指標：** 缺值率、數值分佈、IQR 異常值邊界。
 
-### Stage B：Decision EDA（`scripts/run_decision_eda.py`）
+### Stage B：Decision EDA（`scripts/eda/run_decision_eda.py`）
 - **目的：** 把描述性統計轉為可執行規則。
 - **輸出：** `data/eda/decision_eda_summary.json/.md`
 - **決策訊號：**
@@ -58,7 +58,7 @@
   - 目標欄位相關性輪廓
   - 群組影響摘要（例如 `format` -> `popularity`）
 
-### Stage C：Interim Dataset（`scripts/build_interim_dataset.py`）
+### Stage C：Interim Dataset（`scripts/pipeline/build_interim_dataset.py`）
 - **輸出：** `data/interim/anilist_anime_data_interim_YYYYMMDD.csv` + metadata json
 - **目前規則版本：** `decision_eda_v2_relation_features`
 - **操作：**
@@ -67,7 +67,7 @@
   - 以 `id` 去重
   - 以明確政策映射（`MISSING_RULES`）補值
 
-### Stage D：Processed Dataset（`scripts/build_processed_dataset.py`）
+### Stage D：Processed Dataset（`scripts/pipeline/build_processed_dataset.py`）
 - **輸出：** `data/processed/anilist_anime_data_processed_v1.csv` + metadata json
 - **目前規則版本：** `decision_eda_v3`
 - **操作：**
@@ -77,7 +77,7 @@
   - 時序 pre-release 切分（`train/val/test/unknown`）
   - unknown 政策：`unknown` 轉為 `holdout_unknown`，不納入模型 split
 
-### Stage E：Multimodal Input Export（`scripts/export_multimodal_inputs.py`）
+### Stage E：Multimodal Input Export（`scripts/pipeline/export_multimodal_inputs.py`）
 - **目的：** 保留 text/image/trailer 欄位並維持 split 對齊。
 - **輸出：**
   - `data/processed/anilist_anime_multimodal_input_v1.csv`
@@ -88,7 +88,7 @@
   - 模態可用旗標與比例
   - 實體 split 筆數
 
-### Stage F：RQ-oriented EDA（`scripts/run_rq_eda.py`）
+### Stage F：RQ-oriented EDA（`scripts/eda/run_rq_eda.py`）
 - **目的：** 產出對應 RQ 的論文證據層。
 - **輸出：** `data/eda/rq_eda_summary.json/.md`
 - **目前追蹤證據：**
@@ -103,7 +103,7 @@
     - split 間 multimodal 覆蓋差異的 permutation tests
     - snapshot 相關性下降的 bootstrap CI
 
-### Stage G：RQ 圖表產生（`scripts/run_rq_eda_plots.py`）
+### Stage G：RQ 圖表產生（`scripts/eda/run_rq_eda_plots.py`）
 - **目的：** 把 RQ 指標直接轉成論文圖表。
 - **輸出：** `data/eda/figures/*.png` + `data/eda/figures/rq_figure_notes.md`
 - **目前圖表：**
@@ -111,7 +111,7 @@
   - 各 split 的 popularity bucket 平衡
   - 各 split 的 multimodal 覆蓋
 
-### Stage H：Holdout Unknown 診斷（`scripts/run_holdout_unknown_diagnostic.py`）
+### Stage H：Holdout Unknown 診斷（`scripts/eda/run_holdout_unknown_diagnostic.py`）
 - **目的：** 量化被排除之 temporal-unknown 樣本風險。
 - **輸出：** `data/eda/holdout_unknown_diagnostic.json/.md`
 - **目前追蹤證據：**
@@ -119,7 +119,7 @@
   - 時序欄位缺值輪廓
   - 與模型樣本母體在關鍵欄位上的分佈落差
 
-### Stage I：欄位血緣報告（`scripts/run_column_lineage_report.py`）
+### Stage I：欄位血緣報告（`scripts/eda/run_column_lineage_report.py`）
 - **目的：** 明確記錄 raw -> interim -> processed -> multimodal 欄位變換證據。
 - **輸出：** `data/eda/column_lineage_summary.json/.md`
 - **目前追蹤證據：**
@@ -236,14 +236,14 @@
 ## 8) 最小可重跑指令
 
 ```bash
-python scripts/generate_raw_manifest.py
-python scripts/run_baseline_eda.py
-python scripts/run_decision_eda.py
-python scripts/build_interim_dataset.py
-python scripts/build_processed_dataset.py
-python scripts/export_multimodal_inputs.py
-python scripts/run_rq_eda.py
-python scripts/run_rq_eda_plots.py
-python scripts/run_holdout_unknown_diagnostic.py
-python scripts/run_column_lineage_report.py
+python scripts/pipeline/generate_raw_manifest.py
+python scripts/eda/run_baseline_eda.py
+python scripts/eda/run_decision_eda.py
+python scripts/pipeline/build_interim_dataset.py
+python scripts/pipeline/build_processed_dataset.py
+python scripts/pipeline/export_multimodal_inputs.py
+python scripts/eda/run_rq_eda.py
+python scripts/eda/run_rq_eda_plots.py
+python scripts/eda/run_holdout_unknown_diagnostic.py
+python scripts/eda/run_column_lineage_report.py
 ```

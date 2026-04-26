@@ -5,7 +5,7 @@
 - `data/processed/anilist_anime_multimodal_input_v1.csv`
 
 參考腳本：
-- `scripts/run_missing_value_report.py`
+- `scripts/eda/run_missing_value_report.py`
 
 執行期輸出參考（本機檔案，未納入版控）：
 - `data/eda/missing_value_report.json`

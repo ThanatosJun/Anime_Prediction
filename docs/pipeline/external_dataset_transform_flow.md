@@ -23,7 +23,7 @@
 於專案根目錄執行：
 
 ```bash
-python scripts/transform_external_dataset.py \
+python scripts/external/transform_external_dataset.py \
   --input-csv data/external/new_snapshot.csv \
   --mapping-json docs/pipeline/external_schema_mapping_example.json \
   --output-prefix external_v1

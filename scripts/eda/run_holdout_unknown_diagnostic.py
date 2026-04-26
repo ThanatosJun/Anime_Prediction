@@ -112,7 +112,7 @@ def write_outputs(summary: dict) -> None:
 
 def main() -> None:
     if not PROCESSED_CSV.exists():
-        raise FileNotFoundError("Processed CSV not found. Run scripts/build_processed_dataset.py first.")
+        raise FileNotFoundError("Processed CSV not found. Run scripts/pipeline/build_processed_dataset.py first.")
     df = pd.read_csv(PROCESSED_CSV)
     if "split_pre_release_effective" not in df.columns or "is_model_split" not in df.columns:
         raise ValueError("Processed dataset is missing split columns. Rebuild processed dataset.")

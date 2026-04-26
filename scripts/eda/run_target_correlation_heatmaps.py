@@ -39,7 +39,7 @@ EXCLUDE_FROM_FEATURES = {
 
 def _load_processed() -> pd.DataFrame:
     if not PROCESSED_CSV.exists():
-        raise FileNotFoundError("Processed CSV not found. Run scripts/build_processed_dataset.py first.")
+        raise FileNotFoundError("Processed CSV not found. Run scripts/pipeline/build_processed_dataset.py first.")
     return pd.read_csv(PROCESSED_CSV)
 
 

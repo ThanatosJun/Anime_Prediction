@@ -7,16 +7,16 @@
 請在專案根目錄執行：
 
 ```bash
-python scripts/generate_raw_manifest.py
-python scripts/run_baseline_eda.py
-python scripts/run_decision_eda.py
-python scripts/build_interim_dataset.py
-python scripts/build_processed_dataset.py
-python scripts/export_multimodal_inputs.py
-python scripts/run_rq_eda.py
-python scripts/run_rq_eda_plots.py
-python scripts/run_holdout_unknown_diagnostic.py
-python scripts/run_column_lineage_report.py
+python scripts/pipeline/generate_raw_manifest.py
+python scripts/eda/run_baseline_eda.py
+python scripts/eda/run_decision_eda.py
+python scripts/pipeline/build_interim_dataset.py
+python scripts/pipeline/build_processed_dataset.py
+python scripts/pipeline/export_multimodal_inputs.py
+python scripts/eda/run_rq_eda.py
+python scripts/eda/run_rq_eda_plots.py
+python scripts/eda/run_holdout_unknown_diagnostic.py
+python scripts/eda/run_column_lineage_report.py
 ```
 
 ## 2) 主要輸出檔案說明
@@ -90,41 +90,41 @@ python scripts/run_column_lineage_report.py
 ## 3) 規則修改入口
 
 - 缺值處理政策：
-  - `scripts/build_interim_dataset.py`
+  - `scripts/pipeline/build_interim_dataset.py`
   - 調整 `MISSING_RULES` 與 `impute_missing_values()`。
 - 異常值政策：
-  - `scripts/build_processed_dataset.py`
+  - `scripts/pipeline/build_processed_dataset.py`
   - 調整 `CLIP_COLUMNS` 與 `_clip_by_percentile()`。
 - popularity 目標與時序切分政策：
-  - `scripts/build_processed_dataset.py`
+  - `scripts/pipeline/build_processed_dataset.py`
   - 調整 `_add_popularity_quarter_target()` 與 `_apply_pre_release_temporal_split()`。
   - 現行策略為 chronological + cumulative row ratio（目標 70/15/15）。
 - 多模態輸出契約：
-  - `scripts/export_multimodal_inputs.py`
+  - `scripts/pipeline/export_multimodal_inputs.py`
   - 調整模態欄位選取與 split 檔案契約。
 - 建議策略邏輯：
-  - `scripts/run_decision_eda.py`
+  - `scripts/eda/run_decision_eda.py`
   - 調整 `_missing_strategy()` 與 `_outlier_strategy()`。
 - RQ 證據層：
-  - `scripts/run_rq_eda.py`
+  - `scripts/eda/run_rq_eda.py`
   - 調整 snapshot/retrieval/multimodal proxy 指標與統計檢定設定。
 - Holdout 風險診斷：
-  - `scripts/run_holdout_unknown_diagnostic.py`
+  - `scripts/eda/run_holdout_unknown_diagnostic.py`
   - 調整 temporal-missing 與 distribution-gap 檢查。
 - 欄位血緣報告：
-  - `scripts/run_column_lineage_report.py`
+  - `scripts/eda/run_column_lineage_report.py`
   - 調整分階段 keep/drop/add 解讀邏輯。
 
 ## 4) 常見更新情境
 
 ### A. 原始資料更新
 1. 替換 `data/raw` 內原始檔（`pkl/csv`）。
-2. 執行 `scripts/generate_raw_manifest.py`。
+2. 執行 `scripts/pipeline/generate_raw_manifest.py`。
 3. 執行完整重建流程。
 4. 確認 decision/outlier 摘要是否如預期變動。
 
 ### B. 模型需要新增欄位
-1. 在 `scripts/build_interim_dataset.py` 的 `KEEP_COLUMNS` 加入欄位。
+1. 在 `scripts/pipeline/build_interim_dataset.py` 的 `KEEP_COLUMNS` 加入欄位。
 2. 若為數值欄位，同步更新 `NUMERIC_COLUMNS`。
 3. 重建並檢查缺值/異常值摘要。
 
