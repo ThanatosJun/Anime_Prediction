@@ -55,6 +55,7 @@ KEEP_COLUMNS = [
     "prequel_count",
     "prequel_popularity_mean",
     "prequel_meanScore_mean",
+    "voice_actor_names",
 ]
 
 NUMERIC_COLUMNS = [
@@ -83,6 +84,7 @@ MISSING_RULES = {
     "prequel_count": {"method": "fill_zero_when_no_prequel_match"},
     "prequel_popularity_mean": {"method": "fill_zero_when_no_prequel_match"},
     "prequel_meanScore_mean": {"method": "fill_zero_when_no_prequel_match"},
+    "voice_actor_names": {"method": "pipe_join_unique_voice_actor_names"},
     "is_sequel": {"method": "fill_false_when_missing"},
     "has_sequel": {"method": "fill_false_when_missing"},
 }
@@ -168,6 +170,60 @@ def add_relation_features(raw_df: pd.DataFrame, interim_df: pd.DataFrame) -> pd.
     return interim_df.merge(relation_features, on="id", how="left")
 
 
+def add_voice_actor_names(raw_df: pd.DataFrame, interim_df: pd.DataFrame) -> pd.DataFrame:
+    if "id" not in raw_df.columns or "characters" not in raw_df.columns:
+        return interim_df
+
+    def _parse_json_list(value: object) -> list[dict]:
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return []
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw or raw in {"[]", "nan", "None"}:
+                return []
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return [item for item in parsed if isinstance(item, dict)]
+            except Exception:
+                return []
+        return []
+
+    rows = []
+    for _, row in raw_df[["id", "characters"]].iterrows():
+        character_edges = _parse_json_list(row["characters"])
+        names_seen: set[str] = set()
+        ordered_names: list[str] = []
+
+        for edge in character_edges:
+            voice_actors = _parse_json_list(edge.get("voiceActors"))
+            for actor in voice_actors:
+                name_obj = actor.get("name")
+                full_name = None
+                if isinstance(name_obj, dict):
+                    full_name = name_obj.get("full")
+                if not isinstance(full_name, str) or not full_name.strip():
+                    continue
+                clean_name = full_name.strip()
+                key = clean_name.lower()
+                if key in names_seen:
+                    continue
+                names_seen.add(key)
+                ordered_names.append(clean_name)
+
+        rows.append(
+            {
+                "id": row["id"],
+                "voice_actor_names": "|".join(ordered_names) if ordered_names else "",
+            }
+        )
+
+    voice_actor_df = pd.DataFrame(rows)
+    return interim_df.merge(voice_actor_df, on="id", how="left")
+
+
 def select_columns(df: pd.DataFrame) -> pd.DataFrame:
     available = [col for col in KEEP_COLUMNS if col in df.columns]
     return df[available].copy()
@@ -222,6 +278,9 @@ def impute_missing_values(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].fillna(False).astype(bool)
 
+    if "voice_actor_names" in df.columns:
+        df["voice_actor_names"] = df["voice_actor_names"].fillna("")
+
     return df
 
 
@@ -250,6 +309,7 @@ def main() -> None:
     raw_df = load_raw_dataset()
     interim_df = select_columns(raw_df)
     interim_df = add_relation_features(raw_df, interim_df)
+    interim_df = add_voice_actor_names(raw_df, interim_df)
     interim_df = enforce_dtypes(interim_df)
     interim_df, removed_duplicates = deduplicate_rows(interim_df)
     interim_df = impute_missing_values(interim_df)
