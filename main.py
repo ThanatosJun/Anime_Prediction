@@ -25,11 +25,9 @@ def main():
     import os
     run_id   = config['output']['run_id']
     best_dir = os.path.join(config['output']['results_dir'], run_id, 'best')
-    model    = load_model(config)
-    model.load_state_dict(
-        torch.load(os.path.join(best_dir, 'pytorch_model.bin'), map_location=device)
-    )
-    model.to(device)
+    from src.model import load_model
+    from transformers import SwinModel
+    model    = SwinModel.from_pretrained(best_dir).to(device)
     predict(model, config, device)
 
 

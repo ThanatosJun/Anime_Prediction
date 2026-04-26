@@ -16,12 +16,18 @@ class AnimeImageDataset(Dataset):
         transform_orig,
         transform_aug,
     ):
-        self.df            = df.reset_index(drop=True)
         self.image_dir     = image_dir
         self.image_col     = image_col
         self.transform_orig = transform_orig
         self.transform_aug  = transform_aug
         self.resize        = ResizeWithPad(224)
+
+        # 只保留圖片實際存在的 row，避免 dummy tensor 污染訓練
+        df = df.reset_index(drop=True)
+        mask = df['id'].apply(
+            lambda idx: os.path.isfile(os.path.join(image_dir, f"{idx}_{image_col}.jpg"))
+        )
+        self.df = df[mask].reset_index(drop=True)
 
     def __len__(self) -> int:
         return len(self.df)

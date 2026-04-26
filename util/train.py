@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-import torch.utils.scheduler as lr_scheduler
 
 from src.model import get_embedding
 

@@ -323,3 +323,33 @@ TensorBoard：
 | 輸出 | parquet 檔案 | numpy array |
 | 用途 | 一次性產生全部 embedding | 隨時調用、外部接口 |
 
+---
+
+## TensorBoard 使用說明
+
+TensorBoard log 儲存於 `results/{run_id}/logs/`（例如 `results/01/logs/`）。
+
+### 啟動指令
+
+```bash
+# 啟動特定 run（例如 run_id = 01）
+conda run -n anime_prediction tensorboard --logdir results/01/logs
+
+# 啟動並比較所有 run
+conda run -n anime_prediction tensorboard --logdir results
+
+# 指定 port（預設 6006，若被佔用可改其他 port）
+conda run -n anime_prediction tensorboard --logdir results/01/logs --port 6007
+```
+
+啟動後開啟瀏覽器：[http://localhost:6006](http://localhost:6006)
+
+### 紀錄的 metrics
+
+| 欄位 | 說明 |
+|------|------|
+| `train_loss` | 每 epoch 的平均訓練 InfoNCE loss |
+| `val_loss` | 每 `val_interval` epoch 的平均驗證 loss |
+| `cosine_sim` | val set 的平均 cosine similarity（orig vs aug） |
+| `lr` | 當前 learning rate（含 warmup + cosine decay） |
+
