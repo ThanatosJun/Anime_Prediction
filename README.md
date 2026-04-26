@@ -188,6 +188,8 @@ python scripts/run_column_lineage_report.py
 
 ## 模型分工交接文件
 
+- 文件總索引：`docs/README.md`
+- 腳本總索引：`scripts/README.md`
 - 文字處理組：`docs/handoff_text_model.md`
 - 圖片處理組：`docs/handoff_image_model.md`
 - Fusion Model 組：`docs/handoff_fusion_model.md`
