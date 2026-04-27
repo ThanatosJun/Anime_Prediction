@@ -1,5 +1,18 @@
-from src.fussion_branch.rag_builder import build_collection
-from src.fussion_branch.rag_query import query_all_splits
+"""
+RAG Pipeline for Fusion Branch.
+
+Pre-requisite (for hybrid search):
+  python -m src.fussion_branch.run_text_embedding
+  → generates src/fussion_branch/RAG/text_embeddings_{split}.parquet
+
+If text embeddings are absent, falls back to sparse-only mode automatically.
+
+Usage:
+  conda activate animeprediction
+  python -m src.fussion_branch.run_rag
+"""
+from src.fussion_branch.RAG.rag_builder import build_collection
+from src.fussion_branch.RAG.rag_query import query_all_splits
 
 
 def main():
@@ -12,8 +25,8 @@ def main():
 
     print()
     print("Done. Outputs:")
-    print("  artifacts/sparse_encoder.json")
-    print("  artifacts/rag_features_{train,val,test}.parquet")
+    print("  src/fussion_branch/RAG/sparse_encoder.json")
+    print("  src/fussion_branch/RAG/rag_features_{train,val,test}.parquet")
 
 
 if __name__ == "__main__":

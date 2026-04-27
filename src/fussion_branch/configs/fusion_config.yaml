@@ -2,9 +2,9 @@
 data:
   fusion_meta_dir:   data/fussion
   text_emb_dir:      artifacts
-  rag_features_dir:  artifacts
+  rag_features_dir:  src/fussion_branch/RAG
   image_emb_path:    .exp/image_embedding/image_embeddings.parquet   # 1024-dim Swin-base; zeros if missing
-  meta_encoder_path: artifacts/meta_encoder.json
+  meta_encoder_path: .exp/fussion/meta_encoder.json
   top_studios:       50          # top-K most-common studios kept in multi-hot
 
 # ── Model ─────────────────────────────────────────────────────────────────────
@@ -31,5 +31,5 @@ targets:
 
 # ── Output ────────────────────────────────────────────────────────────────────
 output:
-  results_dir: results/fusion
+  results_dir: .exp/fussion/results
   run_id:      "01"

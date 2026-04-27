@@ -1,7 +1,7 @@
 """
 TextEmbedder: thin wrapper that fully reuses text_components.
 
-Config:  src/fussion_branch/text_components/embedding_config.yaml
+Config:  src/fussion_branch/configs/text_process_config.yaml
 Components:
   TextPreprocessor   (text_components/text_preprocessor.py)
   EmbeddingGenerator (text_components/embedding_generator.py)
@@ -21,7 +21,7 @@ import yaml
 from src.fussion_branch.text_components.embedding_generator import EmbeddingGenerator
 from src.fussion_branch.text_components.text_preprocessor import TextPreprocessor
 
-_CONFIG_PATH = Path("src/fussion_branch/text_components/embedding_config.yaml")
+_CONFIG_PATH = Path("src/fussion_branch/configs/text_process_config.yaml")
 
 
 def _load_text_config(path: Path = _CONFIG_PATH) -> dict:

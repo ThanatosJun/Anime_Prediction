@@ -1,12 +1,12 @@
 """
-ImageEmbedder: loads fine-tuned Swin-base and extracts 768-dim embeddings.
+ImageEmbedder: loads fine-tuned Swin-base and extracts 1024-dim embeddings.
 
 Usage:
     embedder = ImageEmbedder()                         # pretrained only
     embedder = ImageEmbedder(checkpoint_dir="results/01/best")  # fine-tuned
 
-    emb = embedder.encode_path("data/image/12345_coverImage_medium.jpg")  # (768,)
-    embs = embedder.encode_paths([...])                                    # (N, 768)
+    emb = embedder.encode_path("data/image/12345_coverImage_medium.jpg")  # (1024,)
+    embs = embedder.encode_paths([...])                                    # (N, 1024)
 """
 from pathlib import Path
 from typing import List, Optional, Union
@@ -44,14 +44,14 @@ class ImageEmbedder:
 
     @torch.no_grad()
     def encode_image(self, img: Image.Image) -> np.ndarray:
-        """PIL Image → (768,) float32."""
+        """PIL Image → (1024,) float32."""
         img    = self.resize(img)
         tensor = self.transform(img).unsqueeze(0).to(self.device)   # (1, 3, 224, 224)
-        emb    = self.model(pixel_values=tensor).pooler_output       # (1, 768)
+        emb    = self.model(pixel_values=tensor).pooler_output       # (1, 1024)
         return emb.squeeze(0).cpu().numpy().astype(np.float32)
 
     def encode_path(self, path: str) -> np.ndarray:
-        """Image file path → (768,) float32.  Returns zeros if file missing."""
+        """Image file path → (1024,) float32.  Returns zeros if file missing."""
         p = Path(path)
         if not p.exists():
             return np.zeros(self.dim, dtype=np.float32)
@@ -63,7 +63,7 @@ class ImageEmbedder:
 
     @torch.no_grad()
     def encode_paths(self, paths: List[str], batch_size: int = 64) -> np.ndarray:
-        """List of image paths → (N, 768) float32."""
+        """List of image paths → (N, 1024) float32."""
         all_embs = []
         for i in range(0, len(paths), batch_size):
             batch_paths = paths[i : i + batch_size]
@@ -80,6 +80,6 @@ class ImageEmbedder:
                         pass
                 tensors.append(torch.zeros(3, _IMAGE_SIZE, _IMAGE_SIZE))
             batch = torch.stack(tensors).to(self.device)
-            embs  = self.model(pixel_values=batch).pooler_output  # (B, 768)
+            embs  = self.model(pixel_values=batch).pooler_output  # (B, 1024)
             all_embs.append(embs.cpu().numpy().astype(np.float32))
         return np.concatenate(all_embs, axis=0)

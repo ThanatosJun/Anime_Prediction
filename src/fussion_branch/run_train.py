@@ -9,8 +9,8 @@ Usage:
 import argparse
 import json
 
-from src.fussion_branch.config import load_config
-from src.fussion_branch.train import train_one_target
+from src.fussion_branch.utilities.config import load_config
+from src.fussion_branch.fussion_training.train import train_one_target
 
 
 def main():
