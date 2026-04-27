@@ -1,10 +1,10 @@
 """
-Evaluation metrics per pipeline doc:
-  - MAE / RMSE            (original scale, interpretable)
-  - MAPE                  (popularity: % error, scale-free)
-  - log_MAE               (popularity: error in log space = what model actually optimizes)
-  - Spearman ρ            (rank correlation, scale-free)
-  - bucket_accuracy       (popularity: global quartile classification accuracy)
+Evaluation metrics (both targets):
+  - MSE / RMSE       original scale
+  - MAE              original scale
+  - MAE_over_median  MAE normalised by training-set median (scale-free, comparable across targets)
+  - Spearman_rho     rank correlation
+  - R2               coefficient of determination
 """
 from typing import Dict, Optional
 
@@ -23,44 +23,36 @@ def compute_metrics(
     y_pred = y_pred.astype(np.float64)
 
     mae  = float(np.mean(np.abs(y_true - y_pred)))
-    rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+    mse  = float(np.mean((y_true - y_pred) ** 2))
+    rmse = float(np.sqrt(mse))
     rho, _ = spearmanr(y_true, y_pred)
 
+    ss_res = float(np.sum((y_true - y_pred) ** 2))
+    ss_tot = float(np.sum((y_true - np.mean(y_true)) ** 2))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+
     metrics: Dict[str, float] = {
-        "MAE":          round(mae,  4),
+        "MSE":          round(mse,  4),
         "RMSE":         round(rmse, 4),
+        "MAE":          round(mae,  4),
         "Spearman_rho": round(float(rho), 4),
+        "R2":           round(r2,   4),
     }
 
-    if target_col == "popularity":
-        # MAPE: % error — interpretable across all popularity magnitudes
-        # clip true to avoid division by near-zero (popularity min=25, safe in practice)
-        mape = float(np.mean(np.abs(y_true - y_pred) / np.clip(y_true, 1, None)) * 100)
-        metrics["MAPE"] = round(mape, 4)
-
-        # log-scale MAE: error in the space the model actually trains in
-        log_mae = float(np.mean(np.abs(np.log1p(y_true) - np.log1p(np.clip(y_pred, 0, None)))))
-        metrics["log_MAE"] = round(log_mae, 4)
-
-        # bucket accuracy: global quartile classification from training set
-        if train_meta_df is not None:
-            q25, q50, q75 = np.percentile(
-                train_meta_df["popularity"].dropna().values, [25, 50, 75]
-            )
-
-            def to_bucket(arr):
-                return np.where(arr < q25, 0,
-                       np.where(arr < q50, 1,
-                       np.where(arr < q75, 2, 3)))
-
-            acc = float(np.mean(to_bucket(y_true) == to_bucket(y_pred)))
-            metrics["bucket_accuracy"] = round(acc, 4)
+    if train_meta_df is not None and target_col in train_meta_df.columns:
+        median_val = float(np.median(train_meta_df[target_col].dropna().values))
+        metrics["MAE_over_median"] = round(mae / max(median_val, 1e-8), 4)
 
     return metrics
 
 
 def denormalize(y_norm: np.ndarray, scaler: dict) -> np.ndarray:
-    y = y_norm * scaler["std"] + scaler["mean"]
+    y_norm = np.asarray(y_norm, dtype=np.float64)   # model may output float16 under AMP
+    if scaler.get("log_transform", False):
+        # Clip in normalized space before expm1: predictions beyond ±5σ are
+        # physically implausible; float16 overflows expm1 for input > ~10.8.
+        y_norm = np.clip(y_norm, -5.0, 5.0)
+    y = y_norm * float(scaler["std"]) + float(scaler["mean"])
     if scaler.get("log_transform", False):
         y = np.expm1(y)
     return y

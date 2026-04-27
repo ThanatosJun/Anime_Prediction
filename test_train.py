@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader, Subset
 from src.fussion_branch.config import load_config
 from src.fussion_branch.dataset import FusionDataset
 from src.fussion_branch.evaluate import compute_metrics, denormalize
-from src.fussion_branch.meta_encoder import MetaEncoder
+from fussion_branch.fussion_training.meta_encoder import MetaEncoder
 from src.fussion_branch.model import FusionMLP
 
 N_TRAIN  = 1000

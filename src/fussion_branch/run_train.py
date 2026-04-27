@@ -2,9 +2,10 @@
 Entry point: trains Model A (popularity) and Model B (meanScore) independently.
 
 Usage:
-    python -m src.fussion_branch.run_train
-    python -m src.fussion_branch.run_train --target popularity
+    python -m src.fussion_branch.run_train                      # uses active_targets from config
+    python -m src.fussion_branch.run_train --target popularity  # CLI overrides config
     python -m src.fussion_branch.run_train --target meanScore
+    python -m src.fussion_branch.run_train --target both
 """
 import argparse
 import json
@@ -18,8 +19,8 @@ def main():
     parser.add_argument(
         "--target",
         choices=["popularity", "meanScore", "both"],
-        default="both",
-        help="Which target to train (default: both)",
+        default=None,
+        help="Override active_targets in config",
     )
     parser.add_argument(
         "--config",
@@ -28,8 +29,13 @@ def main():
     )
     args = parser.parse_args()
 
-    config  = load_config(args.config)
-    targets = ["popularity", "meanScore"] if args.target == "both" else [args.target]
+    config = load_config(args.config)
+
+    # CLI --target overrides config; fall back to active_targets in config
+    if args.target is not None:
+        targets = ["popularity", "meanScore"] if args.target == "both" else [args.target]
+    else:
+        targets = config.get("active_targets", ["popularity", "meanScore"])
 
     all_results = {}
     for target in targets:

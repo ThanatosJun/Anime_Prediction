@@ -7,7 +7,7 @@ import yaml
 from qdrant_client import QdrantClient, models
 from tqdm import tqdm
 
-from src.fussion_branch.RAG.sparse_encoder import SparseEncoder, parse_genres, parse_studios
+from src.fussion_branch.RAG.sparse_encoder import SparseEncoder, parse_genres, parse_studios, parse_voice_actors, parse_source
 
 _RAG_CONFIG_PATH = Path("src/fussion_branch/configs/rag_config.yaml")
 
@@ -26,6 +26,29 @@ def _load_text_emb(split: str, text_emb_dir: str) -> dict:
     return dict(zip(df["id"].astype(int), df[emb_cols].values.astype(np.float32)))
 
 
+def _build_time_filter(target_year: int, target_quarter, anime_id: int) -> models.Filter:
+    """Server-side filter: only return anime released strictly before the target period."""
+    try:
+        tq = int(target_quarter)
+        time_cond = models.Filter(
+            should=[
+                models.FieldCondition(key="release_year", range=models.Range(lt=target_year)),
+                models.Filter(must=[
+                    models.FieldCondition(key="release_year", match=models.MatchValue(value=target_year)),
+                    models.FieldCondition(key="release_quarter", range=models.Range(lt=tq)),
+                ]),
+            ]
+        )
+    except (TypeError, ValueError):
+        time_cond = models.Filter(
+            must=[models.FieldCondition(key="release_year", range=models.Range(lt=target_year))]
+        )
+    return models.Filter(
+        must=[time_cond],
+        must_not=[models.HasIdCondition(has_id=[anime_id])],
+    )
+
+
 def query_split(
     client: QdrantClient,
     encoder: SparseEncoder,
@@ -34,6 +57,7 @@ def query_split(
     text_emb_map: dict,
     fallback_popularity: float,
     fallback_score: float,
+    fallback_episodes: float,
     collection_name: str,
     top_k: int,
     prefetch_k: int,
@@ -42,9 +66,11 @@ def query_split(
     use_dense = len(text_emb_map) > 0
 
     for _, row in tqdm(df.iterrows(), total=len(df), desc=f"RAG query [{split}]"):
-        genres   = parse_genres(row["genres"])
-        studios  = parse_studios(row["studios"])
-        indices, values = encoder.encode(genres, studios)
+        genres       = parse_genres(row["genres"])
+        studios      = parse_studios(row["studios"])
+        voice_actors = parse_voice_actors(row["voice_actor_names"])
+        source       = parse_source(row["source"])
+        indices, values = encoder.encode(genres, studios, voice_actors, source)
         anime_id = int(row["id"])
 
         rag_row = {
@@ -53,6 +79,9 @@ def query_split(
             "rag_popularity":   fallback_popularity,
             "rag_score":        fallback_score,
             "rag_release_year": 0,
+            "rag_episodes":     fallback_episodes,
+            "rag_genres":       json.dumps([]),
+            "rag_format":       None,
             "rag_studios":      json.dumps([]),
             "rag_found":        False,
         }
@@ -61,10 +90,12 @@ def query_split(
             rows.append(rag_row)
             continue
 
+        query_filter = _build_time_filter(
+            int(row["release_year"]), row["release_quarter"], anime_id
+        )
         text_vec = text_emb_map.get(anime_id) if use_dense else None
 
         if text_vec is not None:
-            # Hybrid: sparse + dense → RRF fusion
             results = client.query_points(
                 collection_name=collection_name,
                 prefetch=[
@@ -72,38 +103,38 @@ def query_split(
                         query=models.SparseVector(indices=indices, values=values),
                         using="genre_studio",
                         limit=prefetch_k,
+                        filter=query_filter,
                     ),
                     models.Prefetch(
                         query=text_vec.tolist(),
                         using="text",
                         limit=prefetch_k,
+                        filter=query_filter,
                     ),
                 ],
                 query=models.FusionQuery(fusion=models.Fusion.RRF),
+                query_filter=query_filter,
                 limit=top_k,
             ).points
         else:
-            # Fallback: sparse only (text embeddings not available)
             results = client.query_points(
                 collection_name=collection_name,
                 query=models.SparseVector(indices=indices, values=values),
                 using="genre_studio",
+                query_filter=query_filter,
                 limit=top_k,
             ).points
 
-        # Python post-filter: remove same-period or later anime
-        filtered = [
-            r for r in results
-            if r.payload.get("release_year", 9999) < row["release_year"]
-        ]
-
-        if filtered:
-            top1 = filtered[0].payload
+        if results:
+            top1 = results[0].payload
             rag_row.update({
                 "rag_title_romaji": top1.get("title_romaji"),
-                "rag_popularity":   top1.get("popularity", fallback_popularity),
-                "rag_score":        top1.get("meanScore", fallback_score),
+                "rag_popularity":   top1.get("popularity",   fallback_popularity),
+                "rag_score":        top1.get("meanScore",    fallback_score),
                 "rag_release_year": top1.get("release_year", 0),
+                "rag_episodes":     top1.get("episodes",     fallback_episodes),
+                "rag_genres":       json.dumps(top1.get("genres_parsed", [])),
+                "rag_format":       top1.get("format"),
                 "rag_studios":      json.dumps(top1.get("studios_parsed", [])),
                 "rag_found":        True,
             })
@@ -116,7 +147,6 @@ def query_split(
 def query_all_splits(splits=("train", "val", "test")):
     cfg = _load_rag_config()
     collection_name = cfg["qdrant"]["collection_name"]
-    db_path         = cfg["qdrant"]["db_path"]
     encoder_path    = cfg["paths"]["encoder_path"]
     train_csv       = cfg["paths"]["train_csv"]
     text_emb_dir    = cfg["paths"]["text_emb_dir"]
@@ -125,12 +155,13 @@ def query_all_splits(splits=("train", "val", "test")):
     prefetch_k      = cfg["query"]["prefetch_k"]
 
     encoder = SparseEncoder.load(encoder_path)
-    client  = QdrantClient(path=db_path)
+    client  = QdrantClient(host=cfg["qdrant"]["host"], port=cfg["qdrant"]["port"])
     out_dir.mkdir(parents=True, exist_ok=True)
 
     train_df = pd.read_csv(train_csv)
     fallback_popularity = float(train_df["popularity"].mean())
     fallback_score      = float(train_df["meanScore"].mean())
+    fallback_episodes   = float(train_df["episodes"].mean())
 
     for split in splits:
         df           = pd.read_csv(f"data/fussion/fusion_meta_clean_{split}.csv")
@@ -140,7 +171,7 @@ def query_all_splits(splits=("train", "val", "test")):
 
         out_df   = query_split(
             client, encoder, df, split, text_emb_map,
-            fallback_popularity, fallback_score,
+            fallback_popularity, fallback_score, fallback_episodes,
             collection_name, top_k, prefetch_k,
         )
         out_path = out_dir / f"rag_features_{split}.parquet"

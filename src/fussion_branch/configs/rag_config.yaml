@@ -1,12 +1,13 @@
 qdrant:
   collection_name: "anime_rag"
-  db_path: "qdrant_db"
+  host: "localhost"
+  port: 6333
 
 paths:
   encoder_path: "src/fussion_branch/RAG/sparse_encoder.json"
   train_csv: "data/fussion/fusion_meta_clean_train.csv"
-  text_emb_dir: "src/fussion_branch/RAG"
-  out_dir: "src/fussion_branch/RAG/returen"
+  text_emb_dir: "src/fussion_branch/embedding/text"
+  out_dir: "src/fussion_branch/RAG/return"
 
 embedding:
   text_emb_dim: 384
@@ -15,5 +16,5 @@ indexing:
   batch_size: 256
 
 query:
-  top_k: 10
-  prefetch_k: 20
+  top_k: 30
+  prefetch_k: 50

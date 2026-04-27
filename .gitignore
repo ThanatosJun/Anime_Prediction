@@ -39,4 +39,5 @@ data/image
 qdrant_db/
 results/
 .exp/
-src/fussion_branch/RAG/returen/
+src/fussion_branch/RAG/return/
+src/fussion_branch/embedding/

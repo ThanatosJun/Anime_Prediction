@@ -23,7 +23,7 @@ from src.fussion_branch.text_embedding import TextEmbedder
 
 FUSION_META_DIR = Path("data/fussion")
 MULTIMODAL_DIR  = Path("data/processed")
-OUT_DIR         = Path("src/fussion_branch/RAG")
+OUT_DIR         = Path("src/fussion_branch/embedding/text")
 
 
 def run(splits: tuple = ("train", "val", "test")) -> None:
