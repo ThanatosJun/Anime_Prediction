@@ -67,6 +67,7 @@ Loss:     HuberLoss(delta=1.0)
 2022 年後出現約 **+4** 的跳升，主因為 AniList 社群爆發性成長與季播評分文化的改變。此 shift 無法透過調整訓練集起始年份解決（Train 中位數無論如何都維持在 60），是本任務的固有限制。
 
 **影響**：test R² 僅 0.047–0.13，模型幾乎無法解釋 test 集的分數變異。
+![meanScore distribution over time](meanscore_distribution_over_time.png)
 
 ### 2. popularity 泛化落差
 
