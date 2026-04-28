@@ -2,12 +2,12 @@
 Generates text embeddings for the Fusion RAG pipeline.
 
 Input:
-  data/fussion/fusion_meta_clean_{split}.csv              — valid IDs per split
-  data/processed/anilist_anime_multimodal_input_{split}.csv — description column
+  {meta_dir}/fusion_meta_clean_{split}.csv  — id + description column
+  (meta_dir configured in src/fussion_branch/configs/text_process_config.yaml)
 
 Output:
-  src/fussion_branch/RAG/text_embeddings_{split}.parquet
-    columns: id, emb_000 .. emb_383
+  {out_dir}/text_embeddings_{split}.parquet
+    columns: id, emb_0 .. emb_383
 
 Usage:
   conda activate animeprediction
@@ -17,62 +17,64 @@ Usage:
 import argparse
 from pathlib import Path
 
+import yaml
 import pandas as pd
 
 from src.fussion_branch.text_embedding import TextEmbedder
 
-FUSION_META_DIR = Path("data/fussion")
-MULTIMODAL_DIR  = Path("data/processed")
-OUT_DIR         = Path("src/fussion_branch/embedding/text")
+_CFG_PATH = Path("src/fussion_branch/configs/text_process_config.yaml")
+
+
+def _load_paths(cfg_path: Path = _CFG_PATH) -> tuple[Path, Path]:
+    with open(cfg_path) as f:
+        cfg = yaml.safe_load(f)
+    paths = cfg.get("paths", {})
+    return (
+        Path(paths.get("meta_dir", "data/fussion")),
+        Path(paths.get("out_dir",  "src/fussion_branch/embedding/text")),
+    )
 
 
 def run(splits: tuple = ("train", "val", "test")) -> None:
     embedder = TextEmbedder()
+    META_DIR, OUT_DIR = _load_paths()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"  meta_dir : {META_DIR}")
+    print(f"  out_dir  : {OUT_DIR}")
 
     for split in splits:
         print(f"\n{'='*50}")
         print(f"  Split: {split}")
         print(f"{'='*50}")
 
-        # Step 1: valid IDs from fusion_meta_clean
-        meta_path = FUSION_META_DIR / f"fusion_meta_clean_{split}.csv"
+        meta_path = META_DIR / f"fusion_meta_clean_{split}.csv"
         if not meta_path.exists():
-            print(f"  fusion_meta_clean not found: {meta_path} — skipping")
+            print(f"  not found: {meta_path} — skipping")
             continue
-        valid_ids = set(pd.read_csv(meta_path, usecols=["id"])["id"].astype(int))
-        print(f"  fusion_meta_clean IDs: {len(valid_ids)}")
 
-        # Step 2: load descriptions, filter to valid IDs
-        input_path = MULTIMODAL_DIR / f"anilist_anime_multimodal_input_{split}.csv"
-        if not input_path.exists():
-            print(f"  description file not found: {input_path} — skipping")
-            continue
-        desc_df = pd.read_csv(input_path, usecols=["id", "description"])
-        desc_df["id"] = desc_df["id"].astype(int)
-        desc_df = desc_df[desc_df["id"].isin(valid_ids)].copy().reset_index(drop=True)
-        print(f"  descriptions matched: {len(desc_df)}/{len(valid_ids)}")
+        df = pd.read_csv(meta_path, usecols=["id", "description"])
+        df["id"] = df["id"].astype(int)
+        print(f"  total rows: {len(df)}  null description: {df['description'].isna().sum()}")
 
-        # Step 3: clean text, keep only valid rows
-        desc_df["text_clean"] = desc_df["description"].apply(embedder.preprocessor.clean)
-        clean_df = desc_df[desc_df["text_clean"].notna()].copy().reset_index(drop=True)
-        dropped  = len(desc_df) - len(clean_df)
+        df["text_clean"] = df["description"].apply(
+            lambda x: embedder.preprocessor.clean(x) if pd.notna(x) else None
+        )
+        clean_df = df[df["text_clean"].notna()].reset_index(drop=True)
+        dropped  = len(df) - len(clean_df)
         print(f"  after cleaning: {len(clean_df)} kept, {dropped} dropped (null/too short)")
 
         if clean_df.empty:
             print(f"  no valid descriptions — skipping")
             continue
 
-        # Step 4: generate embeddings
-        embeddings = embedder.generator.encode(clean_df["text_clean"].tolist(), show_progress_bar=True)
+        embeddings = embedder.generator.encode(
+            clean_df["text_clean"].tolist(), show_progress_bar=True
+        )
 
-        # Step 5: build flat parquet: id + emb_000..emb_383
-        emb_cols = [f"emb_{i:03d}" for i in range(embedder.dim)]
+        emb_cols = [f"emb_{i}" for i in range(embedder.dim)]
         out_df = pd.concat(
-            [
-                clean_df[["id"]].reset_index(drop=True),
-                pd.DataFrame(embeddings, columns=emb_cols),
-            ],
+            [clean_df[["id"]].reset_index(drop=True),
+             pd.DataFrame(embeddings, columns=emb_cols)],
             axis=1,
         )
 

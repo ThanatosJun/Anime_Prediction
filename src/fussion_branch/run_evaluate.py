@@ -26,6 +26,7 @@ from src.fussion_branch.fussion_training.meta_encoder import MetaEncoder
 from src.fussion_branch.fussion_training.model import FusionMLP
 from src.fussion_branch.utilities.config import load_config
 from src.fussion_branch.utilities.evaluate import compute_metrics, denormalize
+from src.fussion_branch.utilities.summarize_experiments import collect
 
 
 def evaluate_target(config: dict, target_col: str):
@@ -92,7 +93,7 @@ def evaluate_target(config: dict, target_col: str):
 
     y_true = denormalize(np.concatenate(y_true_list), scaler)
     y_pred = denormalize(np.concatenate(y_pred_list), scaler)
-    metrics = compute_metrics(y_true, y_pred, target_col, meta_train)
+    metrics = compute_metrics(y_true, y_pred, target_col)
 
     print(f"[{target_col}] test: " + "  ".join(f"{k}={v}" for k, v in metrics.items()))
 
@@ -115,9 +116,16 @@ def main():
         "--config",
         default="src/fussion_branch/configs/fusion_config.yaml",
     )
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Override run_id in config (e.g. --run-id 02)",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.run_id is not None:
+        config["output"]["run_id"] = args.run_id
     if args.target is not None:
         targets = ["popularity", "meanScore"] if args.target == "both" else [args.target]
     else:
@@ -134,6 +142,11 @@ def main():
     print("  Final Test Metrics")
     print("="*60)
     print(json.dumps(all_metrics, indent=2))
+
+    from pathlib import Path
+    out_csv = Path(".exp/fussion/experiments_summary.csv")
+    collect().to_csv(out_csv, index=False)
+    print(f"\n[summary] updated → {out_csv}")
 
 
 if __name__ == "__main__":

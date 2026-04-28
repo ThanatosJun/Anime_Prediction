@@ -272,6 +272,6 @@ def _full_eval(model, loader, scaler, target_col, train_meta_df, device, use_amp
     y_pred_norm = np.concatenate(y_pred_list)
     y_true = denormalize(y_true_norm, scaler)
     y_pred = denormalize(y_pred_norm, scaler)
-    metrics = compute_metrics(y_true, y_pred, target_col, train_meta_df)
+    metrics = compute_metrics(y_true, y_pred, target_col)
     print(f"  [{split_name}] " + "  ".join(f"{k}={v}" for k, v in metrics.items()))
     return metrics

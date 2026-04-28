@@ -41,3 +41,6 @@ results/
 .exp/
 src/fussion_branch/RAG/return/
 src/fussion_branch/embedding/
+data/fussion/fusion_meta_test.csv
+data/fussion/fusion_meta_train.csv
+data/fussion/fusion_meta_val.csv

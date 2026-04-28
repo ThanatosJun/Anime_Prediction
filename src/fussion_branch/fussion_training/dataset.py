@@ -52,17 +52,27 @@ class FusionDataset(Dataset):
         if image_emb_path and os.path.exists(image_emb_path):
             raw = pd.read_parquet(image_emb_path).set_index("id")
             img_ids = common_ids.intersection(raw.index)
+            orig_count = len(common_ids)
             if len(img_ids) > 0:
                 common_ids = img_ids
-                image_df = raw.loc[common_ids].reset_index()
                 self.use_image = True
-                print(f"  [{split}] image embeddings loaded: {len(image_df)} rows")
+                print(f"  [{split}] image embeddings loaded: {len(img_ids)}/{orig_count} rows")
+            else:
+                print(f"  [{split}] image embeddings not found — using zeros (dim={IMAGE_EMB_DIM})")
         if not self.use_image:
             print(f"  [{split}] image embeddings not found — using zeros (dim={IMAGE_EMB_DIM})")
 
-        meta_df = meta_df.loc[common_ids].reset_index()
-        rag_df  = rag_df.loc[common_ids].reset_index()
-        text_df = text_df.loc[common_ids].reset_index()
+        # use meta ID order as anchor; reindex all others explicitly by ID
+        meta_df  = meta_df.loc[common_ids].reset_index()
+        rag_df   = rag_df.loc[meta_df["id"]].reset_index()
+        text_df  = text_df.loc[meta_df["id"]].reset_index()
+        if self.use_image:
+            image_df = raw.loc[meta_df["id"]].reset_index()
+
+        assert (meta_df["id"].values == rag_df["id"].values).all(), \
+            f"[{split}] ID mismatch between meta and rag after alignment"
+        assert (meta_df["id"].values == text_df["id"].values).all(), \
+            f"[{split}] ID mismatch between meta and text after alignment"
 
         self.ids = meta_df["id"].values
         N = len(self.ids)

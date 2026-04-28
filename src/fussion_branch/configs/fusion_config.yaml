@@ -1,10 +1,13 @@
 # ── Data ──────────────────────────────────────────────────────────────────────
 data:
-  fusion_meta_dir:   data/fussion
+  # fusion_meta_dir:   data/fussion
+  fusion_meta_dir:   data/fussion/post2000
   text_emb_dir:      src/fussion_branch/embedding/text
   rag_features_dir:  src/fussion_branch/RAG/return
   image_emb_dir:     src/fussion_branch/embedding/image   # zeros if missing
-  meta_encoder_path: .exp/fussion/meta_encoder.json
+  # meta_encoder_path: .exp/fussion/meta_encoder.json
+  meta_encoder_path: .exp/fussion/meta_encoder_post2000.json
+
   top_studios:       50
   top_voice_actors:  50
 
@@ -22,8 +25,8 @@ model:
 training:
   batch_size:               256
   epochs:                   150
-  learning_rate:            1.0e-3
-  weight_decay:             1.0e-4
+  learning_rate:            5.0e-4
+  weight_decay:             1.0e-3
   warmup_epochs:            5          # linear LR ramp before ReduceLROnPlateau
   early_stopping_patience:  20
   grad_clip:                1.0
@@ -43,4 +46,5 @@ targets:
 # ── Output ────────────────────────────────────────────────────────────────────
 output:
   results_dir: .exp/fussion/results
-  run_id:      "01"
+  run_id:      "03"
+  notes:       "對齊 fussion model 在 embedding 和 RAG features 的訓練資料"

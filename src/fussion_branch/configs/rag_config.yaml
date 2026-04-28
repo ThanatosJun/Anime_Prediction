@@ -4,10 +4,11 @@ qdrant:
   port: 6333
 
 paths:
+  meta_dir:     "data/fussion"
   encoder_path: "src/fussion_branch/RAG/sparse_encoder.json"
-  train_csv: "data/fussion/fusion_meta_clean_train.csv"
+  train_csv:    "data/fussion/fusion_meta_clean_train.csv"
   text_emb_dir: "src/fussion_branch/embedding/text"
-  out_dir: "src/fussion_branch/RAG/return"
+  out_dir:      "src/fussion_branch/RAG/return"
 
 embedding:
   text_emb_dim: 384

@@ -1,15 +1,16 @@
 """
-Evaluation metrics (both targets):
-  - MSE / RMSE       original scale
-  - MAE              original scale
-  - MAE_over_median  MAE normalised by training-set median (scale-free, comparable across targets)
+Evaluation metrics:
+  Both targets (primary → supporting)
   - Spearman_rho     rank correlation
-  - R2               coefficient of determination
+  - R2               coefficient of determination (diagnoses distribution shift)
+  - MAE              absolute error in original scale
+
+  popularity only
+  - log_MAE          MAE in log1p space — scale-free, matches training objective
 """
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
-import pandas as pd
 from scipy.stats import spearmanr
 
 
@@ -17,14 +18,11 @@ def compute_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,
     target_col: str,
-    train_meta_df: Optional[pd.DataFrame] = None,
 ) -> Dict[str, float]:
     y_true = y_true.astype(np.float64)
     y_pred = y_pred.astype(np.float64)
 
-    mae  = float(np.mean(np.abs(y_true - y_pred)))
-    mse  = float(np.mean((y_true - y_pred) ** 2))
-    rmse = float(np.sqrt(mse))
+    mae = float(np.mean(np.abs(y_true - y_pred)))
     rho, _ = spearmanr(y_true, y_pred)
 
     ss_res = float(np.sum((y_true - y_pred) ** 2))
@@ -32,16 +30,16 @@ def compute_metrics(
     r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
     metrics: Dict[str, float] = {
-        "MSE":          round(mse,  4),
-        "RMSE":         round(rmse, 4),
-        "MAE":          round(mae,  4),
         "Spearman_rho": round(float(rho), 4),
-        "R2":           round(r2,   4),
+        "R2":           round(r2,  4),
+        "MAE":          round(mae, 4),
     }
 
-    if train_meta_df is not None and target_col in train_meta_df.columns:
-        median_val = float(np.median(train_meta_df[target_col].dropna().values))
-        metrics["MAE_over_median"] = round(mae / max(median_val, 1e-8), 4)
+    if target_col == "popularity":
+        log_mae = float(np.mean(
+            np.abs(np.log1p(np.clip(y_true, 0, None)) - np.log1p(np.clip(y_pred, 0, None)))
+        ))
+        metrics["log_MAE"] = round(log_mae, 4)
 
     return metrics
 

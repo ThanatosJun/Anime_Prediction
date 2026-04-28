@@ -44,3 +44,8 @@ output:
   format: "parquet"
   artifact_dir: "artifacts"
   report_dir: "reports"
+
+# Paths
+paths:
+  meta_dir: "data/fussion"
+  out_dir:  "src/fussion_branch/embedding/text"

@@ -163,8 +163,9 @@ def query_all_splits(splits=("train", "val", "test")):
     fallback_score      = float(train_df["meanScore"].mean())
     fallback_episodes   = float(train_df["episodes"].mean())
 
+    meta_dir = Path(cfg["paths"].get("meta_dir", "data/fussion"))
     for split in splits:
-        df           = pd.read_csv(f"data/fussion/fusion_meta_clean_{split}.csv")
+        df           = pd.read_csv(meta_dir / f"fusion_meta_clean_{split}.csv")
         text_emb_map = _load_text_emb(split, text_emb_dir)
         mode         = "hybrid (sparse+dense)" if text_emb_map else "sparse only"
         print(f"  [{split}] query mode: {mode}  ({len(text_emb_map)} text embeddings)")
