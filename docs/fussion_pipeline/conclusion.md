@@ -38,9 +38,10 @@ Loss:     HuberLoss(delta=1.0)
 
 ### popularity 預測
 - **Spearman ρ 穩定在 0.83–0.87**，代表模型對動畫人氣的排名判斷一致可靠
-- **Run 01 baseline（lr=1e-3, weight_decay=1e-4）在 test 上表現最佳**：ρ=0.852，R²=0.438，MAE=11,601，log_MAE=0.958
+- **若以 Spearman ρ 為評估指標，Run 01 baseline（lr=1e-3, weight_decay=1e-4）在 test 上表現最佳**：ρ=0.852，R²=0.438，MAE=11,601，log_MAE=0.958
+- *若以 log_MAE 為評估指標，Run 04（ID 對齊 + full dataset）在 test 上表現最佳*：log_MAE=0.9943
 - 降低 lr + 提高 weight_decay（Run 02/03/04）對 popularity test 有明顯負面影響：test R² 從 0.44 降至 0.34，MAE 從 11,601 升至 13,000–14,000，log_MAE 從 0.958 惡化至 1.17
-- **結論：popularity 最佳超參數為 Run 01 的設定，不應盲目降 lr**
+- **結論：以 03 跟 04 來看，不同時期的資料集對模型表現有影響**
 
 ### meanScore 預測
 - **所有 run 的 test Spearman ρ 約 0.52–0.54，顯著低於 val 的 0.60–0.62**，主要受 distribution shift 影響

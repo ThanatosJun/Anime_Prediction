@@ -15,3 +15,5 @@
 1. 是否加入 MSE 作為論文 Anime popularity prediction before huge investments: a multimodal approach using deep learning 的對比，論文是用 log MSE 計算的
 2. 資料集問題
     - 是否需要補足 description 的資料，因為有缺失就沒有該筆 text embedding
+3. optimizer 的選擇
+    - AdamW 是目前的選擇，但是否需要嘗試其他 optimizer，例如：RAdam, Ranger 等等
