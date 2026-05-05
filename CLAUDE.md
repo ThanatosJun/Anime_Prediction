@@ -352,4 +352,3 @@ conda run -n anime_prediction tensorboard --logdir results/01/logs --port 6007
 | `val_loss` | 每 `val_interval` epoch 的平均驗證 loss |
 | `cosine_sim` | val set 的平均 cosine similarity（orig vs aug） |
 | `lr` | 當前 learning rate（含 warmup + cosine decay） |
-

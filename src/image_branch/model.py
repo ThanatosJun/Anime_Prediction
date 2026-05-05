@@ -9,4 +9,4 @@ def load_model(config):
 
 def get_embedding(model, pixel_values):
     outputs = model(pixel_values=pixel_values)
-    return outputs.pooler_output  # (B, 768)
+    return outputs.pooler_output  # (B, 1024)  swin-base hidden_size=1024

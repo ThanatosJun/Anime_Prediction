@@ -1,0 +1,38 @@
+# ── Deep Learning ─────────────────────────────────────────────────────────────
+# PyTorch: install separately with CUDA 12.8 support (RTX 5070 Ti / Blackwell)
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0
+torchvision==0.26.0
+tensorboard==2.20.0
+
+# ── Hugging Face ──────────────────────────────────────────────────────────────
+transformers==5.6.2
+sentence-transformers==5.4.1
+huggingface_hub==1.12.0
+tokenizers==0.22.2
+safetensors==0.7.0
+
+# ── Data / ML ─────────────────────────────────────────────────────────────────
+pandas==3.0.2
+numpy==2.4.4
+scikit-learn==1.8.0
+scipy==1.17.1
+pyarrow==24.0.0
+
+# ── Image ─────────────────────────────────────────────────────────────────────
+Pillow==12.2.0
+
+# ── Vector Database ───────────────────────────────────────────────────────────
+qdrant-client==1.17.1
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+requests==2.33.1
+tqdm==4.67.3
+PyYAML==6.0.3
+
+# ── Visualisation ─────────────────────────────────────────────────────────────
+matplotlib==3.10.9
+seaborn                  # 統計視覺化（heatmap、distribution plot 等），用於 EDA notebook
+
+# ── Notebook ──────────────────────────────────────────────────────────────────
+ipykernel==7.2.0

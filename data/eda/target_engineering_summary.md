@@ -1,7 +1,7 @@
 # Target Engineering Summary
 
 - Rule version: `decision_eda_v3`
-- Input file: `data/interim/anilist_anime_data_interim_20260424.csv`
+- Input file: `data/interim/anilist_anime_data_interim_20260426.csv`
 
 ## Popularity Quarter Target
 
