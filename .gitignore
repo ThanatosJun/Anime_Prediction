@@ -14,6 +14,21 @@ data/archive_local/
 data/raw/anilist_anime_data_complete.csv
 data/raw/anilist_anime_data_complete.pkl
 
+# Local environment (not tracked)
+requirements.txt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Malformed pip artifacts (from incorrect pip install syntax)
+=*/
+
+# Data files not tracked
+data/image/
+data/fetch_log.csv
+
 # Generated dataset artifacts (reproducible)
 data/interim/*
 !data/interim/.gitkeep
