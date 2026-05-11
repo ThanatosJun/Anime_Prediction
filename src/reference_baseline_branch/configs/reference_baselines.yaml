@@ -1,0 +1,172 @@
+# Reference baseline runner config.
+#
+# These experiments are external comparison points for the paper baseline
+# matrix. They intentionally live outside src/fussion_branch so RQ ablations and
+# literature baselines do not get mixed together.
+
+data:
+  meta_dir: data/fussion/post2000
+  text_emb_dir: src/fussion_branch/embedding/text
+  image_emb_dir: src/fussion_branch/embedding/image
+  splits: ["train", "val", "test"]
+  id_col: id
+
+output:
+  results_dir: .exp/baseline/results
+  run_id: "01"
+  notes: "Foundation baselines plus Armenta-style fusion scaffold"
+
+targets:
+  popularity:
+    log_transform: true
+  meanScore:
+    log_transform: false
+
+features:
+  metadata:
+    numeric:
+      - release_year
+      - episodes
+      - duration
+      - startDate_day
+      - prequel_count
+      - prequel_meanScore_mean
+    log_numeric:
+      - prequel_popularity_mean
+    cyclic:
+      release_quarter: 4
+      startDate_month: 12
+    categorical:
+      - format
+      - source
+      - countryOfOrigin
+    boolean:
+      - isAdult
+      - is_sequel
+      - has_sequel
+    multihot:
+      genres:
+        parser: literal_list
+        top_k: null
+      studios:
+        parser: anilist_studios_json
+        top_k: 50
+      voice_actor_names:
+        parser: pipe
+        top_k: 50
+  text_embedding:
+    file_template: text_embeddings_{split}.parquet
+    prefix: emb_
+  image_embedding:
+    file_template: image_embeddings_{split}.parquet
+
+feature_sets:
+  none:
+    metadata: false
+    text_embedding: false
+    image_embedding: false
+  metadata:
+    metadata: true
+    text_embedding: false
+    image_embedding: false
+  metadata_text_image:
+    metadata: true
+    text_embedding: true
+    image_embedding: true
+
+baselines:
+  - id: F0-Mean
+    enabled: true
+    feature_set: none
+    model: mean
+    reference: common baseline
+    reproduction_level: common
+    paper_supported_component: "Common lowest-reference predictor; no specific paper reproduction claimed."
+    project_adaptation_component: "Predict train-set target mean for every validation/test sample."
+    claim_allowed: "Used as a lowest-reference baseline."
+    claim_not_allowed: "Do not cite this as reproducing any paper."
+
+  - id: F0-Ridge-Meta
+    enabled: true
+    feature_set: metadata
+    model: ridge
+    params:
+      alpha: 1.0
+    reference: common baseline
+    reproduction_level: common
+    paper_supported_component: "Common linear baseline; no specific paper reproduction claimed."
+    project_adaptation_component: "Ridge regression on AniList pre-release metadata using project temporal split."
+    claim_allowed: "Used as a simple linear metadata baseline."
+    claim_not_allowed: "Do not cite this as reproducing Lo & Syu 2023 or another paper."
+
+  - id: F1-RF-Meta
+    enabled: true
+    feature_set: metadata
+    model: random_forest
+    params:
+      n_estimators: 300
+      max_depth: null
+      min_samples_leaf: 2
+      random_state: 42
+      # Keep single-worker by default: some Windows sandbox sessions deny
+      # joblib worker pipe creation.
+      n_jobs: 1
+    reference: Lo & Syu 2023
+    reproduction_level: adapted
+    paper_supported_component: "Lo & Syu 2023 supports pre-broadcast entertainment metadata with classical ML and includes Random Forest."
+    project_adaptation_component: "Anime-domain regression on popularity/meanScore with AniList pre-release metadata and temporal split."
+    claim_allowed: "Metadata-only Random Forest baseline adapted from Lo & Syu 2023."
+    claim_not_allowed: "Do not claim exact reproduction; the original task is Japanese TV drama high/low rating classification with cross-validation."
+
+  - id: F1-GB-Meta
+    enabled: true
+    feature_set: metadata
+    model: gradient_boosting
+    params:
+      n_estimators: 300
+      max_depth: 3
+      learning_rate: 0.05
+      random_state: 42
+    reference: Lo & Syu 2023 + gradient boosting adaptation
+    reproduction_level: adapted
+    paper_supported_component: "Lo & Syu 2023 supports the metadata-only classical ML route, but not Gradient Boosting specifically."
+    project_adaptation_component: "Stronger sklearn Gradient Boosting tabular baseline on the same AniList metadata feature set."
+    claim_allowed: "Gradient-boosting extension of the Lo & Syu 2023 metadata-only classical ML route."
+    claim_not_allowed: "Do not claim this model appears in Lo & Syu 2023."
+
+  - id: F2-XGB-Concat
+    enabled: true
+    feature_set: metadata_text_image
+    model: xgboost
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.9
+      colsample_bytree: 0.9
+      random_state: 42
+      objective: reg:squarederror
+    reference: Chen et al. 2019; Jeong et al. 2024
+    reproduction_level: adapted
+    paper_supported_component: "Chen et al. 2019 and Jeong et al. 2024 support visual/textual feature fusion with XGBoost-style classical regressors."
+    project_adaptation_component: "AniList metadata + project text embeddings + project image embeddings concatenated for XGBoost regression."
+    claim_allowed: "Feature-concat XGBoost baseline adapted from visual-textual popularity prediction literature."
+    claim_not_allowed: "Do not claim same dataset, encoders, or exact feature extraction as the cited papers."
+
+  - id: C1-Armenta-MLP
+    enabled: false
+    feature_set: metadata_text_image
+    model: mlp
+    params:
+      hidden_layer_sizes: [512, 256, 128]
+      alpha: 0.001
+      learning_rate_init: 0.0005
+      max_iter: 300
+      early_stopping: true
+      random_state: 42
+    reference: Armenta-Segura & Sidorov 2025
+    reproduction_level: adapted
+    paper_supported_component: "Armenta-Segura & Sidorov 2025 supports anime-domain multimodal popularity prediction using text/image branches and deep fusion."
+    project_adaptation_component: "Project metadata + text embeddings + image embeddings with an sklearn MLP fusion head."
+    claim_allowed: "Anime-domain deep fusion baseline adapted from Armenta-Segura & Sidorov 2025."
+    claim_not_allowed: "Do not claim numerical comparability or exact reproduction; model branches, dataset, and target definitions differ."
