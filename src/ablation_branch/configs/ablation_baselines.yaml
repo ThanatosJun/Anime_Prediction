@@ -1,0 +1,67 @@
+# Project-internal ablation baseline config.
+#
+# This file is intentionally separate from reference_baselines.yaml. These rows
+# answer RQ/internal contribution questions, not "which paper did we reproduce?"
+
+data:
+  meta_dir: data/fussion/post2000
+  text_emb_dir: src/fussion_branch/embedding/text
+  image_emb_dir: src/fussion_branch/embedding/image
+  rag_features_root: src/fussion_branch/RAG/return
+  splits: ["train", "val", "test"]
+  id_col: id
+
+output:
+  results_dir: .exp/baseline/ablation_results
+  run_id: "01"
+  notes: "Project ablation baselines for modality, image, text, RAG, and fusion RQs"
+
+targets:
+  popularity:
+    log_transform: true
+  meanScore:
+    log_transform: false
+
+ablation_groups:
+  - id: A1-Modality
+    description: Compare metadata/text/image modality combinations.
+    planned_baselines:
+      - A1-MetaOnly
+      - A1-TextOnly
+      - A1-ImageOnly
+      - A1-MetaText
+      - A1-MetaImage
+      - A1-TextImage
+      - A1-AllModalities
+
+  - id: A2-ImageSource
+    description: Compare cover, banner, and cover+banner image embeddings.
+    planned_baselines:
+      - A2-CoverOnly
+      - A2-BannerOnly
+      - A2-CoverBanner
+
+  - id: A3-TextSource
+    description: Compare title, description, title+description, and supplemented descriptions.
+    planned_baselines:
+      - A3-TitleOnly
+      - A3-DescriptionOnly
+      - A3-TitleDescription
+      - A3-SupplementedDescription
+
+  - id: A4-RAG
+    description: Compare no retrieval, sparse, dense, hybrid, and time-filter variants.
+    planned_baselines:
+      - A4-NoRAG
+      - A4-SparseRAG
+      - A4-DenseRAG
+      - A4-HybridRAG
+
+  - id: A5-Fusion
+    description: Compare concat MLP, projected MLP, gated fusion, and attention-style fusion.
+    planned_baselines:
+      - A5-ConcatMLP
+      - A5-ProjectedMLP
+      - A5-GatedFusion
+      - A5-AttentionFusion
+
