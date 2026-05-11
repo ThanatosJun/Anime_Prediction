@@ -59,3 +59,10 @@ def getImage(config: dict) -> None:
             save_path = os.path.join(image_dir, f"{idx}_{col}.jpg")
             success = fetch_one(url, save_path)
             log_result(log_path, idx, col, url, 'success' if success else 'error')
+
+def getImage_YOLO(config: dict, col: str) -> pd.DataFrame:
+    data_cfg = config['data']
+    log = pd.read_csv(data_cfg['csv_path'])
+    success = log[(log['col'] == col) & (log['status'] == 'success')]
+    return success.reset_index(drop=True)
+

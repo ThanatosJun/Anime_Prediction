@@ -11,15 +11,33 @@ from src.model import get_embedding
 
 # ── 單步 forward ──────────────────────────────────────────────────────────────
 
+def _pool_embeddings(model, samples, device, no_grad=False):
+    """支援兩種輸入：
+    - Tensor (B, 3, 224, 224)：直接 forward，回傳 (B, 1024)
+    - List[Tensor(N_i, 3, 224, 224)]：逐樣本 forward + mean pool，回傳 (B, 1024)
+    """
+    if isinstance(samples, torch.Tensor):
+        samples = samples.to(device)
+        ctx = torch.no_grad() if no_grad else torch.enable_grad()
+        with ctx:
+            return get_embedding(model, samples)
+    # YOLO 路徑：List of tensors
+    embs = []
+    for crops in samples:                          # crops: (N_i, 3, 224, 224)
+        crops = crops.to(device)
+        ctx = torch.no_grad() if no_grad else torch.enable_grad()
+        with ctx:
+            emb = get_embedding(model, crops)      # (N_i, 1024)
+        embs.append(emb.mean(dim=0))               # (1024,)
+    return torch.stack(embs)                       # (B, 1024)
+
+
 def _forward_orig(model, pixel_values, device):
-    pixel_values = pixel_values.to(device)
-    with torch.no_grad():
-        return get_embedding(model, pixel_values)
+    return _pool_embeddings(model, pixel_values, device, no_grad=True)
 
 
 def _forward_aug(model, pixel_values, device):
-    pixel_values = pixel_values.to(device)
-    return get_embedding(model, pixel_values)
+    return _pool_embeddings(model, pixel_values, device, no_grad=False)
 
 
 # ── 單步 train / val ──────────────────────────────────────────────────────────
@@ -116,6 +134,10 @@ def train(config: dict) -> None:
     from src.loss import infonce_loss
     from util.image_process import get_transform_original, get_transform_aug
     from util.dataset import AnimeImageDataset, get_dataloader
+    from src.config import load_yolo_config
+
+    yolo_config = load_yolo_config()
+    use_yolo = yolo_config.get('yolo', {}).get('use', False)
 
     # device
     device = torch.device(
@@ -152,16 +174,16 @@ def train(config: dict) -> None:
     test_df  = pd.read_csv(split_csv['test'])
 
     train_loader = get_dataloader(
-        AnimeImageDataset(train_df, image_dir, image_col, transform_orig, transform_aug),
-        batch_size, shuffle=True,
+        AnimeImageDataset(train_df, image_dir, image_col, transform_orig, transform_aug, use_yolo=use_yolo),
+        batch_size, shuffle=True, use_yolo=use_yolo,
     )
     val_loader = get_dataloader(
-        AnimeImageDataset(val_df, image_dir, image_col, transform_orig, transform_aug),
-        batch_size, shuffle=False,
+        AnimeImageDataset(val_df, image_dir, image_col, transform_orig, transform_aug, use_yolo=use_yolo),
+        batch_size, shuffle=False, use_yolo=use_yolo,
     )
     test_loader = get_dataloader(
-        AnimeImageDataset(test_df, image_dir, image_col, transform_orig, transform_aug),
-        batch_size, shuffle=False,
+        AnimeImageDataset(test_df, image_dir, image_col, transform_orig, transform_aug, use_yolo=use_yolo),
+        batch_size, shuffle=False, use_yolo=use_yolo,
     )
 
     # output paths

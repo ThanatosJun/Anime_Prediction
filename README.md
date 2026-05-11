@@ -225,3 +225,39 @@ python scripts/run_column_lineage_report.py
 1. **Baseline (Tabular + Text)**：僅依賴「IP/製作陣容 + 故事設定」，代表業界最基本的企劃文案評估水準。
 2. **加入靜態視覺 (+Image)**：評估加入主視覺圖後，對觀眾吸引力的額外增益。
 3. **完整模型 (+PV)**：檢驗動態視聽資訊 (畫風流暢度、分鏡、配樂節奏) 所帶來的最終極限增益。
+
+---
+
+## 🖼️ Image Pipeline（圖片處理分支）
+
+### 執行順序
+
+```
+python util/getImage.py       # 下載圖片、記錄 fetch_log.csv
+python util/yolo_for_image.py # YOLO 偵測人物、裁切、儲存 canvas
+python run_train.py           # Swin Transformer 自監督訓練
+python run_predict.py         # 產生 image_embeddings.parquet
+```
+
+### YOLO 人物偵測與裁切
+
+使用 `dghs-imgutils` 的動畫人物偵測模型（`deepghs/anime_person_detection`），對每張封面圖自動偵測人物並裁切，最多保留信心分數前 5 個結果。
+
+**裁切範例**（id=103393，`coverImage_medium`）：
+
+![YOLO 裁切範例](gen/cropped/01_th/103393_canvas.jpg)
+
+> 左側為原始封面圖，右側依序為各人物裁切（crop\_0 ～ crop\_4），依信心分數由高至低排列。裁切結果作為 Swin Transformer 的輸入，每張圖的所有裁切 embedding 做 mean pooling 後作為該圖的最終向量表示。
+
+### 設定檔
+
+| 檔案 | 說明 |
+|------|------|
+| `image_process_config.yaml` | Swin Transformer 訓練參數（batch size、lr、epoch 等） |
+| `yolo_config.yaml` | YOLO 偵測參數（conf threshold、max\_persons、output dir 等） |
+
+### 輸出
+
+- 裁切圖：`gen/cropped/01_th/{idx}_{col}_crop_{n}.jpg`
+- 視覺化 canvas：`gen/cropped/01_th/{idx}_canvas.jpg`
+- 最終 embedding：`data/processed/image_embeddings.parquet`（欄位：`idx`、`coverImage_emb`、`bannerImage_emb`，各 1024 維）

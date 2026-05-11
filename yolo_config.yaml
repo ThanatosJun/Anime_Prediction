@@ -1,0 +1,38 @@
+# ── Data ──────────────────────────────────────────────────────────────────────
+data:
+  csv_path: data/fetch_log.csv
+  image_columns:
+    - coverImage_medium
+    #- bannerImage
+  image_dir: data/image           # 原始圖片所在目錄
+  output_dir: gen/cropped/01_th  # 裁切後人物圖片的儲存目錄
+  log_path: data/yolo_log.csv     # 偵測結果 log（每張圖的偵測數量、狀態）
+
+# ── Debug ─────────────────────────────────────────────────────────────────────
+debug:
+  enabled: false
+  sample_size: 20                 # enabled=true 時只處理前 n 筆
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model:
+  repo_id: deepghs/anime_person_detection
+  level: m                        # n（最快）/ s / m / x（最準）
+  version: v1.1                   # v0 / v1 / v1.1
+  # model_name:                   # 手動指定模型名稱時取消註解，會覆蓋 level + version
+
+# ── Detection ─────────────────────────────────────────────────────────────────
+detection:
+  conf_threshold: 0.2             # 信心分數門檻，低於此值的偵測結果會被濾除
+  iou_threshold: 0.8              # NMS 的 IoU 門檻，控制重疊框的合併程度
+  max_persons: 5                  # 每張圖最多保留幾個人物框（依信心分數排序）
+  min_bbox_ratio: 0.05            # 人物框面積 / 圖片面積的最小比例（過濾太小的框）
+  save_crops: true                # 是否將裁切後的人物圖另存
+  fallback_full_image: true       # 偵測不到人物時，是否改用整張圖作為輸出
+
+# ── Output ────────────────────────────────────────────────────────────────────
+output:
+  detection_result_path: data/processed/yolo_detections.parquet
+  # 欄位：idx、image_col、bbox (x0,y0,x1,y1)、confidence、crop_path
+
+yolo:
+  use: true

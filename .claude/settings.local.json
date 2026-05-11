@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"c:\\\\Users\\\\USER\\\\Documents\\\\資科\\\\Anime_Prediction\\\\util\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(git fetch *)",
+      "Bash(git rebase *)",
+      "Bash(git checkout *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\USER\\Documents\\資科\\Anime_Prediction\\.git\\rebase-merge",
+      "C:\\Users\\USER\\Documents\\資科\\Anime_Prediction\\.git"
+    ]
+  }
+}
