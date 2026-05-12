@@ -1,0 +1,74 @@
+{
+  "timestamp_utc": "2026-05-08T03:28:05.195933+00:00",
+  "config_path": "src/text_branch/configs/embedding_config.yaml",
+  "data_dir": "data/processed",
+  "splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "text_column": "description",
+  "id_column": "id",
+  "target_columns": [
+    "popularity",
+    "meanScore"
+  ],
+  "sample_size": 500,
+  "embedding_runtime": {
+    "model_name": "BAAI/bge-small-en-v1.5",
+    "device": "auto",
+    "batch_size": 24,
+    "active_model_key": "bge_small"
+  },
+  "model_info": {
+    "model_name": "BAAI/bge-small-en-v1.5",
+    "embedding_dim": 384,
+    "device": "cpu",
+    "batch_size": 24,
+    "random_seed": 42
+  },
+  "preprocessing": {
+    "lowercase": true,
+    "remove_urls": true,
+    "remove_extra_whitespace": true,
+    "min_length": 10,
+    "max_length": 512
+  },
+  "aggregate_metrics": {
+    "total_duration_sec": 27.7321,
+    "total_input_rows": 1500,
+    "total_encoded_rows": 1400,
+    "weighted_retention_rate": 0.9333333333333333,
+    "avg_split_duration_sec": 9.243900000000002,
+    "rows_per_second": 50.48301426866339
+  },
+  "split_stats": [
+    {
+      "split": "train",
+      "input_rows": 500,
+      "encoded_rows": 476,
+      "dropped_rows": 24,
+      "retention_rate": 0.952,
+      "output_path": "artifacts/text_embeddings_train.parquet",
+      "duration_sec": 6.8714
+    },
+    {
+      "split": "val",
+      "input_rows": 500,
+      "encoded_rows": 482,
+      "dropped_rows": 18,
+      "retention_rate": 0.964,
+      "output_path": "artifacts/text_embeddings_val.parquet",
+      "duration_sec": 10.3305
+    },
+    {
+      "split": "test",
+      "input_rows": 500,
+      "encoded_rows": 442,
+      "dropped_rows": 58,
+      "retention_rate": 0.884,
+      "output_path": "artifacts/text_embeddings_test.parquet",
+      "duration_sec": 10.5298
+    }
+  ]
+}

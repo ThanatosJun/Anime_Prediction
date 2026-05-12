@@ -46,7 +46,58 @@ def _parse_args() -> argparse.Namespace:
         default="text_branch_metrics.json",
         help="Output JSON report filename.",
     )
+    parser.add_argument(
+        "--comparison-csv-name",
+        type=str,
+        default="text_branch_quality_compare.csv",
+        help="CSV filename under report_dir for one-row-per-run quality comparison.",
+    )
+    parser.add_argument(
+        "--experiment-name",
+        type=str,
+        default="",
+        help="Optional label for this experiment row.",
+    )
+    parser.add_argument(
+        "--embedding-model-key",
+        type=str,
+        default="",
+        help="Optional embedding model preset key for tracking.",
+    )
+    parser.add_argument(
+        "--embedding-model-name",
+        type=str,
+        default="",
+        help="Optional embedding model name for tracking.",
+    )
     return parser.parse_args()
+
+
+def _build_compare_row(args: argparse.Namespace, summary: Dict) -> Dict:
+    row = {
+        "timestamp_utc": summary["timestamp_utc"],
+        "experiment_name": args.experiment_name or Path(args.report_name).stem,
+        "embedding_model_key": args.embedding_model_key,
+        "embedding_model_name": args.embedding_model_name,
+        "regressor_name": summary["model"]["name"],
+        "alpha": summary["model"]["alpha"],
+        "feature_count": summary["inputs"]["feature_count"],
+        "train_path": summary["inputs"]["train_path"],
+        "val_path": summary["inputs"]["val_path"],
+        "test_path": summary["inputs"]["test_path"],
+        "report_path": str((args.report_dir / args.report_name).as_posix()),
+    }
+
+    for target, target_report in summary["metrics"].items():
+        row[f"{target}_train_rows"] = target_report["train_rows"]
+        row[f"{target}_val_rows"] = target_report["val_rows"]
+        row[f"{target}_test_rows"] = target_report["test_rows"]
+        for split in ("val", "test"):
+            row[f"{target}_{split}_MAE"] = target_report[split]["MAE"]
+            row[f"{target}_{split}_RMSE"] = target_report[split]["RMSE"]
+            row[f"{target}_{split}_Spearman"] = target_report[split]["Spearman"]
+
+    return row
 
 
 def _embedding_file(artifact_dir: Path, prefix: str, split: str) -> Path:
@@ -206,7 +257,18 @@ def main() -> None:
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 
+    compare_row = _build_compare_row(args, summary)
+    compare_path = args.report_dir / args.comparison_csv_name
+    pd.DataFrame([compare_row]).to_csv(
+        compare_path,
+        mode="a",
+        index=False,
+        header=not compare_path.exists(),
+        encoding="utf-8",
+    )
+
     print(f"Saved metrics report: {out_path.as_posix()}")
+    print(f"Quality comparison row appended: {compare_path.as_posix()}")
     for target in args.targets:
         t = target_reports[target]
         print(

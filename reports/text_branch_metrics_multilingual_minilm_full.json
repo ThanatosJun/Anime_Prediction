@@ -1,0 +1,66 @@
+{
+  "timestamp_utc": "2026-05-08T05:50:52.909913+00:00",
+  "model": {
+    "name": "Ridge",
+    "alpha": 1.0,
+    "random_seed": 42
+  },
+  "package_versions": {
+    "python": "3.10.20",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "scipy": "1.15.3",
+    "scikit-learn": "1.7.2",
+    "pyarrow": "24.0.0"
+  },
+  "inputs": {
+    "train_path": "artifacts/text_embeddings_train.parquet",
+    "val_path": "artifacts/text_embeddings_val.parquet",
+    "test_path": "artifacts/text_embeddings_test.parquet",
+    "feature_count": 384,
+    "targets": [
+      "popularity",
+      "meanScore"
+    ]
+  },
+  "split_integrity": {
+    "train_val_overlap": 0,
+    "train_test_overlap": 0,
+    "val_test_overlap": 0,
+    "no_overlap": true
+  },
+  "metrics": {
+    "popularity": {
+      "target": "popularity",
+      "train_rows": 12783,
+      "val_rows": 2637,
+      "test_rows": 2808,
+      "val": {
+        "MAE": 20645.638671875,
+        "RMSE": 41917.369383108955,
+        "Spearman": 0.5526030209356781
+      },
+      "test": {
+        "MAE": 18027.64453125,
+        "RMSE": 33910.51565517693,
+        "Spearman": 0.5378796016055305
+      }
+    },
+    "meanScore": {
+      "target": "meanScore",
+      "train_rows": 12783,
+      "val_rows": 2637,
+      "test_rows": 2808,
+      "val": {
+        "MAE": 9.694622039794922,
+        "RMSE": 11.82910087722125,
+        "Spearman": 0.3086328873286297
+      },
+      "test": {
+        "MAE": 10.887136459350586,
+        "RMSE": 13.113239941661181,
+        "Spearman": 0.20536230409171025
+      }
+    }
+  }
+}

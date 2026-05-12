@@ -15,6 +15,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import time
 from typing import Dict, List
 
 import numpy as np
@@ -31,6 +32,48 @@ except ImportError:
 
 DEFAULT_CONFIG_PATH = Path("src/text_branch/configs/embedding_config.yaml")
 DEFAULT_INPUT_TEMPLATE = "anilist_anime_multimodal_input_{split}.csv"
+
+
+def _resolve_embedding_runtime_cfg(embedding_cfg: Dict) -> Dict:
+    """Resolve model/device/batch from base config and optional experiment presets."""
+    model_name = embedding_cfg.get("model_name")
+    device = embedding_cfg.get("device", "auto")
+    batch_size = int(embedding_cfg.get("batch_size", 16))
+
+    exp_cfg = embedding_cfg.get("experiments", {})
+    active_model_key = exp_cfg.get("active_model_key")
+    model_presets = exp_cfg.get("models", {})
+
+    if active_model_key:
+        if not isinstance(model_presets, dict):
+            raise ValueError("embedding.experiments.models must be a mapping")
+
+        selected = model_presets.get(active_model_key)
+        if selected is None:
+            available = ", ".join(sorted(model_presets.keys())) or "<none>"
+            raise ValueError(
+                f"Unknown embedding.experiments.active_model_key='{active_model_key}'. "
+                f"Available keys: {available}"
+            )
+
+        if not isinstance(selected, dict) or not selected.get("model_name"):
+            raise ValueError(
+                f"embedding.experiments.models.{active_model_key} must define model_name"
+            )
+
+        model_name = selected["model_name"]
+        device = selected.get("device", device)
+        batch_size = int(selected.get("batch_size", batch_size))
+
+    if not model_name:
+        model_name = "sentence-transformers/all-MiniLM-L6-v2"
+
+    return {
+        "model_name": model_name,
+        "device": device,
+        "batch_size": batch_size,
+        "active_model_key": active_model_key,
+    }
 
 
 def _parse_args() -> argparse.Namespace:
@@ -82,6 +125,12 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default="text_embedding_pipeline_summary.json",
         help="Summary report filename under report_dir.",
+    )
+    parser.add_argument(
+        "--comparison-csv-name",
+        type=str,
+        default="text_embedding_experiment_compare.csv",
+        help="CSV filename under report_dir for one-row-per-run quick comparison.",
     )
     parser.add_argument(
         "--sample-size",
@@ -193,6 +242,7 @@ def main() -> None:
     embedding_cfg = config.get("embedding", {})
     preprocess_cfg = config.get("preprocessing", {})
     output_cfg = config.get("output", {})
+    runtime_embedding_cfg = _resolve_embedding_runtime_cfg(embedding_cfg)
 
     artifact_dir = Path(output_cfg.get("artifact_dir", "artifacts"))
     report_dir = Path(output_cfg.get("report_dir", "reports"))
@@ -208,14 +258,16 @@ def main() -> None:
     )
 
     generator = EmbeddingGenerator(
-        model_name=embedding_cfg.get("model_name", "sentence-transformers/all-MiniLM-L6-v2"),
-        device=embedding_cfg.get("device", "auto"),
-        batch_size=int(embedding_cfg.get("batch_size", 16)),
+        model_name=runtime_embedding_cfg["model_name"],
+        device=runtime_embedding_cfg["device"],
+        batch_size=runtime_embedding_cfg["batch_size"],
         random_seed=int(config.get("random_seed", 42)),
     )
 
+    run_started_at = time.perf_counter()
     run_stats = []
     for split in args.splits:
+        split_started_at = time.perf_counter()
         input_csv = args.data_dir / DEFAULT_INPUT_TEMPLATE.format(split=split)
         print(f"\n[Split: {split}] Reading {input_csv.as_posix()}")
         split_stats = _process_split(
@@ -230,15 +282,30 @@ def main() -> None:
             output_prefix=args.output_prefix,
             sample_size=args.sample_size,
         )
+        split_stats["duration_sec"] = round(time.perf_counter() - split_started_at, 4)
         run_stats.append(split_stats)
         print(
-            "Saved {path} | encoded={enc}/{total} (retention={ret:.2%})".format(
+            "Saved {path} | encoded={enc}/{total} (retention={ret:.2%}) | time={sec:.2f}s".format(
                 path=split_stats["output_path"],
                 enc=split_stats["encoded_rows"],
                 total=split_stats["input_rows"],
                 ret=split_stats["retention_rate"],
+                sec=split_stats["duration_sec"],
             )
         )
+
+    total_duration_sec = round(time.perf_counter() - run_started_at, 4)
+    total_input_rows = int(sum(s["input_rows"] for s in run_stats))
+    total_encoded_rows = int(sum(s["encoded_rows"] for s in run_stats))
+    weighted_retention_rate = (
+        float(total_encoded_rows / total_input_rows) if total_input_rows > 0 else 0.0
+    )
+    avg_split_duration_sec = (
+        float(np.mean([s["duration_sec"] for s in run_stats])) if run_stats else 0.0
+    )
+    rows_per_second = (
+        float(total_encoded_rows / total_duration_sec) if total_duration_sec > 0 else 0.0
+    )
 
     summary = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -249,8 +316,17 @@ def main() -> None:
         "id_column": args.id_column,
         "target_columns": args.target_columns,
         "sample_size": args.sample_size,
+        "embedding_runtime": runtime_embedding_cfg,
         "model_info": generator.get_model_info(),
         "preprocessing": preprocess_cfg,
+        "aggregate_metrics": {
+            "total_duration_sec": total_duration_sec,
+            "total_input_rows": total_input_rows,
+            "total_encoded_rows": total_encoded_rows,
+            "weighted_retention_rate": weighted_retention_rate,
+            "avg_split_duration_sec": avg_split_duration_sec,
+            "rows_per_second": rows_per_second,
+        },
         "split_stats": run_stats,
     }
 
@@ -258,7 +334,35 @@ def main() -> None:
     with report_path.open("w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
+    compare_row = {
+        "timestamp_utc": summary["timestamp_utc"],
+        "active_model_key": runtime_embedding_cfg.get("active_model_key"),
+        "model_name": runtime_embedding_cfg["model_name"],
+        "device": generator.get_model_info().get("device"),
+        "batch_size": generator.get_model_info().get("batch_size"),
+        "sample_size": args.sample_size,
+        "splits": "|".join(args.splits),
+        "total_duration_sec": total_duration_sec,
+        "total_input_rows": total_input_rows,
+        "total_encoded_rows": total_encoded_rows,
+        "weighted_retention_rate": weighted_retention_rate,
+        "avg_split_duration_sec": avg_split_duration_sec,
+        "rows_per_second": rows_per_second,
+        "summary_report": report_path.as_posix(),
+    }
+
+    compare_path = report_dir / args.comparison_csv_name
+    compare_df = pd.DataFrame([compare_row])
+    compare_df.to_csv(
+        compare_path,
+        mode="a",
+        index=False,
+        header=not compare_path.exists(),
+        encoding="utf-8",
+    )
+
     print(f"\nSummary report written: {report_path.as_posix()}")
+    print(f"Comparison row appended: {compare_path.as_posix()}")
 
 
 if __name__ == "__main__":
