@@ -13,14 +13,13 @@
 
 尚未完成的是：
 
-1. `1.2 Feature-concat Classical ML`
-2. `1.3 Text-only Baseline`
-3. `1.4 Image-only Baseline`
-4. `2.1 Anime Domain Deep Fusion`
-5. `2.2 Cross-modal Transformer Fusion`
-6. `2.3 Retrieval / RAG Competitive Baseline`
+1. `1.3 Text-only Baseline`
+2. `1.4 Image-only Baseline`
+3. `2.1 Anime Domain Deep Fusion`
+4. `2.2 Cross-modal Transformer Fusion`
+5. `2.3 Retrieval / RAG Competitive Baseline`
 
-換句話說：目前不是完成 Armenta-Segura & Sidorov 2025 那條 competitive baseline，而是先完成 reference baseline map 裡的 foundation/classical 起始段。
+換句話說：目前不是完成 Armenta-Segura & Sidorov 2025 那條 competitive baseline，而是先完成 reference baseline map 裡的 foundation/classical 與 feature-concat 起始段。
 
 ## Plan Mapping
 
@@ -28,7 +27,7 @@
 |---|---|---|---|
 | `0. Lowest Reference / 最低地板` | `F0-Mean`, `F0-Ridge-Meta` | done | Mean predictor 與 Ridge metadata baseline 已跑 `popularity`、`meanScore` |
 | `1.1 Metadata-only Classical ML` | `F1-RF-Meta`, `F1-GB-Meta` | done as adaptation | 對應 Lo & Syu 2023 的 pre-broadcast metadata + classical ML 參考；RF 有原文方法支撐，Gradient Boosting 是本專案延伸強 tabular baseline，不是原文模型 |
-| `1.2 Feature-concat Classical ML` | `F2-XGB-Concat` | blocked | 需要 `src/fussion_branch/embedding/text` 與 image embedding parquet，目前缺 text/image embedding 輸出 |
+| `1.2 Feature-concat Classical ML` | `F2-XGB-Concat` | done as adaptation | 已補 `docs/reference_baselines/f2_feature_concat_plan.md`；metadata + text embedding + image embedding concat 架構已用真實 embeddings 與 XGBoost 跑通 `popularity`、`meanScore` |
 | `1.3 Text-only Baseline` | not implemented | todo | 尚未建立 TF-IDF / text embedding only reference runner |
 | `1.4 Image-only Baseline` | not implemented | todo | 尚未建立 cover/banner image-only reference runner |
 | `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP` | scaffold only | config 中有 disabled scaffold；需 text/image embeddings 後才能跑 |
@@ -74,6 +73,27 @@ Latest full run before directory split:
 ```
 
 Important note: `.exp/` is ignored and should be treated as local experiment output. This markdown file is the tracked status record.
+
+Tracked result summary:
+
+```text
+reports/reference_baseline_results.csv
+reports/reference_baseline_runs.md
+```
+
+Latest F2 feature-concat run:
+
+```text
+.exp/baseline/results/14/baseline_results.csv
+```
+
+Embedding coverage used by strict intersection:
+
+| split | metadata ids | text ids in split | image ids in split | common ids used |
+|---|---:|---:|---:|---:|
+| train | 9583 | 9205 | 9583 | 9205 |
+| val | 2918 | 2637 | 2918 | 2637 |
+| test | 3087 | 2808 | 3087 | 2808 |
 
 ## Paper Reference Check
 
@@ -126,8 +146,48 @@ This is not directly from Lo & Syu (2023). It is a stronger classical tabular ex
 | `F1-RF-Meta` | meanScore | 7.9541 | 0.1298 | 0.5836 | ok |
 | `F1-GB-Meta` | popularity | 8917.8924 | 0.4951 | 0.8367 | ok |
 | `F1-GB-Meta` | meanScore | 8.7243 | -0.0269 | 0.5380 | ok |
-| `F2-XGB-Concat` | popularity |  |  |  | skipped: missing text embedding directory |
-| `F2-XGB-Concat` | meanScore |  |  |  | skipped: missing text embedding directory |
+| `F2-XGB-Concat` | popularity | 9588.2590 | 0.5194 | 0.8575 | ok |
+| `F2-XGB-Concat` | meanScore | 8.3391 | 0.0193 | 0.5292 | ok |
+
+### F2 Architecture Smoke Test
+
+On 2026-05-12, the feature-concat path was tested with synthetic text/image embeddings:
+
+```text
+python -m src.reference_baseline_branch.run_reference_baselines --config .exp/f2_feature_concat_smoke/f2_smoke_config.yaml --baseline F2-LGBM-Concat-Smoke --target popularity
+```
+
+Result:
+
+```text
+status = ok
+n_train = 9583
+n_val = 2918
+n_test = 3087
+n_features = 159
+```
+
+This confirmed the runner could execute metadata + text embedding parquet + image embedding parquet through ID alignment, feature concatenation, model fitting, metrics, and result output before the real embeddings were available. The smoke result is not reportable as a real baseline because the embeddings were synthetic and the smoke model used LightGBM, not XGBoost.
+
+### F2 Real Embedding Run
+
+On 2026-05-12, real text/image embeddings were placed under the configured directories and `xgboost` was installed in the current Python environment.
+
+Command:
+
+```text
+python -m src.reference_baseline_branch.run_reference_baselines --baseline F2-XGB-Concat
+```
+
+Result:
+
+```text
+status = ok
+n_train = 9205
+n_val = 2637
+n_test = 2808
+n_features = 1559
+```
 
 ## Reproduction Commands
 
@@ -151,11 +211,10 @@ python -m src.ablation_branch.run_ablation_baselines
 
 ## Next Required Step
 
-To move from completed foundation baselines to the first competitive route:
+To move from completed foundation/classical baselines to the first competitive route:
 
-1. Generate or restore text embeddings under `src/fussion_branch/embedding/text`.
-2. Generate or restore image embeddings under `src/fussion_branch/embedding/image`.
-3. Run `F2-XGB-Concat`.
-4. Enable and run `C1-Armenta-MLP`.
+1. Review whether `F2-XGB-Concat` should use strict intersection as final reporting policy or add a separately named missing-modality ablation.
+2. Enable and run `C1-Armenta-MLP`.
+3. Compare `C1-Armenta-MLP` against `F2-XGB-Concat`.
 
-Only after step 4 can we say the `2.1 Anime Domain Deep Fusion` route has been implemented.
+Only after step 3 can we say the `2.1 Anime Domain Deep Fusion` route has been implemented and compared against the feature-concat floor.
