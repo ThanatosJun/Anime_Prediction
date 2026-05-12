@@ -13,10 +13,9 @@
 
 尚未完成的是：
 
-1. `2.2 Cross-modal Transformer Fusion`
-2. `2.3 Retrieval / RAG Competitive Baseline`
+1. `2.3 Retrieval / RAG Competitive Baseline`
 
-換句話說：目前已完成 foundation/classical、single-modality、feature-concat，以及 `C1-Armenta-MLP` first-pass adaptation；但 C1 目前沒有超過 F2，所以不能主張 deep fusion 已帶來增益。
+換句話說：目前已完成 foundation/classical、single-modality、feature-concat、`C1-Armenta-MLP` first-pass adaptation，以及 lightweight `C2-CTNN-Lite` cross-modal transformer adaptation；但 neural fusion routes 目前都沒有超過 F2，所以不能主張 deep fusion 已帶來增益。
 
 ## Plan Mapping
 
@@ -28,7 +27,7 @@
 | `1.3 Text-only Baseline` | `T2-XGB-TextEmb` | done as adaptation | 使用 text embeddings + XGBoost；對應 implementation plan 的 `T2-Emb` 類型，不是 TF-IDF exact reproduction |
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | done as adaptation | 使用 image embeddings + XGBoost；對應 implementation plan 的 `I1-Emb` 類型，不是 poster CNN exact reproduction |
 | `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP` | first-pass done as adaptation | 使用 `--include-disabled` 跑通；結果低於 `F2-XGB-Concat`，目前只能作為 first-pass deep fusion adaptation |
-| `2.2 Cross-modal Transformer Fusion` | not implemented | todo | 尚未實作 CTNN / cross-attention baseline |
+| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | done as adaptation | 使用 text/image embedding token + lightweight TransformerEncoder；對應 Madongo et al. 2023 的 cross-modal transformer route，但不是 exact CTNN reproduction |
 | `2.3 Retrieval / RAG Competitive Baseline` | not implemented | todo | 尚未實作 SKAPP-inspired reference runner；現有 RAG 對照較偏 project ablation |
 
 ## Implemented Code
@@ -95,6 +94,12 @@ Latest single-modality runs:
 ```text
 .exp/baseline/results/16/baseline_results.csv  # T2-XGB-TextEmb
 .exp/baseline/results/17/baseline_results.csv  # I1-XGB-ImageEmb
+```
+
+Latest C2 cross-modal transformer run:
+
+```text
+.exp/baseline/results/18/baseline_results.csv
 ```
 
 Embedding coverage used by strict intersection:
@@ -164,6 +169,8 @@ This is not directly from Lo & Syu (2023). It is a stronger classical tabular ex
 | `T2-XGB-TextEmb` | meanScore | 10.3206 | -0.3846 | 0.2427 | ok |
 | `I1-XGB-ImageEmb` | popularity | 13815.0865 | 0.0158 | 0.6046 | ok |
 | `I1-XGB-ImageEmb` | meanScore | 9.4042 | -0.1559 | 0.2918 | ok |
+| `C2-CTNN-Lite` | popularity | 13764.4086 | 0.1716 | 0.7410 | ok |
+| `C2-CTNN-Lite` | meanScore | 9.5102 | -0.2602 | 0.3107 | ok |
 
 ### F2 Architecture Smoke Test
 
@@ -251,6 +258,38 @@ Current interpretation:
 Text-only and image-only embeddings contain ranking signal, especially for popularity, but neither is enough to produce strong R2 alone. F2's gain appears to come from combining metadata with embeddings rather than from either embedding modality alone.
 ```
 
+### C2 Cross-Modal Transformer Run
+
+On 2026-05-12, `C2-CTNN-Lite` was added and run:
+
+```text
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C2-CTNN-Lite --include-disabled
+```
+
+Implementation:
+
+```text
+text embedding -> projection -> text token
+image embedding -> projection -> image token
+two-token TransformerEncoder -> pooled fusion vector -> regression head
+```
+
+Result:
+
+```text
+status = ok
+n_train = 9205
+n_val = 2637
+n_test = 2808
+n_features = 1408
+```
+
+Current interpretation:
+
+```text
+C2-CTNN-Lite improves over text-only/image-only embeddings for popularity, but still trails F2-XGB-Concat. For meanScore, the first cross-modal transformer adaptation remains weak.
+```
+
 ## Reproduction Commands
 
 Run all enabled reference baselines:
@@ -273,10 +312,10 @@ python -m src.ablation_branch.run_ablation_baselines
 
 ## Next Required Step
 
-To move from completed foundation/classical, single-modality, and first-pass deep-fusion baselines to the next reference routes:
+To move from completed foundation/classical, single-modality, and neural-fusion baselines to the next reference route:
 
-1. Tune or replace the C1 MLP fusion head only if the goal is to improve the deep-fusion route.
-2. Continue to `2.2 Cross-modal Transformer Fusion` for the next competitive reference route.
-3. Continue to `2.3 Retrieval / RAG Competitive Baseline` after C2, or earlier if RQ2 becomes the priority.
+1. Continue to `2.3 Retrieval / RAG Competitive Baseline` if the goal is to cover the remaining anchor paper route.
+2. Tune or replace the C1/C2 neural fusion heads only if the goal is to improve performance rather than complete the reference map.
+3. Decide whether F2 should remain the primary competitive reference floor for current reporting.
 
-Only after step 2 can the transformer-fusion anchor paper be represented in the baseline table.
+Only after step 1 can the SKAPP-inspired retrieval anchor paper be represented in the baseline table.

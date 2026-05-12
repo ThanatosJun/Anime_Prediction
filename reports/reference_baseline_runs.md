@@ -21,6 +21,7 @@ reports/reference_baseline_results.csv
 | `.exp/baseline/results/15` | `C1-Armenta-MLP` | local raw output | Source for first-pass anime-domain deep fusion adaptation results. |
 | `.exp/baseline/results/16` | `T2-XGB-TextEmb` | local raw output | Source for completed text-embedding-only XGBoost results. |
 | `.exp/baseline/results/17` | `I1-XGB-ImageEmb` | local raw output | Source for completed image-embedding-only XGBoost results. |
+| `.exp/baseline/results/18` | `C2-CTNN-Lite` | local raw output | Source for completed lightweight cross-modal transformer fusion results. |
 
 ## Completed Routes
 
@@ -32,6 +33,7 @@ reports/reference_baseline_results.csv
 | `1.3 Text-only Baseline` | `T2-XGB-TextEmb` | done as adaptation |
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | done as adaptation |
 | `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP` | first-pass done as adaptation |
+| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | done as adaptation |
 
 ## C1 vs F2 Snapshot
 
@@ -46,6 +48,13 @@ reports/reference_baseline_results.csv
 |---|---:|---:|---:|---|
 | `popularity` | -0.0152 | 0.0158 | 0.5194 | Text/image embeddings alone have ranking signal, but the strong result comes from the combined metadata + embedding setup. |
 | `meanScore` | -0.3846 | -0.1559 | 0.0193 | Single-modality embeddings are weak for score regression; F2 remains the least weak multimodal classical reference. |
+
+## C2 Snapshot
+
+| Target | `C2-CTNN-Lite` test R2 | `C2-CTNN-Lite` test Spearman | Current interpretation |
+|---|---:|---:|---|
+| `popularity` | 0.1716 | 0.7410 | Lightweight text-image transformer fusion improves over single-modality embedding baselines but still trails metadata+embedding XGBoost. |
+| `meanScore` | -0.2602 | 0.3107 | The text-image transformer route remains weak for score regression in this first adaptation. |
 
 ## Artifact Policy
 
