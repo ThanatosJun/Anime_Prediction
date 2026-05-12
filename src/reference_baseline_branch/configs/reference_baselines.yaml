@@ -8,6 +8,7 @@ data:
   meta_dir: data/fussion/post2000
   text_emb_dir: src/fussion_branch/embedding/text
   image_emb_dir: src/fussion_branch/embedding/image
+  rag_features_root: .exp/baseline/rag_features
   splits: ["train", "val", "test"]
   id_col: id
 
@@ -59,6 +60,26 @@ features:
     prefix: emb_
   image_embedding:
     file_template: image_embeddings_{split}.parquet
+  rag:
+    numeric:
+      - rag_popularity
+      - rag_score
+      - rag_release_year
+      - rag_episodes
+      - rag_similarity_mean
+      - rag_similarity_max
+      - rag_topk_count
+    boolean:
+      - rag_found
+    categorical:
+      - rag_format
+    multihot:
+      rag_genres:
+        parser: json_list
+        top_k: null
+      rag_studios:
+        parser: json_list
+        top_k: 50
 
 feature_sets:
   none:
@@ -85,6 +106,30 @@ feature_sets:
     metadata: true
     text_embedding: true
     image_embedding: true
+  metadata_text_image_rag_none:
+    metadata: true
+    text_embedding: true
+    image_embedding: true
+    rag: true
+    rag_features_dir: .exp/baseline/rag_features/none
+  metadata_text_image_rag_sparse:
+    metadata: true
+    text_embedding: true
+    image_embedding: true
+    rag: true
+    rag_features_dir: .exp/baseline/rag_features/sparse
+  metadata_text_image_rag_dense:
+    metadata: true
+    text_embedding: true
+    image_embedding: true
+    rag: true
+    rag_features_dir: .exp/baseline/rag_features/dense
+  metadata_text_image_rag_hybrid:
+    metadata: true
+    text_embedding: true
+    image_embedding: true
+    rag: true
+    rag_features_dir: .exp/baseline/rag_features/hybrid
 
 baselines:
   - id: F0-Mean
@@ -277,3 +322,79 @@ baselines:
     project_adaptation_component: "Project text and image embeddings are projected into two modality tokens and fused with a lightweight TransformerEncoder regression head; this omits the paper's full CTNN/recurrent-fusion design."
     claim_allowed: "Lightweight cross-modal transformer fusion baseline adapted from poster-text box-office prediction literature."
     claim_not_allowed: "Do not claim exact CTNN reproduction; this implementation uses precomputed project embeddings, a simplified two-token transformer fusion head, and anime regression targets."
+
+  - id: C3-RAG-None-XGB
+    enabled: false
+    feature_set: metadata_text_image_rag_none
+    model: xgboost
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.9
+      colsample_bytree: 0.9
+      random_state: 42
+      objective: reg:squarederror
+    reference: Xu et al. 2025 SKAPP
+    reproduction_level: inspired
+    paper_supported_component: "SKAPP includes a non-retrieval control and retrieval-augmented popularity prediction setup."
+    project_adaptation_component: "Project full multimodal metadata/text/image features plus schema-compatible no-retrieval RAG features."
+    claim_allowed: "No-RAG control for a SKAPP-inspired retrieval ablation."
+    claim_not_allowed: "Do not claim SKAPP reproduction; this row has no retrieval and no RRCP/VL-GNN/RRCP-Attention."
+
+  - id: C3-RAG-Sparse-XGB
+    enabled: false
+    feature_set: metadata_text_image_rag_sparse
+    model: xgboost
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.9
+      colsample_bytree: 0.9
+      random_state: 42
+      objective: reg:squarederror
+    reference: Xu et al. 2025 SKAPP
+    reproduction_level: inspired
+    paper_supported_component: "SKAPP motivates metadata-aware retrieval beyond vanilla semantic retrieval."
+    project_adaptation_component: "Offline train-set knowledge base retrieval using genre, studio, voice actor, and source overlap with temporal filtering."
+    claim_allowed: "Sparse metadata retrieval baseline inspired by SKAPP's meta retriever."
+    claim_not_allowed: "Do not claim SKAPP reproduction; this lacks RRCP selection, VL-GNN context learning, and RRCP-Attention."
+
+  - id: C3-RAG-Dense-XGB
+    enabled: false
+    feature_set: metadata_text_image_rag_dense
+    model: xgboost
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.9
+      colsample_bytree: 0.9
+      random_state: 42
+      objective: reg:squarederror
+    reference: Xu et al. 2025 SKAPP
+    reproduction_level: inspired
+    paper_supported_component: "SKAPP compares against vanilla semantic retrieval and improves it with selective retrieval knowledge augmentation."
+    project_adaptation_component: "Offline dense retrieval using project text embeddings over temporally valid train-set items."
+    claim_allowed: "Dense semantic retrieval baseline inspired by the retrieval comparison in SKAPP."
+    claim_not_allowed: "Do not claim SKAPP reproduction; this is vanilla semantic retrieval without RRCP/VL-GNN/RRCP-Attention."
+
+  - id: C3-RAG-Hybrid-XGB
+    enabled: false
+    feature_set: metadata_text_image_rag_hybrid
+    model: xgboost
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.9
+      colsample_bytree: 0.9
+      random_state: 42
+      objective: reg:squarederror
+    reference: Xu et al. 2025 SKAPP
+    reproduction_level: inspired
+    paper_supported_component: "SKAPP motivates combining multimodal semantics and metadata/context for retrieval-augmented popularity prediction."
+    project_adaptation_component: "Offline hybrid retrieval fusing sparse metadata overlap and dense text-embedding retrieval with reciprocal-rank fusion."
+    claim_allowed: "Hybrid retrieval baseline inspired by SKAPP's meta retrieval motivation."
+    claim_not_allowed: "Do not claim SKAPP reproduction; this lacks RRCP selection, VL-GNN context learning, and RRCP-Attention."

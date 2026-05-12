@@ -134,6 +134,87 @@ class MetadataEncoder:
         return names
 
 
+class RagFeatureEncoder:
+    def __init__(self, config: dict):
+        self.config = config
+        self.numeric_stats: Dict[str, Tuple[float, float, float]] = {}
+        self.categorical_vocabs: Dict[str, List[str]] = {}
+        self.multihot_vocabs: Dict[str, List[str]] = {}
+        self.feature_names: List[str] = []
+
+    def fit(self, df: pd.DataFrame) -> "RagFeatureEncoder":
+        for col in self.config.get("numeric", []):
+            values = pd.to_numeric(df[col], errors="coerce")
+            median = float(values.median())
+            filled = values.fillna(median).astype(float)
+            mean = float(filled.mean())
+            std = float(filled.std()) or 1.0
+            self.numeric_stats[col] = (median, mean, std)
+
+        for col in self.config.get("categorical", []):
+            vocab = sorted(str(v) for v in df[col].dropna().unique().tolist())
+            self.categorical_vocabs[col] = vocab
+
+        for col, spec in self.config.get("multihot", {}).items():
+            counter: Counter = Counter()
+            for value in df[col]:
+                counter.update(_parse_multi_value(value, spec.get("parser", "json_list")))
+            top_k = spec.get("top_k")
+            if top_k is None:
+                vocab = sorted(counter.keys())
+            else:
+                vocab = [name for name, _ in counter.most_common(int(top_k))]
+            self.multihot_vocabs[col] = vocab
+
+        self.feature_names = self._build_feature_names()
+        return self
+
+    def transform(self, df: pd.DataFrame) -> np.ndarray:
+        parts: List[np.ndarray] = []
+        n_rows = len(df)
+
+        for col, (median, mean, std) in self.numeric_stats.items():
+            values = pd.to_numeric(df[col], errors="coerce").fillna(median).astype(float)
+            parts.append(((values.values - mean) / std).reshape(n_rows, 1).astype(np.float32))
+
+        for col in self.config.get("boolean", []):
+            values = df[col].fillna(False).astype(float).values
+            parts.append(values.reshape(n_rows, 1).astype(np.float32))
+
+        for col, vocab in self.categorical_vocabs.items():
+            index = {value: idx for idx, value in enumerate(vocab)}
+            mat = np.zeros((n_rows, len(vocab)), dtype=np.float32)
+            for row_idx, value in enumerate(df[col]):
+                key = str(value) if pd.notna(value) else None
+                if key in index:
+                    mat[row_idx, index[key]] = 1.0
+            parts.append(mat)
+
+        for col, spec in self.config.get("multihot", {}).items():
+            vocab = self.multihot_vocabs[col]
+            index = {value: idx for idx, value in enumerate(vocab)}
+            mat = np.zeros((n_rows, len(vocab)), dtype=np.float32)
+            for row_idx, value in enumerate(df[col]):
+                for token in _parse_multi_value(value, spec.get("parser", "json_list")):
+                    if token in index:
+                        mat[row_idx, index[token]] = 1.0
+            parts.append(mat)
+
+        if not parts:
+            return np.empty((n_rows, 0), dtype=np.float32)
+        return np.concatenate(parts, axis=1)
+
+    def _build_feature_names(self) -> List[str]:
+        names: List[str] = []
+        names.extend(self.numeric_stats.keys())
+        names.extend(self.config.get("boolean", []))
+        for col, vocab in self.categorical_vocabs.items():
+            names.extend(f"{col}={value}" for value in vocab)
+        for col, vocab in self.multihot_vocabs.items():
+            names.extend(f"{col}={value}" for value in vocab)
+        return names
+
+
 class BaselineFeatureStore:
     def __init__(self, config: dict):
         self.config = config
@@ -162,10 +243,16 @@ class BaselineFeatureStore:
 
         train_df = self._df_for_ids("train", split_ids["train"])
         encoder = None
+        rag_encoder = None
         feature_names: List[str] = []
         if feature_set.get("metadata", False):
             encoder = MetadataEncoder(self.feature_cfg["metadata"]).fit(train_df)
             feature_names.extend([f"meta:{name}" for name in encoder.feature_names])
+
+        rag_cache = self._load_rag_cache(feature_set, split_ids)
+        if feature_set.get("rag", False):
+            rag_encoder = RagFeatureEncoder(self.feature_cfg["rag"]).fit(rag_cache["train"].loc[split_ids["train"]])
+            feature_names.extend([f"rag:{name}" for name in rag_encoder.feature_names])
 
         emb_cache = self._load_embedding_cache(feature_set, split_ids)
         for prefix, dims in self._embedding_feature_dims(emb_cache):
@@ -177,6 +264,8 @@ class BaselineFeatureStore:
             parts: List[np.ndarray] = []
             if encoder is not None:
                 parts.append(encoder.transform(df))
+            if rag_encoder is not None:
+                parts.append(rag_encoder.transform(rag_cache[split].loc[ids]))
             for key in ("text_embedding", "image_embedding"):
                 if feature_set.get(key, False):
                     parts.append(emb_cache[key][split].loc[ids].values.astype(np.float32))
@@ -208,7 +297,29 @@ class BaselineFeatureStore:
                     return split_ids, f"Missing {key} file: {path}"
                 emb_ids = pd.Index(pd.read_parquet(path, columns=[self.id_col])[self.id_col].values)
                 split_ids[split] = split_ids[split].intersection(emb_ids)
+        if feature_set.get("rag", False):
+            rag_dir = Path(feature_set["rag_features_dir"])
+            for split in split_ids:
+                path = rag_dir / f"rag_features_{split}.parquet"
+                if not path.exists():
+                    return split_ids, f"Missing rag feature file: {path}"
+                rag_ids = pd.Index(pd.read_parquet(path, columns=[self.id_col])[self.id_col].values)
+                split_ids[split] = split_ids[split].intersection(rag_ids)
         return split_ids, None
+
+    def _load_rag_cache(
+        self,
+        feature_set: dict,
+        split_ids: Dict[str, pd.Index],
+    ) -> Dict[str, pd.DataFrame]:
+        if not feature_set.get("rag", False):
+            return {}
+        rag_dir = Path(feature_set["rag_features_dir"])
+        cache: Dict[str, pd.DataFrame] = {}
+        for split, ids in split_ids.items():
+            path = rag_dir / f"rag_features_{split}.parquet"
+            cache[split] = pd.read_parquet(path).set_index(self.id_col).loc[ids]
+        return cache
 
     def _load_embedding_cache(
         self,
@@ -272,5 +383,12 @@ def _parse_multi_value(value, parser: str) -> List[str]:
             return []
     if parser == "pipe":
         return [part.strip() for part in str(value).split("|") if part.strip()]
+    if parser == "json_list":
+        try:
+            parsed = json.loads(str(value))
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed if str(item).strip()]
+        except Exception:
+            return []
+        return []
     raise ValueError(f"Unknown multihot parser: {parser}")
-
