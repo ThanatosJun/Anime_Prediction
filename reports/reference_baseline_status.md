@@ -13,13 +13,10 @@
 
 尚未完成的是：
 
-1. `1.3 Text-only Baseline`
-2. `1.4 Image-only Baseline`
-3. `2.1 Anime Domain Deep Fusion`
-4. `2.2 Cross-modal Transformer Fusion`
-5. `2.3 Retrieval / RAG Competitive Baseline`
+1. `2.2 Cross-modal Transformer Fusion`
+2. `2.3 Retrieval / RAG Competitive Baseline`
 
-換句話說：目前不是完成 Armenta-Segura & Sidorov 2025 那條 competitive baseline，而是先完成 reference baseline map 裡的 foundation/classical 與 feature-concat 起始段。
+換句話說：目前已完成 foundation/classical、single-modality、feature-concat，以及 `C1-Armenta-MLP` first-pass adaptation；但 C1 目前沒有超過 F2，所以不能主張 deep fusion 已帶來增益。
 
 ## Plan Mapping
 
@@ -28,9 +25,9 @@
 | `0. Lowest Reference / 最低地板` | `F0-Mean`, `F0-Ridge-Meta` | done | Mean predictor 與 Ridge metadata baseline 已跑 `popularity`、`meanScore` |
 | `1.1 Metadata-only Classical ML` | `F1-RF-Meta`, `F1-GB-Meta` | done as adaptation | 對應 Lo & Syu 2023 的 pre-broadcast metadata + classical ML 參考；RF 有原文方法支撐，Gradient Boosting 是本專案延伸強 tabular baseline，不是原文模型 |
 | `1.2 Feature-concat Classical ML` | `F2-XGB-Concat` | done as adaptation | 已補 `docs/reference_baselines/f2_feature_concat_plan.md`；metadata + text embedding + image embedding concat 架構已用真實 embeddings 與 XGBoost 跑通 `popularity`、`meanScore` |
-| `1.3 Text-only Baseline` | not implemented | todo | 尚未建立 TF-IDF / text embedding only reference runner |
-| `1.4 Image-only Baseline` | not implemented | todo | 尚未建立 cover/banner image-only reference runner |
-| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP` | scaffold only | config 中有 disabled scaffold；需 text/image embeddings 後才能跑 |
+| `1.3 Text-only Baseline` | `T2-XGB-TextEmb` | done as adaptation | 使用 text embeddings + XGBoost；對應 implementation plan 的 `T2-Emb` 類型，不是 TF-IDF exact reproduction |
+| `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | done as adaptation | 使用 image embeddings + XGBoost；對應 implementation plan 的 `I1-Emb` 類型，不是 poster CNN exact reproduction |
+| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP` | first-pass done as adaptation | 使用 `--include-disabled` 跑通；結果低於 `F2-XGB-Concat`，目前只能作為 first-pass deep fusion adaptation |
 | `2.2 Cross-modal Transformer Fusion` | not implemented | todo | 尚未實作 CTNN / cross-attention baseline |
 | `2.3 Retrieval / RAG Competitive Baseline` | not implemented | todo | 尚未實作 SKAPP-inspired reference runner；現有 RAG 對照較偏 project ablation |
 
@@ -85,6 +82,19 @@ Latest F2 feature-concat run:
 
 ```text
 .exp/baseline/results/14/baseline_results.csv
+```
+
+Latest C1 deep-fusion first-pass run:
+
+```text
+.exp/baseline/results/15/baseline_results.csv
+```
+
+Latest single-modality runs:
+
+```text
+.exp/baseline/results/16/baseline_results.csv  # T2-XGB-TextEmb
+.exp/baseline/results/17/baseline_results.csv  # I1-XGB-ImageEmb
 ```
 
 Embedding coverage used by strict intersection:
@@ -148,6 +158,12 @@ This is not directly from Lo & Syu (2023). It is a stronger classical tabular ex
 | `F1-GB-Meta` | meanScore | 8.7243 | -0.0269 | 0.5380 | ok |
 | `F2-XGB-Concat` | popularity | 9588.2590 | 0.5194 | 0.8575 | ok |
 | `F2-XGB-Concat` | meanScore | 8.3391 | 0.0193 | 0.5292 | ok |
+| `C1-Armenta-MLP` | popularity | 15352.2529 | -0.9811 | 0.8250 | ok |
+| `C1-Armenta-MLP` | meanScore | 9.0610 | -0.1173 | 0.4494 | ok |
+| `T2-XGB-TextEmb` | popularity | 14908.8897 | -0.0152 | 0.6488 | ok |
+| `T2-XGB-TextEmb` | meanScore | 10.3206 | -0.3846 | 0.2427 | ok |
+| `I1-XGB-ImageEmb` | popularity | 13815.0865 | 0.0158 | 0.6046 | ok |
+| `I1-XGB-ImageEmb` | meanScore | 9.4042 | -0.1559 | 0.2918 | ok |
 
 ### F2 Architecture Smoke Test
 
@@ -189,6 +205,52 @@ n_test = 2808
 n_features = 1559
 ```
 
+### C1 First-Pass Deep Fusion Run
+
+On 2026-05-12, `C1-Armenta-MLP` was run with real text/image embeddings using:
+
+```text
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C1-Armenta-MLP --include-disabled
+```
+
+Result:
+
+```text
+status = ok
+n_train = 9205
+n_val = 2637
+n_test = 2808
+n_features = 1559
+```
+
+Current interpretation:
+
+```text
+The first-pass sklearn MLP fusion head does not beat F2-XGB-Concat. It should be reported as an adapted deep-fusion attempt, not as evidence that deep fusion improves over feature concatenation.
+```
+
+### Single-Modality Runs
+
+On 2026-05-12, text-only and image-only embedding baselines were added and run:
+
+```text
+python -m src.reference_baseline_branch.run_reference_baselines --baseline T2-XGB-TextEmb
+python -m src.reference_baseline_branch.run_reference_baselines --baseline I1-XGB-ImageEmb
+```
+
+Result:
+
+| baseline_id | n_train | n_val | n_test | n_features |
+|---|---:|---:|---:|---:|
+| `T2-XGB-TextEmb` | 9205 | 2637 | 2808 | 384 |
+| `I1-XGB-ImageEmb` | 9583 | 2918 | 3087 | 1024 |
+
+Current interpretation:
+
+```text
+Text-only and image-only embeddings contain ranking signal, especially for popularity, but neither is enough to produce strong R2 alone. F2's gain appears to come from combining metadata with embeddings rather than from either embedding modality alone.
+```
+
 ## Reproduction Commands
 
 Run all enabled reference baselines:
@@ -211,10 +273,10 @@ python -m src.ablation_branch.run_ablation_baselines
 
 ## Next Required Step
 
-To move from completed foundation/classical baselines to the first competitive route:
+To move from completed foundation/classical, single-modality, and first-pass deep-fusion baselines to the next reference routes:
 
-1. Review whether `F2-XGB-Concat` should use strict intersection as final reporting policy or add a separately named missing-modality ablation.
-2. Enable and run `C1-Armenta-MLP`.
-3. Compare `C1-Armenta-MLP` against `F2-XGB-Concat`.
+1. Tune or replace the C1 MLP fusion head only if the goal is to improve the deep-fusion route.
+2. Continue to `2.2 Cross-modal Transformer Fusion` for the next competitive reference route.
+3. Continue to `2.3 Retrieval / RAG Competitive Baseline` after C2, or earlier if RQ2 becomes the priority.
 
-Only after step 3 can we say the `2.1 Anime Domain Deep Fusion` route has been implemented and compared against the feature-concat floor.
+Only after step 2 can the transformer-fusion anchor paper be represented in the baseline table.
