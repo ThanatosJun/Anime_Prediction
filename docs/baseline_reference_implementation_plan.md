@@ -61,6 +61,14 @@ Baseline 不只是一種。這裡分為：
 
 若只是做 `none / sparse / dense / hybrid`，那只能稱為 SKAPP-inspired retrieval baseline，不是重現 SKAPP。
 
+實作後的「可主張範圍」與 C1/C2/C3 復現限制，統一記錄在：
+
+```text
+reports/reference_baseline_paper_alignment_audit.md
+```
+
+後續報告若要寫「復現」，需先對照該 audit；目前 C1/C2 都只能稱 adaptation 或 proxy adaptation，C3 在缺少 RRCP、VL-GNN、RRCP-Attention 前只能稱 SKAPP-inspired。
+
 ## 2. Baseline 總覽與重要性排序
 
 ### 2.0 Baseline Branch Map
