@@ -216,10 +216,38 @@ baselines:
       random_state: 42
     reference: Armenta-Segura & Sidorov 2025
     reproduction_level: adapted
-    paper_supported_component: "Armenta-Segura & Sidorov 2025 supports anime-domain multimodal popularity prediction using text/image branches and deep fusion."
-    project_adaptation_component: "Project metadata + text embeddings + image embeddings with an sklearn MLP fusion head."
-    claim_allowed: "Anime-domain deep fusion baseline adapted from Armenta-Segura & Sidorov 2025."
-    claim_not_allowed: "Do not claim numerical comparability or exact reproduction; model branches, dataset, and target definitions differ."
+    paper_supported_component: "Armenta-Segura & Sidorov 2025 supports anime-domain multimodal prediction with GPT-2 text branches, ResNet-50 visual features, and MLP fusion."
+    project_adaptation_component: "Project metadata + precomputed text/image embeddings with an sklearn MLP fusion head; this omits the paper's separate character-description and character-portrait branches."
+    claim_allowed: "Loose anime-domain multimodal MLP adaptation inspired by Armenta-Segura & Sidorov 2025."
+    claim_not_allowed: "Do not claim exact framework reproduction, numerical comparability, or matching paper inputs; the paper uses synopsis, character descriptions, and character portraits, not this project's metadata plus cover/banner embeddings."
+
+  - id: C1-Armenta-ProxyBranchMLP
+    enabled: false
+    feature_set: metadata_text_image
+    model: branch_mlp
+    params:
+      metadata_dim: 151
+      text_dim: 384
+      image_dim: 1024
+      branch_dim: 128
+      fusion_hidden_dims: [256, 128, 64]
+      dropout: 0.1
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 100
+      patience: 12
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Armenta-Segura & Sidorov 2025
+    reproduction_level: adapted
+    paper_supported_component: "Armenta-Segura & Sidorov 2025 supports branch-wise GPT-2 text features, ResNet-50 visual features, and MLP fusion for anime-domain prediction."
+    project_adaptation_component: "Project metadata proxy, text embeddings, and image embeddings are processed by separate MLP branches before fusion; character descriptions and character portraits are not available in the current artifact set."
+    claim_allowed: "Branch-wise multimodal MLP adaptation that is closer to the Armenta fusion pattern than the flat C1-Armenta-MLP baseline."
+    claim_not_allowed: "Do not claim exact framework reproduction; this proxy branch model still lacks the paper's main-character description and portrait inputs and uses project cover/banner embeddings."
 
   - id: C2-CTNN-Lite
     enabled: false
@@ -245,7 +273,7 @@ baselines:
       verbose: false
     reference: Madongo, Tang & Hassan 2023
     reproduction_level: adapted
-    paper_supported_component: "Madongo et al. 2023 supports poster/text cross-modal transformer fusion for entertainment outcome prediction."
-    project_adaptation_component: "Project text and image embeddings are projected into modality tokens and fused with a lightweight TransformerEncoder regression head."
+    paper_supported_component: "Madongo et al. 2023 supports poster/review cross-modal attention transformer fusion for entertainment outcome prediction."
+    project_adaptation_component: "Project text and image embeddings are projected into two modality tokens and fused with a lightweight TransformerEncoder regression head; this omits the paper's full CTNN/recurrent-fusion design."
     claim_allowed: "Lightweight cross-modal transformer fusion baseline adapted from poster-text box-office prediction literature."
-    claim_not_allowed: "Do not claim exact CTNN reproduction; this implementation uses precomputed project embeddings and a simplified two-token transformer fusion head."
+    claim_not_allowed: "Do not claim exact CTNN reproduction; this implementation uses precomputed project embeddings, a simplified two-token transformer fusion head, and anime regression targets."
