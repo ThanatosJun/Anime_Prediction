@@ -69,6 +69,14 @@ feature_sets:
     metadata: true
     text_embedding: false
     image_embedding: false
+  text_embedding:
+    metadata: false
+    text_embedding: true
+    image_embedding: false
+  image_embedding:
+    metadata: false
+    text_embedding: false
+    image_embedding: true
   metadata_text_image:
     metadata: true
     text_embedding: true
@@ -152,6 +160,44 @@ baselines:
     project_adaptation_component: "AniList metadata + project text embeddings + project image embeddings concatenated for XGBoost regression."
     claim_allowed: "Feature-concat XGBoost baseline adapted from visual-textual popularity prediction literature."
     claim_not_allowed: "Do not claim same dataset, encoders, or exact feature extraction as the cited papers."
+
+  - id: T2-XGB-TextEmb
+    enabled: true
+    feature_set: text_embedding
+    model: xgboost
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.9
+      colsample_bytree: 0.9
+      random_state: 42
+      objective: reg:squarederror
+    reference: Anime synopsis traditional classifiers + text embedding adaptation
+    reproduction_level: adapted
+    paper_supported_component: "Anime synopsis-only success prediction literature supports single-modality text baselines for anime-related prediction."
+    project_adaptation_component: "Project text embeddings are used as pre-release synopsis/title representations and fed to XGBoost regression."
+    claim_allowed: "Text-embedding-only baseline adapted from anime synopsis-only prediction literature."
+    claim_not_allowed: "Do not claim exact reproduction of TF-IDF/classifier synopsis methods because this baseline uses project embeddings and regression targets."
+
+  - id: I1-XGB-ImageEmb
+    enabled: true
+    feature_set: image_embedding
+    model: xgboost
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.9
+      colsample_bytree: 0.9
+      random_state: 42
+      objective: reg:squarederror
+    reference: Zhou, Zhang & Yi 2019
+    reproduction_level: adapted
+    paper_supported_component: "Poster/cover CNN feature literature supports using visual embeddings as predictive signals for entertainment performance."
+    project_adaptation_component: "Project image embeddings from anime cover/banner assets are fed to XGBoost regression."
+    claim_allowed: "Image-embedding-only baseline adapted from poster/cover visual-feature prediction literature."
+    claim_not_allowed: "Do not claim exact reproduction of the poster CNN architecture or movie box-office setting."
 
   - id: C1-Armenta-MLP
     enabled: false
