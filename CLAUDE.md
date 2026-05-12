@@ -21,7 +21,7 @@ python scripts/export_multimodal_inputs.py
 # 文字 Embedding
 python -m src.text_branch.run_text_embedding_pipeline
 
-# 圖片 Embedding（需要 data/image/ 內有圖片，以及 results/01/best/ 的 checkpoint）
+# 圖片 Embedding（需要 data/image/ 內有圖片，以及 src/fussion_branch/model/best/ 的 checkpoint）
 python -m src.image_branch.run_fetch       # 下載封面圖片
 python util/split_images_by_split.py       # 將圖片依 split 分入子資料夾
 python -m src.image_branch.run_train       # 微調 Swin Transformer
@@ -34,6 +34,10 @@ python -m src.fussion_branch.run_rag       # 建立 Qdrant + 查詢所有 split
 python -m src.fussion_branch.run_train                     # 訓練兩個目標
 python -m src.fussion_branch.run_train --target popularity # 只訓練 popularity
 python -m src.fussion_branch.run_train --target meanScore  # 只訓練 meanScore
+
+# SHAP feature importance 分析（訓練完成後）
+python -m src.fussion_branch.run_shap --target popularity
+python -m src.fussion_branch.run_shap --target meanScore
 
 # 快速測試（1000 筆 smoke test）
 python test_train.py
@@ -97,7 +101,7 @@ results/              image branch checkpoint（已 gitignore）
 | 內容屬性 | `source`（7 類，含 UNKNOWN_SOURCE）、`countryOfOrigin`（4 類） | one-hot |
 | 內容屬性 | `isAdult` | binary 0/1 |
 | 標籤 | `genres`（19 類） | multi-hot |
-| 標籤 | `studios`（top-50） | multi-hot |
+| 標籤 | `studios` | Target Encoding（log1p_popularity, score）|
 | 續集 | `is_sequel`、`has_sequel` | binary 0/1 |
 | 續集 | `prequel_count` | 標準化 |
 | 續集 | `prequel_popularity_mean` | log1p + 標準化 |
@@ -105,15 +109,33 @@ results/              image branch checkpoint（已 gitignore）
 | 目標 | `popularity` | log1p + 標準化（訓練目標） |
 | 目標 | `meanScore` | 標準化（訓練目標） |
 
-**已移除欄位：** `type`（zero variance）、`season` / `seasonYear` / `startDate_year`（重複時間資訊）、`release_date` / `release_quarter_key`（重複）、`voice_actor_names`（缺值率 40%，v4 改 multi-hot）、`popularity_quarter_pct` / `popularity_quarter_bucket`（target leakage）、`is_source_missing`（冗餘，`source='UNKNOWN_SOURCE'` 由 one-hot 自然處理）
+**已移除欄位：** `type`（zero variance）、`season` / `seasonYear` / `startDate_year`（重複時間資訊）、`release_date` / `release_quarter_key`（重複）、`popularity_quarter_pct` / `popularity_quarter_bucket`（target leakage）、`is_source_missing`（冗餘，`source='UNKNOWN_SOURCE'` 由 one-hot 自然處理）
+
+**MetaEncoder 編碼說明：**
+- `studios`：Target Encoding（log1p_popularity + score），取該動畫所有 studio 的平均，z-score 標準化
+- `voice_actor_names`：同上，缺失時以訓練集全體均值補值（標準化後 ≈ 0）
+- `rag_popularity`：log1p 後標準化（與訓練目標單位一致）
+- RAG overlap：`studio_match`（binary）、`genre_overlap`（Jaccard）、`format_match`（binary）
+- MetaEncoder 只在訓練集 fit，transform 套用於所有 split
 
 ---
 
 ## Fusion 模型
 
 ```
-輸入：text(384) + image(1024，缺失時補零) + meta_rag(~158) ≈ 1566 維
-架構：Linear → BN → ReLU → Dropout × 3 層（hidden_dims: [512, 256, 128]，dropout: 0.4）
+輸入：text(384) + image(1024，缺失時補零) + meta_rag(65) = 1473 維
+
+架構：
+  text_proj  (384→128, Linear→LN→GELU) → × α_text  ┐
+  image_proj (1024→256, Linear→LN→GELU) → × α_image ┤→ concat(448) → backbone → head
+  meta_proj  (65→64, Linear→LN→GELU)   → × α_meta  ┘
+
+  Modality Gate（各自獨立）：
+    α = softmax([Linear(128→1)(t), Linear(256→1)(img), Linear(64→1)(m)])
+
+  backbone: Dropout → [Linear→LN→GELU→Dropout] × 3（256→128→64）
+  head: Linear(64→1)
+
 輸出：scalar（每個 target 獨立）
 ```
 
@@ -188,6 +210,8 @@ python -m src.image_branch.run_predict
 
 ---
 
-## TODO（v4）
+## 注意事項（MetaEncoder）
 
-- `voice_actor_names` → top-K 聲優 multi-hot encoding（同 studios 邏輯，建議先測 top-50）
+- MetaEncoder 有改動時，必須刪除舊的 `.exp/fussion/meta_encoder.json` 讓訓練重新 fit
+- `rag_features` 中的 `rag_studios` 為 JSON 字串；overlap scalar 與 TE 在 MetaEncoder.transform() 計算
+- `rag_features` 中的 `rag_title_romaji` 僅供可解釋性使用，不得輸入 MLP

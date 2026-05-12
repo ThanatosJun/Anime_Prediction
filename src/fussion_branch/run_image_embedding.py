@@ -12,7 +12,7 @@ Output:
 Usage:
   conda activate animeprediction
   python -m src.fussion_branch.run_image_embedding
-  python -m src.fussion_branch.run_image_embedding --checkpoint results/01/best
+  python -m src.fussion_branch.run_image_embedding --checkpoint src/fussion_branch/model/best
   python -m src.fussion_branch.run_image_embedding --splits train val
 """
 import argparse
@@ -36,7 +36,7 @@ SPLIT_IMAGE_DIR = {
 
 def run(
     splits: tuple = ("train", "val", "test", "holdout_unknown"),
-    checkpoint_dir: str = "results/01/best",
+    checkpoint_dir: str = "src/fussion_branch/model/best",
     batch_size: int = 64,
 ) -> None:
     embedder = ImageEmbedder(checkpoint_dir=checkpoint_dir)
@@ -80,8 +80,8 @@ def main() -> None:
         default=["train", "val", "test", "holdout_unknown"],
     )
     parser.add_argument(
-        "--checkpoint", default="results/01/best",
-        help="Fine-tuned Swin checkpoint dir (default: results/01/best)",
+        "--checkpoint", default="src/fussion_branch/model/best",
+        help="Fine-tuned Swin checkpoint dir (default: src/fussion_branch/model/best)",
     )
     parser.add_argument("--batch_size", type=int, default=64)
     args = parser.parse_args()

@@ -29,13 +29,21 @@ from src.fussion_branch.fussion_training.meta_encoder import MetaEncoder
 from src.fussion_branch.utilities.evaluate import compute_metrics, denormalize
 
 
-def _build_target_scaler(meta_df: pd.DataFrame, target_col: str, log_transform: bool) -> dict:
+def _build_target_scaler(
+    meta_df: pd.DataFrame, target_col: str, log_transform: bool, winsor_pct: float | None = None
+) -> dict:
     y = meta_df[target_col].dropna().values.astype(np.float64)
     if log_transform:
         y = np.log1p(y)
+    winsor_cap = None
+    if winsor_pct is not None:
+        winsor_cap = float(np.percentile(y, winsor_pct))
+        y = np.clip(y, None, winsor_cap)
+        print(f"  Winsorize {target_col}: cap={winsor_cap:.4f} (log space, {winsor_pct}th pct)")
     mean = float(y.mean())
     std  = float(y.std())
-    return {"mean": mean, "std": max(std, 1e-8), "log_transform": log_transform}
+    return {"mean": mean, "std": max(std, 1e-8), "log_transform": log_transform,
+            "winsor_cap": winsor_cap}
 
 
 def train_one_target(config: dict, target_col: str) -> dict:
@@ -44,6 +52,7 @@ def train_one_target(config: dict, target_col: str) -> dict:
     cfg_train = config["training"]
     cfg_out   = config["output"]
     log_transform = config["targets"][target_col]["log_transform"]
+    winsor_pct    = config["targets"][target_col].get("winsor_pct", None)
     use_amp = cfg_train.get("mixed_precision", True) and torch.cuda.is_available()
 
     device = torch.device(
@@ -65,16 +74,13 @@ def train_one_target(config: dict, target_col: str) -> dict:
         print("  Fitting MetaEncoder on training set…")
         meta_train_raw = pd.read_csv(f"{cfg_data['fusion_meta_dir']}/fusion_meta_clean_train.csv")
         rag_train_raw  = pd.read_parquet(f"{cfg_data['rag_features_dir']}/rag_features_train.parquet")
-        encoder = MetaEncoder(
-            top_studios=cfg_data["top_studios"],
-            top_voice_actors=cfg_data.get("top_voice_actors", 50),
-        ).fit(meta_train_raw, rag_train_raw)
+        encoder = MetaEncoder().fit(meta_train_raw, rag_train_raw)
         encoder.save(encoder_path)
         print(f"  MetaEncoder saved → {encoder_path}  (feature_dim={encoder.feature_dim})")
 
     # ── target scaler ─────────────────────────────────────────────────────────
     meta_train = pd.read_csv(f"{cfg_data['fusion_meta_dir']}/fusion_meta_clean_train.csv")
-    scaler = _build_target_scaler(meta_train, target_col, log_transform)
+    scaler = _build_target_scaler(meta_train, target_col, log_transform, winsor_pct)
     with open(out_dir / "target_scaler.json", "w") as f:
         json.dump(scaler, f, indent=2)
 
@@ -93,6 +99,7 @@ def train_one_target(config: dict, target_col: str) -> dict:
             log_transform_target=log_transform,
             target_mean=scaler["mean"],
             target_std=scaler["std"],
+            winsor_cap=scaler.get("winsor_cap"),
         )
 
     train_ds = make_dataset("train")

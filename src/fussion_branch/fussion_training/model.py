@@ -2,15 +2,16 @@
 FusionMLP: modality-aware fusion MLP for anime popularity / score prediction.
 
 Architecture:
-  text_emb  (384)  ──→ text_proj  (Linear → LayerNorm → GELU) ─┐
-  image_emb (1024) ──→ image_proj (Linear → LayerNorm → GELU) ──┤→ concat → backbone → head
-  meta_rag  (~182) ──→ meta_proj  (Linear → LayerNorm → GELU) ─┘
+  text_emb  (384) ──→ text_proj  (Linear → LayerNorm → GELU) → 128 ──→ × α_t   ─┐
+  image_emb (1024) ─→ image_proj (Linear → LayerNorm → GELU) → 256 ──→ × α_img  ─┤→ concat(449) → backbone → head
+  meta_rag  (65)  ──→ meta_proj  (Linear → LayerNorm → GELU) →  64 ──→ × α_meta ─┘
+
+  Modality gate (independent per modality, sees only its own projection):
+    α_t   = softmax( [Linear(128→1)(t),   Linear(256→1)(img), Linear(64→1)(m)] )[0]
+    α_img = softmax( ... )[1]
+    α_meta= softmax( ... )[2]
 
 Backbone: Dropout → [Linear → LayerNorm → GELU → Dropout] × N → Linear(1)
-
-Separate projections per modality let each branch learn its own representation
-before fusion, which helps with the large dimensionality gap between image (1024)
-and text/meta (~384/182).
 """
 import json
 from pathlib import Path
@@ -18,6 +19,7 @@ from typing import List
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 def _proj_block(in_dim: int, out_dim: int) -> nn.Sequential:
@@ -36,13 +38,13 @@ class FusionMLP(nn.Module):
         meta_dim: int,
         text_proj: int = 128,
         image_proj: int = 256,
-        meta_proj: int = 128,
+        meta_proj: int = 64,
         hidden_dims: List[int] = None,
         dropout: float = 0.4,
     ):
         super().__init__()
         if hidden_dims is None:
-            hidden_dims = [512, 256, 128]
+            hidden_dims = [256, 128, 64]
 
         self._text_dim  = text_dim
         self._image_dim = image_dim
@@ -51,6 +53,11 @@ class FusionMLP(nn.Module):
         self.text_proj  = _proj_block(text_dim,  text_proj)
         self.image_proj = _proj_block(image_dim, image_proj)
         self.meta_proj  = _proj_block(meta_dim,  meta_proj)
+
+        # modality gate: each gate sees only its own projection → semantic guarantee
+        self.text_gate  = nn.Linear(text_proj,  1)
+        self.image_gate = nn.Linear(image_proj, 1)
+        self.meta_gate  = nn.Linear(meta_proj,  1)
 
         fused_dim = text_proj + image_proj + meta_proj
 
@@ -80,8 +87,34 @@ class FusionMLP(nn.Module):
         t   = self.text_proj(x[:, :s1])
         img = self.image_proj(x[:, s1:s2])
         m   = self.meta_proj(x[:, s2:])
-        fused = torch.cat([t, img, m], dim=-1)
+
+        # modality gate: each scalar from its own projection, softmax across 3
+        gates = F.softmax(
+            torch.cat([self.text_gate(t), self.image_gate(img), self.meta_gate(m)], dim=1),
+            dim=1,
+        )  # (B, 3)
+
+        fused = torch.cat([
+            gates[:, 0:1] * t,
+            gates[:, 1:2] * img,
+            gates[:, 2:3] * m,
+        ], dim=1)  # (B, 448)
+
         return self.head(self.backbone(fused)).squeeze(-1)
+
+    def get_gates(self, x: torch.Tensor) -> torch.Tensor:
+        """Return gate weights (B, 3) for inspection: [α_text, α_image, α_meta]."""
+        self.eval()
+        with torch.no_grad():
+            s1 = self._text_dim
+            s2 = self._text_dim + self._image_dim
+            t   = self.text_proj(x[:, :s1])
+            img = self.image_proj(x[:, s1:s2])
+            m   = self.meta_proj(x[:, s2:])
+            return F.softmax(
+                torch.cat([self.text_gate(t), self.image_gate(img), self.meta_gate(m)], dim=1),
+                dim=1,
+            )
 
     def get_config(self) -> dict:
         return dict(self._cfg)

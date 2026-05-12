@@ -17,7 +17,7 @@ from src.image_branch.config import load_config
 from src.image_branch.model import get_embedding
 from src.image_branch.image_process import load_image, ResizeWithPad, get_transform_original
 
-CHECKPOINT = "results/01/best"
+CHECKPOINT = "src/fussion_branch/model/best"
 EXPECTED_DIM = 1024
 
 
@@ -37,7 +37,7 @@ def main():
     print(f"device: {device}")
     print(f"checkpoint: {CHECKPOINT}")
 
-    # 載入微調過的 checkpoint（results/01/best/model.safetensors）
+    # 載入微調過的 checkpoint（src/fussion_branch/model/best/model.safetensors）
     from transformers import SwinModel
     model = SwinModel.from_pretrained(CHECKPOINT).to(device)
     model.eval()

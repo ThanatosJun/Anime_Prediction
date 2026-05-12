@@ -1,24 +1,22 @@
 # ── Data ──────────────────────────────────────────────────────────────────────
 data:
   # fusion_meta_dir:   data/fussion
-  fusion_meta_dir:   data/fussion/post2000
+  fusion_meta_dir:   data/fussion
   text_emb_dir:      src/fussion_branch/embedding/text
   rag_features_dir:  src/fussion_branch/RAG/return
   image_emb_dir:     src/fussion_branch/embedding/image   # zeros if missing
-  # meta_encoder_path: .exp/fussion/meta_encoder.json
-  meta_encoder_path: .exp/fussion/meta_encoder_post2000.json
+  meta_encoder_path: .exp/fussion/meta_encoder.json
+  # meta_encoder_path: .exp/fussion/meta_encoder_post2000.json
 
-  top_studios:       50
-  top_voice_actors:  50
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 model:
-  # per-modality projection dims (text→128, image→256, meta→128 → fused 512)
-  text_proj:   128
-  image_proj:  256
-  meta_proj:   128
-  # backbone hidden dims after fusion
-  hidden_dims: [512, 256, 128]
+  # per-modality projection dims → fused 448 (after modality gate)
+  text_proj:   128   # 384  → 128
+  image_proj:  256   # 1024 → 256
+  meta_proj:   64    # 65   → 64
+  # backbone hidden dims after fusion (fused_dim = 128+256+64 = 448)
+  hidden_dims: [256, 128, 64]
   dropout:     0.4
 
 # ── Training ──────────────────────────────────────────────────────────────────
@@ -39,12 +37,14 @@ active_targets: ["popularity", "meanScore"]   # change to ["popularity"] or ["me
 
 targets:
   popularity:
-    log_transform: true
+    log_transform:  true
+    winsor_pct:     99      # cap training target at this percentile (log1p space), null = disabled
   meanScore:
-    log_transform: false
+    log_transform:  false
+    winsor_pct:     null
 
 # ── Output ────────────────────────────────────────────────────────────────────
 output:
   results_dir: .exp/fussion/results
-  run_id:      "03"
-  notes:       "對齊 fussion model 在 embedding 和 RAG features 的訓練資料"
+  run_id:      "07"
+  notes:       "同 06 架構；TE 改用 log1p popularity 重新 fit meta_encoder；popularity 訓練目標 Winsorize 99th pct（log1p 空間）"

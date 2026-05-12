@@ -222,5 +222,5 @@ popularity 新增兩個補充指標，解決原始 MAE 因數值範圍（25–23
 ```
 .exp/image_embedding/image_embeddings.parquet
 ```
-模型使用微調後的 Swin-base checkpoint（`results/01/best/`），輸出 **1024-dim**。
+模型使用微調後的 Swin-base checkpoint（`src/fussion_branch/model/best/`），輸出 **1024-dim**。
 若檔案不存在，FusionDataset 自動以全零向量代替，不影響訓練流程。

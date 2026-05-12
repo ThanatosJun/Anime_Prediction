@@ -31,6 +31,7 @@ class FusionDataset(Dataset):
         log_transform_target: bool = False,
         target_mean: float = 0.0,
         target_std: float = 1.0,
+        winsor_cap: float | None = None,   # cap in log1p space, applied before normalisation
     ):
         meta_df = pd.read_csv(f"{meta_dir}/fusion_meta_clean_{split}.csv")
         rag_df  = pd.read_parquet(f"{rag_dir}/rag_features_{split}.parquet")
@@ -95,6 +96,8 @@ class FusionDataset(Dataset):
         raw_target = meta_df[target_col].values.astype(np.float32)
         if log_transform_target:
             raw_target = np.log1p(raw_target)
+        if winsor_cap is not None:
+            raw_target = np.clip(raw_target, None, winsor_cap)
         self.target = (raw_target - target_mean) / target_std
 
     # ── dim properties (used by model constructor) ────────────────────────────

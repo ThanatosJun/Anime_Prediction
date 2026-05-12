@@ -2,8 +2,8 @@
 ImageEmbedder: loads fine-tuned Swin-base and extracts 1024-dim embeddings.
 
 Usage:
-    embedder = ImageEmbedder()                         # pretrained only
-    embedder = ImageEmbedder(checkpoint_dir="results/01/best")  # fine-tuned
+    embedder = ImageEmbedder()                                              # pretrained only
+    embedder = ImageEmbedder(checkpoint_dir="src/fussion_branch/model/best")  # fine-tuned
 
     emb = embedder.encode_path("data/image/12345_coverImage_medium.jpg")  # (1024,)
     embs = embedder.encode_paths([...])                                    # (N, 1024)
@@ -25,7 +25,7 @@ _IMAGE_SIZE = 224
 class ImageEmbedder:
     def __init__(
         self,
-        checkpoint_dir: Optional[str] = "results/01/best",
+        checkpoint_dir: Optional[str] = "src/fussion_branch/model/best",
         device: Optional[str] = None,
     ):
         if device is None:

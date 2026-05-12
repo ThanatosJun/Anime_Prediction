@@ -9,6 +9,10 @@
 ```
 src/fussion_branch/
 │
+├── model/                        # Swin-base 微調 checkpoint（已 gitignore）
+│   ├── best/                     # HuggingFace 格式（model.safetensors + config.json）
+│   └── checkpoint/               # PyTorch epoch checkpoint（epoch_N.pt）
+│
 ├── RAG/                          # RAG pipeline（Qdrant sparse + dense hybrid search）
 │   ├── sparse_encoder.py         # genre + studio + voice_actor + source → sparse vector 詞表
 │   ├── rag_builder.py            # 建立 Qdrant collection（訓練集 indexing）
@@ -51,12 +55,12 @@ src/fussion_branch/
 │   ├── fusion_config.yaml        # MLP 訓練設定（data 路徑、model、training 超參數）
 │   └── rag_config.yaml           # Qdrant / encoder / path 設定
 │
-├── run_meta_preprocess.py        # 從 data/processed/ 產生 fusion_meta_clean_{split}.csv
 ├── run_text_embedding.py         # 產生 embedding/text/text_embeddings_{split}.parquet
 ├── run_image_embedding.py        # 產生 embedding/image/image_embeddings_{split}.parquet
 ├── run_rag.py                    # 建 Qdrant collection + 查詢所有 split
 ├── run_train.py                  # 訓練 popularity / meanScore 模型
-└── run_evaluate.py               # 最終 test set 評估（訓練完成後執行一次）
+├── run_evaluate.py               # 最終 test set 評估（訓練完成後執行一次）
+└── run_shap.py                   # SHAP feature importance 分析（modality gate + meta 特徵）
 ```
 
 ---
@@ -107,6 +111,7 @@ python -m src.fussion_branch.run_text_embedding
 # Step 2（選用）：產生 image embedding
 python -m src.fussion_branch.run_image_embedding
 # → src/fussion_branch/embedding/image/image_embeddings_{train,val,test,holdout_unknown}.parquet
+# ※ 需要 src/fussion_branch/model/best/model.safetensors
 
 # Step 3：RAG query（只需重跑 query，不需重建 collection）
 python -c "from src.fussion_branch.RAG.rag_query import query_all_splits; query_all_splits()"
@@ -123,12 +128,20 @@ python -m src.fussion_branch.run_train --target meanScore
 
 # Step 5：test set 評估（訓練完成後執行一次）
 python -m src.fussion_branch.run_evaluate
-python -m src.fussion_branch.run_evaluate --run-id 02           # 指定 run
+python -m src.fussion_branch.run_evaluate --run-id 02
 python -m src.fussion_branch.run_evaluate --run-id 02 --target meanScore
 
-# 彙整所有實驗結果（train / evaluate 結束後會自動更新，也可手動執行）
+# 彙整所有實驗結果
 python -m src.fussion_branch.utilities.summarize_experiments
 # → .exp/fussion/experiments_summary.csv
+
+# Step 6（選用）：SHAP feature importance 分析
+python -m src.fussion_branch.run_shap --target popularity
+python -m src.fussion_branch.run_shap --target meanScore
+# → .exp/fussion/results/{run_id}/{target}/shap/
+#     modality_importance.json   — 各 modality 貢獻佔比
+#     meta_bar.png               — top-20 meta 特徵 bar chart
+#     meta_beeswarm.png          — 特徵值高低 vs SHAP 方向
 ```
 
 > Step 1 若跳過，Step 3 自動退回 **sparse-only** 模式。
@@ -145,22 +158,6 @@ python -m src.fussion_branch.utilities.summarize_experiments
 ```
 [run_id] '01' already exists → using '02'
 ```
-
-### 指定 run 評估
-
-```bash
-python -m src.fussion_branch.run_evaluate --run-id 02
-```
-
-### 實驗統計 CSV
-
-每次 `run_train` 或 `run_evaluate` 結束後自動更新 `.exp/fussion/experiments_summary.csv`，欄位包含：
-
-| 欄位 | 說明 |
-|------|------|
-| `run_id`, `target` | 實驗識別 |
-| `dropout`, `hidden_dims`, `log_transform` | 模型設定 |
-| `val_*` / `test_*` | 各 split 的 metrics |
 
 ### 切換資料集（全量 vs post-2000）
 
@@ -185,19 +182,32 @@ post-2000 版本的 CSV 位於 `data/fussion/post2000/`，text / image / RAG emb
 ### FusionMLP
 
 ```
-text_emb  (384)  ──→ text_proj  (Linear→LN→GELU, 128-dim) ─┐
-image_emb (1024) ──→ image_proj (Linear→LN→GELU, 256-dim) ──┤→ concat(512) → backbone → head
-meta_rag  (232)  ──→ meta_proj  (Linear→LN→GELU, 128-dim) ─┘
+text_emb  (384)  ──→ text_proj  (Linear→LN→GELU, 128) ──→ × α_text  ─┐
+image_emb (1024) ──→ image_proj (Linear→LN→GELU, 256) ──→ × α_image ──┤→ concat(448) → backbone → head
+meta_rag   (65)  ──→ meta_proj  (Linear→LN→GELU,  64) ──→ × α_meta  ─┘
 
-backbone: Dropout → [Linear→LN→GELU→Dropout] × 3（512→256→128）
-head:     Linear(128→1)
+Modality Gate（各自獨立，語意對應）：
+  α_text  = softmax( [Linear(128→1)(t), Linear(256→1)(img), Linear(64→1)(m)] )[0]
+  α_image = softmax( ... )[1]
+  α_meta  = softmax( ... )[2]
+
+backbone: Dropout → [Linear→LN→GELU→Dropout] × 3（256→128→64）
+head:     Linear(64→1)
 ```
 
 **設計重點：**
 - 各模態先獨立 projection，解決 image（1024-dim）對梯度的主導問題
+- Modality Gate：每個 gate 只看自己的 projection（語意對應有保證），softmax 確保三者加總 = 1
+- Gate 是 input-dependent：每部動畫動態決定哪個 modality 較重要，而非固定比例
 - LayerNorm 取代 BatchNorm（inference 時行為和 training 一致）
 - GELU 取代 ReLU（平滑梯度）
 - Projection 層無 Dropout（參數量小，主要正則化在 backbone）
+
+**Gate 查看（inference）：**
+```python
+gates = model.get_gates(x.to(device)).mean(dim=0)
+print(f"text={gates[0]:.3f}  image={gates[1]:.3f}  meta={gates[2]:.3f}")
+```
 
 ### 訓練設定
 
@@ -230,10 +240,10 @@ head:     Linear(128→1)
 |------|------|------|
 | Text embedding | 384 | all-MiniLM-L6-v2，description |
 | Image embedding | 1024 | Swin-base pooler_output（缺失補零）|
-| MetaEncoder | 232 | 見下表 |
-| **合計** | **1640** | |
+| MetaEncoder | 65 | 見下表 |
+| **合計** | **1473** | |
 
-### MetaEncoder 特徵明細
+### MetaEncoder 特徵明細（65 dims）
 
 | 類型 | 欄位 | 維度 |
 |------|------|------|
@@ -243,12 +253,27 @@ head:     Linear(128→1)
 | One-hot | format（7）, source（7）, countryOfOrigin（4）| 18 |
 | Binary | isAdult, is_sequel, has_sequel | 3 |
 | Multi-hot | genres（19 類）| 19 |
-| Multi-hot | studios（top-50）| 50 |
-| RAG 標準化 | rag_popularity, rag_score, rag_release_year, rag_episodes | 4 |
+| Studio Target Encoding | 此動畫製作公司的歷史 mean_log1p_popularity, mean_score | 2 |
+| Voice Actor Target Encoding | 此動畫聲優群的歷史 mean_log1p_popularity, mean_score | 2 |
+| RAG 標準化 | rag_popularity（log1p）, rag_score, rag_release_year, rag_episodes | 4 |
 | RAG binary | rag_found | 1 |
-| RAG multi-hot | rag_studios（同 studio vocab）| 50 |
-| RAG multi-hot | rag_genres（同 genre vocab）| 19 |
-| RAG one-hot | rag_format（同 format vocab）| 7 |
+| Overlap Scalar | studio_match（binary）, genre_overlap（Jaccard）, format_match（binary）| 3 |
+| RAG Studio Target Encoding | RAG 結果製作社 mean_popularity, mean_score | 2 |
+
+### Target Encoding 說明
+
+**Studio / Voice Actor TE：**
+fit 階段從訓練集統計每個製作公司 / 聲優的歷史 `mean_log1p_popularity` 和 `mean_score`（popularity 先 log1p 再平均，與訓練目標單位一致），transform 時以該動畫的 studio 或 voice_actor 查表並取平均，最後 z-score 標準化。
+未見過的 studio / va → 訓練集全體均值（標準化後 ≈ 0）。
+
+`rag_popularity` 同樣先做 log1p 再標準化，與 meta 的 popularity 單位對齊。
+
+**Overlap Scalar：**
+| 欄位 | 計算方式 |
+|------|---------|
+| `studio_match` | meta studios ∩ RAG studios 有交集 → 1，否則 → 0 |
+| `genre_overlap` | \|meta genres ∩ RAG genres\| / \|meta genres ∪ RAG genres\|（Jaccard） |
+| `format_match` | meta format == RAG format → 1，否則 → 0 |
 
 ---
 
@@ -276,7 +301,11 @@ mean/std 僅從訓練集計算，再套用到 val/test。
     ├── target_scaler.json   ← 標準化參數（mean, std, log_transform）
     ├── training_log.jsonl   ← 每 epoch 的 train_loss / val_MAE / lr
     ├── metrics_val.json     ← 最終 val 評估指標
-    └── metrics_test.json    ← 最終 test 評估指標
+    ├── metrics_test.json    ← 最終 test 評估指標
+    └── shap/                ← run_shap.py 產生
+        ├── modality_importance.json
+        ├── meta_bar.png
+        └── meta_beeswarm.png
 ```
 
 ---
@@ -288,9 +317,9 @@ mean/std 僅從訓練集計算，再套用到 val/test。
 | text_embeddings 存在 | **Hybrid**：sparse + dense → RRF fusion |
 | text_embeddings 不存在 | **Sparse-only**：genre+studio+voice_actor+source |
 
-Sparse 向量：genre、studio、voice_actor、source token
-時間過濾：Qdrant server-side filter（`release_year/quarter < target` + self-exclusion）
-結果：取 top-1 作為 RAG 輔助特徵
+- Sparse 向量：genre、studio、voice_actor、source token
+- 時間過濾：Qdrant server-side filter（`release_year/quarter < target` + self-exclusion）
+- 結果：top-1 的 payload 提取 popularity、score、studios 等數值
 
 ---
 
@@ -311,9 +340,7 @@ Sparse 向量：genre、studio、voice_actor、source token
 - 季播文化：邊看邊評分的觀眾對當季作品給分較寬鬆
 - 近期作品評分尚未穩定（資料截止 2026 年 4 月，高峰期尚未退去）
 
-**重要發現：調整訓練集起始年份無法緩解此問題。**
-無論從 1990、2000、2010 或 2015 起算，訓練集中位數均固定在 60，因為 shift 發生在 train/val/test 邊界之外（2022+），並非由舊動畫拉低平均所致。
-此現象導致 test 集 R² 偏低（~0.077），為本模型的固有限制，建議在論文中作為 limitation 說明。
+此現象導致 test 集 R² 偏低（~0.077），為本模型的固有限制。
 
 可視化圖表：`.exp/fussion/meanscore_distribution_over_time.png`
 
@@ -338,6 +365,7 @@ Sparse 向量：genre、studio、voice_actor、source token
 | Text embedding | `src/fussion_branch/embedding/text/text_embeddings_{split}.parquet` |
 | Image embedding | `src/fussion_branch/embedding/image/image_embeddings_{split}.parquet` |
 | RAG features | `src/fussion_branch/RAG/return/rag_features_{split}.parquet` |
+| Swin-base checkpoint | `src/fussion_branch/model/best/` |
 | MetaEncoder（全量）| `.exp/fussion/meta_encoder.json` |
 | MetaEncoder（post-2000）| `.exp/fussion/meta_encoder_post2000.json` |
 | 訓練 checkpoint | `.exp/fussion/results/{run_id}/{target}/` |

@@ -7,24 +7,28 @@ Feature layout (in order):
                                 prequel_count, prequel_meanScore_mean
   [log1p+standardize]  1 dim   prequel_popularity_mean
   [cyclical sin+cos]   4 dims  release_quarter(period=4), startDate_month(period=12)
-  [one-hot format]     7 dims  fit from training vocab
-  [one-hot source]     7 dims  fit from training vocab
-  [one-hot country]    4 dims  fit from training vocab
+  [one-hot format]     7 dims
+  [one-hot source]     7 dims
+  [one-hot country]    4 dims
   [binary]             3 dims  isAdult, is_sequel, has_sequel
   [genres multi-hot]  19 dims
-  [studios multi-hot]       50 dims  top-K by frequency
-  [voice_actors multi-hot]  50 dims  top-K by frequency (NaN → all zeros)
-  [rag numerical]            4 dims  rag_popularity, rag_score, rag_release_year, rag_episodes (standardized)
+  [studio TE]          2 dims  standardized mean_pop, mean_score of this anime's studios
+  [va TE]              2 dims  standardized mean_pop, mean_score of this anime's voice actors
+  [rag numerical]      4 dims  rag_popularity, rag_score, rag_release_year, rag_episodes
   [rag_found]          1 dim
-  [rag studios]       50 dims  same studio vocab as meta
-  [rag genres]        19 dims  same genre vocab as meta
-  [rag format]         7 dims  same format vocab as meta
+  [studio_match]       1 dim   any studio overlap between meta and RAG result (binary)
+  [genre_overlap]      1 dim   Jaccard similarity of meta genres and RAG genres
+  [format_match]       1 dim   meta format == RAG format (binary)
+  [rag_studio TE]      2 dims  standardized mean_pop, mean_score of RAG result's studios
+
+Total: 65 dims
 """
 import ast
 import json
 import math
+from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -82,25 +86,52 @@ def _parse_rag_genres(val) -> List[str]:
         return []
 
 
+def _te_lookup(
+    names: List[str],
+    te_table: Dict[str, Dict[str, float]],
+    fallback_pop: float,
+    fallback_score: float,
+) -> Tuple[float, float]:
+    """Look up target encoding for a list of names → (mean_pop, mean_score) raw."""
+    if not names:
+        return fallback_pop, fallback_score
+    pops   = [te_table[n]["pop"]   if n in te_table else fallback_pop   for n in names]
+    scores = [te_table[n]["score"] if n in te_table else fallback_score for n in names]
+    return float(np.mean(pops)), float(np.mean(scores))
+
+
+def _standardize(raw_pop: float, raw_score: float, te_stats: Dict[str, float]) -> Tuple[float, float]:
+    pop_z   = (raw_pop   - te_stats["pop_mean"])   / te_stats["pop_std"]
+    score_z = (raw_score - te_stats["score_mean"]) / te_stats["score_std"]
+    return float(pop_z), float(score_z)
+
+
 class MetaEncoder:
-    def __init__(self, top_studios: int = 50, top_voice_actors: int = 50):
-        self.top_studios       = top_studios
-        self.top_voice_actors  = top_voice_actors
-        self.std_medians:  Dict[str, float] = {}
-        self.std_means:    Dict[str, float] = {}
-        self.std_stds:     Dict[str, float] = {}
-        self.cyc_medians:  Dict[str, float] = {}
-        self.cat_vocabs:   Dict[str, List[str]] = {}
-        self.genre_vocab:        List[str] = []
-        self.studio_vocab:       List[str] = []
-        self.voice_actor_vocab:  List[str] = []
-        self.rag_medians:  Dict[str, float] = {}
-        self.rag_means:    Dict[str, float] = {}
-        self.rag_stds:     Dict[str, float] = {}
-        self.feature_dim:  int = 0
+    def __init__(self):
+        self.std_medians: Dict[str, float] = {}
+        self.std_means:   Dict[str, float] = {}
+        self.std_stds:    Dict[str, float] = {}
+        self.cyc_medians: Dict[str, float] = {}
+        self.cat_vocabs:  Dict[str, List[str]] = {}
+        self.genre_vocab: List[str] = []
+
+        # target encoding tables (name → {pop, score} raw train means)
+        self.studio_te:   Dict[str, Dict[str, float]] = {}
+        self.va_te:       Dict[str, Dict[str, float]] = {}
+        self.te_fallback: Dict[str, float] = {}   # {pop, score} — train overall mean
+        self.te_stats:    Dict[str, float] = {}   # standardization params
+
+        # rag numerical
+        self.rag_medians: Dict[str, float] = {}
+        self.rag_means:   Dict[str, float] = {}
+        self.rag_stds:    Dict[str, float] = {}
+
+        self.feature_dim: int = 0
+
+    # ── fit ───────────────────────────────────────────────────────────────────
 
     def fit(self, meta_df: pd.DataFrame, rag_df: pd.DataFrame) -> "MetaEncoder":
-        # standardize cols: median imputation + mean/std
+        # numerical standardization
         for col in STANDARDIZE_COLS:
             s = pd.to_numeric(meta_df[col], errors="coerce")
             self.std_medians[col] = float(s.median())
@@ -109,7 +140,6 @@ class MetaEncoder:
             std = float(s.std())
             self.std_stds[col] = std if std > 0 else 1.0
 
-        # log1p + standardize cols
         for col in LOG1P_STANDARDIZE_COLS:
             s = pd.to_numeric(meta_df[col], errors="coerce")
             self.std_medians[col] = float(s.median())
@@ -118,41 +148,81 @@ class MetaEncoder:
             std = float(s.std())
             self.std_stds[col] = std if std > 0 else 1.0
 
-        # cyclical cols: store median for NaN imputation
         for col in CYCLICAL_COLS:
             s = pd.to_numeric(meta_df[col], errors="coerce")
             self.cyc_medians[col] = float(s.median())
 
-        # categorical one-hot: vocab from training (unknown → all zeros)
+        # categorical vocabs (for one-hot)
         for col in CATEGORICAL_COLS:
             self.cat_vocabs[col] = sorted(meta_df[col].dropna().unique().tolist())
 
-        # genres multi-hot
+        # genres multi-hot vocab
         genres: set = set()
         for v in meta_df["genres"]:
             genres.update(_parse_genres(v))
         self.genre_vocab = sorted(genres)
 
-        # studios top-K by frequency
-        from collections import Counter
-        cnt: Counter = Counter()
-        for v in meta_df["studios"]:
-            for s in _parse_studios_meta(v):
-                cnt[s] += 1
-        self.studio_vocab = [s for s, _ in cnt.most_common(self.top_studios)]
+        # target values for TE — log1p(popularity) for scale consistency with training target
+        pop_col   = np.log1p(pd.to_numeric(meta_df["popularity"], errors="coerce"))
+        score_col = pd.to_numeric(meta_df["meanScore"],  errors="coerce")
+        fallback_pop   = float(pop_col.mean())
+        fallback_score = float(score_col.mean())
+        self.te_fallback = {"pop": fallback_pop, "score": fallback_score}
 
-        # voice_actors top-K by frequency
-        va_cnt: Counter = Counter()
-        for v in meta_df["voice_actor_names"]:
-            for va in _parse_voice_actors(v):
-                va_cnt[va] += 1
-        self.voice_actor_vocab = [va for va, _ in va_cnt.most_common(self.top_voice_actors)]
+        # studio target encoding
+        studio_pop_acc:   Dict[str, List[float]] = defaultdict(list)
+        studio_score_acc: Dict[str, List[float]] = defaultdict(list)
+        for studios_val, pop_val, score_val in zip(meta_df["studios"], pop_col, score_col):
+            if pd.isna(pop_val) or pd.isna(score_val):
+                continue
+            for s in _parse_studios_meta(studios_val):
+                studio_pop_acc[s].append(float(pop_val))
+                studio_score_acc[s].append(float(score_val))
+        self.studio_te = {
+            s: {"pop": float(np.mean(studio_pop_acc[s])), "score": float(np.mean(studio_score_acc[s]))}
+            for s in studio_pop_acc
+        }
 
-        # rag numerical: median imputation + standardize
+        # voice actor target encoding
+        va_pop_acc:   Dict[str, List[float]] = defaultdict(list)
+        va_score_acc: Dict[str, List[float]] = defaultdict(list)
+        if "voice_actor_names" in meta_df.columns:
+            for va_val, pop_val, score_val in zip(meta_df["voice_actor_names"], pop_col, score_col):
+                if pd.isna(pop_val) or pd.isna(score_val):
+                    continue
+                for va in _parse_voice_actors(va_val):
+                    va_pop_acc[va].append(float(pop_val))
+                    va_score_acc[va].append(float(score_val))
+        self.va_te = {
+            va: {"pop": float(np.mean(va_pop_acc[va])), "score": float(np.mean(va_score_acc[va]))}
+            for va in va_pop_acc
+        }
+
+        # TE standardization stats — computed from per-anime studio TE values on train
+        te_pop_vals, te_score_vals = [], []
+        for studios_val in meta_df["studios"]:
+            studios = _parse_studios_meta(studios_val)
+            p, s = _te_lookup(studios, self.studio_te, fallback_pop, fallback_score)
+            te_pop_vals.append(p)
+            te_score_vals.append(s)
+        te_pop_arr   = np.array(te_pop_vals,   dtype=np.float64)
+        te_score_arr = np.array(te_score_vals, dtype=np.float64)
+        pop_std   = float(te_pop_arr.std())
+        score_std = float(te_score_arr.std())
+        self.te_stats = {
+            "pop_mean":   float(te_pop_arr.mean()),
+            "pop_std":    pop_std   if pop_std   > 0 else 1.0,
+            "score_mean": float(te_score_arr.mean()),
+            "score_std":  score_std if score_std > 0 else 1.0,
+        }
+
+        # rag numerical standardization (rag_popularity uses log1p)
         for col in RAG_NUMERICAL_COLS:
             s = pd.to_numeric(rag_df[col], errors="coerce")
             self.rag_medians[col] = float(s.median())
             s = s.fillna(self.rag_medians[col])
+            if col == "rag_popularity":
+                s = np.log1p(s)
             self.rag_means[col] = float(s.mean())
             std = float(s.std())
             self.rag_stds[col] = std if std > 0 else 1.0
@@ -162,24 +232,56 @@ class MetaEncoder:
 
     def _update_dim(self):
         self.feature_dim = (
-            len(STANDARDIZE_COLS)
-            + len(LOG1P_STANDARDIZE_COLS)
-            + len(CYCLICAL_COLS) * 2          # sin + cos per col
-            + sum(len(v) for v in self.cat_vocabs.values())
-            + len(BOOL_COLS)
-            + len(self.genre_vocab)
-            + len(self.studio_vocab)
-            + len(self.voice_actor_vocab)     # voice_actors multi-hot
-            + len(RAG_NUMERICAL_COLS)         # rag_popularity, rag_score, rag_release_year, rag_episodes
-            + 1                               # rag_found
-            + len(self.studio_vocab)          # rag_studios
-            + len(self.genre_vocab)           # rag_genres
-            + len(self.cat_vocabs.get("format", []))  # rag_format
+            len(STANDARDIZE_COLS)                           #  6
+            + len(LOG1P_STANDARDIZE_COLS)                   #  1
+            + len(CYCLICAL_COLS) * 2                        #  4
+            + sum(len(v) for v in self.cat_vocabs.values()) # 18  (7+7+4)
+            + len(BOOL_COLS)                                #  3
+            + len(self.genre_vocab)                         # 19
+            + 2                                             #  studio TE
+            + 2                                             #  va TE
+            + len(RAG_NUMERICAL_COLS)                       #  4
+            + 1                                             #  rag_found
+            + 1                                             #  studio_match
+            + 1                                             #  genre_overlap
+            + 1                                             #  format_match
+            + 2                                             #  rag_studio TE
         )
+
+    @property
+    def feature_names_(self) -> List[str]:
+        """Ordered list of feature names matching each column in transform() output."""
+        names: List[str] = []
+        for col in STANDARDIZE_COLS:
+            names.append(col)
+        for col in LOG1P_STANDARDIZE_COLS:
+            names.append(f"{col}_log1p")
+        for col in CYCLICAL_COLS:
+            names.append(f"{col}_sin")
+            names.append(f"{col}_cos")
+        for col in CATEGORICAL_COLS:
+            for val in self.cat_vocabs.get(col, []):
+                names.append(f"{col}_{val}")
+        for col in BOOL_COLS:
+            names.append(col)
+        for g in self.genre_vocab:
+            names.append(f"genre_{g}")
+        names += ["studio_te_pop", "studio_te_score"]
+        names += ["va_te_pop", "va_te_score"]
+        for col in RAG_NUMERICAL_COLS:
+            names.append(f"rag_{col}" if not col.startswith("rag_") else col)
+        names.append("rag_found")
+        names += ["studio_match", "genre_overlap", "format_match"]
+        names += ["rag_studio_te_pop", "rag_studio_te_score"]
+        return names
+
+    # ── transform ─────────────────────────────────────────────────────────────
 
     def transform(self, meta_df: pd.DataFrame, rag_df: pd.DataFrame) -> np.ndarray:
         N = len(meta_df)
         parts = []
+        fallback_pop   = self.te_fallback["pop"]
+        fallback_score = self.te_fallback["score"]
 
         # standardize
         std_mat = np.zeros((N, len(STANDARDIZE_COLS)), dtype=np.float32)
@@ -228,28 +330,33 @@ class MetaEncoder:
                     genre_mat[i, g_idx[g]] = 1.0
         parts.append(genre_mat)
 
-        # studios multi-hot
-        s_idx = {s: i for i, s in enumerate(self.studio_vocab)}
-        studio_meta_mat = np.zeros((N, len(self.studio_vocab)), dtype=np.float32)
+        # studio target encoding (2 dims)
+        studio_te_mat = np.zeros((N, 2), dtype=np.float32)
         for i, val in enumerate(meta_df["studios"]):
-            for s in _parse_studios_meta(val):
-                if s in s_idx:
-                    studio_meta_mat[i, s_idx[s]] = 1.0
-        parts.append(studio_meta_mat)
+            studios = _parse_studios_meta(val)
+            raw_pop, raw_score = _te_lookup(studios, self.studio_te, fallback_pop, fallback_score)
+            std_pop, std_score = _standardize(raw_pop, raw_score, self.te_stats)
+            studio_te_mat[i, 0] = std_pop
+            studio_te_mat[i, 1] = std_score
+        parts.append(studio_te_mat)
 
-        # voice_actors multi-hot (NaN → all zeros)
-        va_idx = {va: i for i, va in enumerate(self.voice_actor_vocab)}
-        va_mat = np.zeros((N, len(self.voice_actor_vocab)), dtype=np.float32)
-        for i, val in enumerate(meta_df["voice_actor_names"]):
-            for va in _parse_voice_actors(val):
-                if va in va_idx:
-                    va_mat[i, va_idx[va]] = 1.0
-        parts.append(va_mat)
+        # voice actor target encoding (2 dims)
+        va_te_mat = np.zeros((N, 2), dtype=np.float32)
+        va_col = meta_df["voice_actor_names"] if "voice_actor_names" in meta_df.columns else pd.Series([None] * N)
+        for i, val in enumerate(va_col):
+            vas = _parse_voice_actors(val)
+            raw_pop, raw_score = _te_lookup(vas, self.va_te, fallback_pop, fallback_score)
+            std_pop, std_score = _standardize(raw_pop, raw_score, self.te_stats)
+            va_te_mat[i, 0] = std_pop
+            va_te_mat[i, 1] = std_score
+        parts.append(va_te_mat)
 
-        # rag numerical
+        # rag numerical (rag_popularity uses log1p, consistent with fit)
         rag_num_mat = np.zeros((N, len(RAG_NUMERICAL_COLS)), dtype=np.float32)
         for j, col in enumerate(RAG_NUMERICAL_COLS):
             s = pd.to_numeric(rag_df[col], errors="coerce").fillna(self.rag_medians[col])
+            if col == "rag_popularity":
+                s = np.log1p(s)
             rag_num_mat[:, j] = (s.values - self.rag_means[col]) / self.rag_stds[col]
         parts.append(rag_num_mat)
 
@@ -257,49 +364,62 @@ class MetaEncoder:
         found_vec = rag_df["rag_found"].fillna(False).astype(float).values.reshape(N, 1).astype(np.float32)
         parts.append(found_vec)
 
-        # rag studios multi-hot (same vocab)
-        studio_rag_mat = np.zeros((N, len(self.studio_vocab)), dtype=np.float32)
+        # overlap scalars (3 dims: studio_match, genre_overlap, format_match)
+        overlap_mat = np.zeros((N, 3), dtype=np.float32)
+        meta_studios_list  = [set(_parse_studios_meta(v))  for v in meta_df["studios"]]
+        meta_genres_list   = [set(_parse_genres(v))        for v in meta_df["genres"]]
+        meta_formats_list  = [str(v) if pd.notna(v) else "" for v in meta_df["format"]]
+        rag_studios_list   = [set(_parse_studios_rag(v))   for v in rag_df["rag_studios"]]
+        rag_genres_list    = [set(_parse_rag_genres(v))    for v in rag_df["rag_genres"]]
+        rag_formats_list   = [str(v) if pd.notna(v) else "" for v in rag_df["rag_format"]]
+
+        for i in range(N):
+            # studio_match: binary — any shared studio
+            overlap_mat[i, 0] = 1.0 if meta_studios_list[i] & rag_studios_list[i] else 0.0
+
+            # genre_overlap: Jaccard
+            union = meta_genres_list[i] | rag_genres_list[i]
+            overlap_mat[i, 1] = (
+                len(meta_genres_list[i] & rag_genres_list[i]) / len(union)
+                if union else 0.0
+            )
+
+            # format_match: binary
+            mf, rf = meta_formats_list[i], rag_formats_list[i]
+            overlap_mat[i, 2] = 1.0 if mf and mf == rf else 0.0
+        parts.append(overlap_mat)
+
+        # rag_studio target encoding (2 dims)
+        rag_studio_te_mat = np.zeros((N, 2), dtype=np.float32)
         for i, val in enumerate(rag_df["rag_studios"]):
-            for s in _parse_studios_rag(val):
-                if s in s_idx:
-                    studio_rag_mat[i, s_idx[s]] = 1.0
-        parts.append(studio_rag_mat)
-
-        # rag genres multi-hot (same vocab as meta genres)
-        rag_genre_mat = np.zeros((N, len(self.genre_vocab)), dtype=np.float32)
-        for i, val in enumerate(rag_df["rag_genres"]):
-            for g in _parse_rag_genres(val):
-                if g in g_idx:
-                    rag_genre_mat[i, g_idx[g]] = 1.0
-        parts.append(rag_genre_mat)
-
-        # rag format one-hot (same vocab as meta format)
-        format_vocab = self.cat_vocabs.get("format", [])
-        rag_format_mat = np.zeros((N, len(format_vocab)), dtype=np.float32)
-        for i, val in enumerate(rag_df["rag_format"]):
-            if pd.notna(val) and val in format_vocab:
-                rag_format_mat[i, format_vocab.index(val)] = 1.0
-        parts.append(rag_format_mat)
+            rag_studios = _parse_studios_rag(val)
+            raw_pop, raw_score = _te_lookup(rag_studios, self.studio_te, fallback_pop, fallback_score)
+            std_pop, std_score = _standardize(raw_pop, raw_score, self.te_stats)
+            rag_studio_te_mat[i, 0] = std_pop
+            rag_studio_te_mat[i, 1] = std_score
+        parts.append(rag_studio_te_mat)
 
         return np.concatenate(parts, axis=1)
+
+    # ── persistence ───────────────────────────────────────────────────────────
 
     def save(self, path: str):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         state = {
-            "top_studios":        self.top_studios,
-            "top_voice_actors":   self.top_voice_actors,
-            "std_medians":        self.std_medians,
-            "std_means":          self.std_means,
-            "std_stds":           self.std_stds,
-            "cyc_medians":        self.cyc_medians,
-            "cat_vocabs":         self.cat_vocabs,
-            "genre_vocab":        self.genre_vocab,
-            "studio_vocab":       self.studio_vocab,
-            "voice_actor_vocab":  self.voice_actor_vocab,
-            "rag_medians":        self.rag_medians,
-            "rag_means":          self.rag_means,
-            "rag_stds":           self.rag_stds,
-            "feature_dim":        self.feature_dim,
+            "std_medians": self.std_medians,
+            "std_means":   self.std_means,
+            "std_stds":    self.std_stds,
+            "cyc_medians": self.cyc_medians,
+            "cat_vocabs":  self.cat_vocabs,
+            "genre_vocab": self.genre_vocab,
+            "studio_te":   self.studio_te,
+            "va_te":       self.va_te,
+            "te_fallback": self.te_fallback,
+            "te_stats":    self.te_stats,
+            "rag_medians": self.rag_medians,
+            "rag_means":   self.rag_means,
+            "rag_stds":    self.rag_stds,
+            "feature_dim": self.feature_dim,
         }
         with open(path, "w") as f:
             json.dump(state, f, indent=2)
@@ -308,7 +428,7 @@ class MetaEncoder:
     def load(cls, path: str) -> "MetaEncoder":
         with open(path) as f:
             state = json.load(f)
-        enc = cls(top_studios=state["top_studios"], top_voice_actors=state.get("top_voice_actors", 50))
+        enc = cls()
         for k, v in state.items():
             setattr(enc, k, v)
         return enc
