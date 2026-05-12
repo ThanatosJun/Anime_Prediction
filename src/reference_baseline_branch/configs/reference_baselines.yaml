@@ -77,6 +77,10 @@ feature_sets:
     metadata: false
     text_embedding: false
     image_embedding: true
+  text_image:
+    metadata: false
+    text_embedding: true
+    image_embedding: true
   metadata_text_image:
     metadata: true
     text_embedding: true
@@ -216,3 +220,32 @@ baselines:
     project_adaptation_component: "Project metadata + text embeddings + image embeddings with an sklearn MLP fusion head."
     claim_allowed: "Anime-domain deep fusion baseline adapted from Armenta-Segura & Sidorov 2025."
     claim_not_allowed: "Do not claim numerical comparability or exact reproduction; model branches, dataset, and target definitions differ."
+
+  - id: C2-CTNN-Lite
+    enabled: false
+    feature_set: text_image
+    model: cross_modal_transformer
+    params:
+      text_dim: 384
+      image_dim: 1024
+      d_model: 128
+      nhead: 4
+      num_layers: 2
+      dim_feedforward: 256
+      dropout: 0.1
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 80
+      patience: 10
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Madongo, Tang & Hassan 2023
+    reproduction_level: adapted
+    paper_supported_component: "Madongo et al. 2023 supports poster/text cross-modal transformer fusion for entertainment outcome prediction."
+    project_adaptation_component: "Project text and image embeddings are projected into modality tokens and fused with a lightweight TransformerEncoder regression head."
+    claim_allowed: "Lightweight cross-modal transformer fusion baseline adapted from poster-text box-office prediction literature."
+    claim_not_allowed: "Do not claim exact CTNN reproduction; this implementation uses precomputed project embeddings and a simplified two-token transformer fusion head."
