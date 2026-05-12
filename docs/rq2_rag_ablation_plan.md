@@ -112,3 +112,31 @@ python -m src.fussion_branch.run_rq2_rag_experiments --modes none sparse dense h
 - `sparse/dense/hybrid` 相對 `none` 的增益回答「RAG 是否有效」。
 - `sparse` vs `dense` 回答 metadata retrieval 與 semantic retrieval 的差異。
 - `hybrid` 是否最佳，用來檢查多訊號 retrieval 是否比單一 retrieval 穩定。
+
+## 目前 first-pass reference 結果
+
+2026-05-12 已在 `src/reference_baseline_branch` 先完成不依賴 Qdrant/Docker 的 C3 reference baseline：
+
+```bash
+python -m src.reference_baseline_branch.build_c3_rag_features --modes none sparse dense hybrid --top-k 10
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RAG-None-XGB --include-disabled
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RAG-Sparse-XGB --include-disabled
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RAG-Dense-XGB --include-disabled
+```
+
+已完成 `none/sparse/dense`。`hybrid` 目前 train/val artifacts 已產生，但 test artifact 生成 timeout，暫不列入正式表。
+
+| target | mode | test Spearman rho | test MAE | test R2 | test log_MAE |
+|---|---|---:|---:|---:|---:|
+| popularity | none | 0.8583 | 9664.2004 | 0.5064 | 0.9013 |
+| popularity | sparse | 0.8722 | 9736.1037 | 0.5725 | 0.9429 |
+| popularity | dense | 0.8584 | 9704.8621 | 0.5084 | 0.9016 |
+| meanScore | none | 0.5307 | 8.3647 | 0.0132 | |
+| meanScore | sparse | 0.5384 | 8.1703 | 0.0730 | |
+| meanScore | dense | 0.5382 | 8.2445 | 0.0464 | |
+
+目前判讀：
+
+- `sparse` metadata retrieval 是 first-pass 最強 C3 設定。
+- `dense` semantic retrieval 對 popularity 幾乎接近 no-RAG，但對 meanScore 有小幅增益。
+- 這些結果仍是 SKAPP-inspired retrieval baselines，不是 SKAPP reproduction。

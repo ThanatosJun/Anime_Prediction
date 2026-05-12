@@ -25,6 +25,9 @@ reports/reference_baseline_results.csv
 | `.exp/baseline/results/17` | `I1-XGB-ImageEmb` | local raw output | Source for completed image-embedding-only XGBoost results. |
 | `.exp/baseline/results/18` | `C2-CTNN-Lite` | local raw output | Source for completed lightweight cross-modal transformer fusion results. |
 | `.exp/baseline/results/19` | `C1-Armenta-ProxyBranchMLP` | local raw output | Source for branch-wise anime-domain multimodal MLP proxy adaptation results. |
+| `.exp/baseline/results/21` | `C3-RAG-None-XGB` | local raw output | Source for no-retrieval control under the SKAPP-inspired C3 route. |
+| `.exp/baseline/results/22` | `C3-RAG-Sparse-XGB` | local raw output | Source for sparse metadata retrieval under the SKAPP-inspired C3 route. |
+| `.exp/baseline/results/23` | `C3-RAG-Dense-XGB` | local raw output | Source for dense semantic retrieval under the SKAPP-inspired C3 route. |
 
 ## Completed Routes
 
@@ -37,6 +40,7 @@ reports/reference_baseline_results.csv
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | done as adaptation |
 | `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP` | first-pass and branch-wise proxy done as adaptations |
 | `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | done as adaptation |
+| `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB` | first-pass SKAPP-inspired retrieval baselines done |
 
 ## C1 vs F2 Snapshot
 
@@ -77,6 +81,22 @@ main-character descriptions and main-character portraits.
 Paper alignment caveat: `C2-CTNN-Lite` is not a CTNN reproduction. It omits
 the full poster/review feature extraction, recurrent fusion component,
 metadata-related movie factors, and box-office classification setup.
+
+## C3 Retrieval Snapshot
+
+These rows use full metadata + text + image features and only vary the RAG
+feature source. Retrieval is generated offline from train-set knowledge only,
+with temporal filtering so retrieved items are earlier than the query period.
+
+| Target | `C3-RAG-None-XGB` test R2 | `C3-RAG-Sparse-XGB` test R2 | `C3-RAG-Dense-XGB` test R2 | Current interpretation |
+|---|---:|---:|---:|---|
+| `popularity` | 0.5064 | 0.5725 | 0.5084 | Sparse metadata retrieval improves over the no-RAG control and beats the F2 feature-concat reference on R2. Dense semantic retrieval is close to no-RAG. |
+| `meanScore` | 0.0132 | 0.0730 | 0.0464 | Both retrieval modes improve over no-RAG for score regression, with sparse metadata retrieval strongest in this first pass. |
+
+Paper alignment caveat: these are SKAPP-inspired retrieval baselines, not SKAPP
+reproduction. They do not implement RRCP selection, VL-GNN contextual learning,
+or RRCP-Attention fusion. `hybrid` artifact generation produced train/val but
+timed out before test and is not included in the tracked result table yet.
 
 ## Artifact Policy
 

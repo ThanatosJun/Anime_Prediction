@@ -11,7 +11,7 @@
 | `C1-Armenta-MLP` | Armenta-Segura & Sidorov 2025 anime multimodal deep model | 寬鬆 adaptation | 只能作為 anime-domain multimodal MLP 的 first-pass adaptation，不能稱框架重現。 |
 | `C1-Armenta-ProxyBranchMLP` | Armenta-Segura & Sidorov 2025 anime multimodal deep model | 較強 proxy adaptation | 可優先用來代表 Armenta 路線，但必須清楚標註缺少 main-character description / portrait artifacts。 |
 | `C2-CTNN-Lite` | Madongo, Tang & Hassan 2023 CTNN | partial adaptation | 只能稱 lightweight cross-modal transformer fusion adaptation，不能稱 CTNN reproduction。 |
-| future `C3-*` | Xu et al. 2025 SKAPP | reference runner 尚未實作 | 目前 `none/sparse/dense/hybrid` retrieval 只能稱 SKAPP-inspired。若要更強 claim，至少需要 RRCP-style selection 與 graph/attention fusion。 |
+| `C3-RAG-*` | Xu et al. 2025 SKAPP | first-pass inspired baseline | 目前完成 `none/sparse/dense` retrieval baselines，只能稱 SKAPP-inspired。若要更強 claim，至少需要 RRCP-style selection 與 graph/attention fusion。 |
 
 ## 復現可行性矩陣
 
@@ -19,7 +19,7 @@
 |---|---|---|---|---|
 | `C1` Armenta anime deep model | MAL-style dataset、synopsis、main-character descriptions、main-character portraits、GPT-2 text branches、ResNet-50 portrait branch、character MLP、Big MLP，以及原論文 split/target 設定。 | AniList processed metadata、project text embeddings、cover/banner image embeddings、raw AniList character JSON 覆蓋多數 split IDs、flat MLP 與 branch-wise proxy MLP。 | 目前 embedding artifacts 沒有 character-description 或 character-portrait branches；raw train coverage 不完整；target/split 與原論文不同。 | 建立 `C1-Armenta-Figure2Proxy`：從 raw character inputs 產生新 artifacts，之後用 strict subset 或補抓缺失 raw IDs 後重跑。 |
 | `C2` CTNN box-office model | movie poster + movie review dataset、poster/review transformer feature extraction、cross-modal attention transformer、recurrent fusion、metadata factors，以及 box-office class/range target。 | anime text embeddings、anime cover/banner image embeddings、two-token TransformerEncoder fusion、regression targets。 | domain、inputs、feature extractors、fusion architecture、target formulation 都不同；目前 pre-release anime dataset 沒有 movie review 等價訊號。 | 保留 `C2-CTNN-Lite`；若需要更強 proxy，可加 cross-attention blocks 與 metadata branch，但仍只能稱 CTNN-inspired/adapted。 |
-| `C3` SKAPP retrieval model | UGC knowledge base、multimodal/meta retriever、top-k retrieval、RRCP selective refiner、VL-GNN contextual learning、RRCP-Attention prediction network，以及 social-media popularity targets。 | Qdrant-based `none/sparse/dense/hybrid` retrieval features、metadata sparse encoder、text embedding dense retrieval、RRF hybrid retrieval、FusionMLP input features。 | 目前 retrieval 只輸出 top-1 summary features；沒有 RRCP contribution scoring、沒有 selected retrieved-set graph、沒有 VL-GNN、沒有 RRCP-Attention。anime release metadata 也缺少 SKAPP 使用的 user/social context。 | 先做 `C3-SKAPP-Inspired`：top-k aggregate retrieval + contribution filter + fixed fusion backbone。只有完成 RRCP + graph/attention 後才保留 SKAPP reproduction 的可能性。 |
+| `C3` SKAPP retrieval model | UGC knowledge base、multimodal/meta retriever、top-k retrieval、RRCP selective refiner、VL-GNN contextual learning、RRCP-Attention prediction network，以及 social-media popularity targets。 | Offline train-set knowledge base、`none/sparse/dense` RAG feature artifacts、metadata sparse retrieval、text embedding dense retrieval、top-k aggregate RAG features、XGBoost fusion。 | 目前沒有 RRCP contribution scoring、沒有 selected retrieved-set graph、沒有 VL-GNN、沒有 RRCP-Attention。anime release metadata 也缺少 SKAPP 使用的 user/social context；`hybrid` test artifact 尚未完成。 | 下一層做 `C3-RAG-Selective`：在 top-k aggregate retrieval 上加入 contribution filter。只有完成 RRCP + graph/attention 後才保留 SKAPP reproduction 的可能性。 |
 
 ## C1：Armenta-Segura & Sidorov 2025
 
@@ -168,6 +168,8 @@ docs/refer/Improving Multimodal Social Media Popularity Prediction via Selective
 目前專案 retrieval implementation：
 
 ```text
+src/reference_baseline_branch/build_c3_rag_features.py
+src/reference_baseline_branch/run_reference_baselines.py
 src/fussion_branch/run_rag_ablation.py
 src/fussion_branch/RAG/rag_query.py
 ```
@@ -177,13 +179,13 @@ src/fussion_branch/RAG/rag_query.py
 | Mode | 專案行為 | 與 SKAPP 的關係 |
 |---|---|---|
 | `none` | 產生 schema-compatible no-retrieval features | 只是 non-retrieval control |
-| `sparse` | 用 genre/studio/voice actor/source 做 metadata sparse retrieval | partial meta retrieval proxy |
-| `dense` | text embedding semantic retrieval | vanilla semantic retrieval proxy |
-| `hybrid` | sparse + dense RRF retrieval | 較強 retrieval proxy，但仍不是 selective retrieval |
+| `sparse` | 用 genre/studio/voice actor/source 做 metadata sparse retrieval，目前已跑通 reference baseline | partial meta retrieval proxy |
+| `dense` | text embedding semantic retrieval，目前已跑通 reference baseline | vanilla semantic retrieval proxy |
+| `hybrid` | sparse + dense RRF retrieval，目前 artifact generation 缺 test | 較強 retrieval proxy，但仍不是 selective retrieval |
 
 差異：
 
-1. 目前 retrieval 只保留 summary RAG features，主要來自 top retrieved item，不會把 selected retrieved set 送進 neural contextual module。
+1. 目前 retrieval 只保留 aggregate RAG features，不會把 selected retrieved set 送進 neural contextual module。
 2. 沒有 RRCP score 估計 retrieved item 對 query prediction 是否有幫助。
 3. 沒有 selective refiner 依 contribution 過濾 noisy retrieved examples。
 4. 沒有 VL-GNN，也沒有 query/retrieved multimodal nodes 的 graph construction。
