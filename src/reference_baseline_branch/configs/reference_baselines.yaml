@@ -300,6 +300,34 @@ baselines:
     claim_allowed: "Branch-wise multimodal MLP adaptation that is closer to the Armenta fusion pattern than the flat C1-Armenta-MLP baseline."
     claim_not_allowed: "Do not claim exact framework reproduction; this proxy branch model still lacks the paper's main-character description and portrait inputs and uses project cover/banner embeddings."
 
+  - id: C1-Armenta-ProjectInputProxy
+    enabled: false
+    feature_set: metadata_text_image
+    model: armenta_project_input_mlp
+    params:
+      metadata_dim: 151
+      text_dim: 384
+      image_dim: 1024
+      branch_dim: 768
+      big_mlp_hidden_dims: [768, 384, 192, 96, 48, 24, 12, 6]
+      dropout: 0.1
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 100
+      patience: 12
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Armenta-Segura & Sidorov 2025
+    reproduction_level: adapted
+    paper_supported_component: "Armenta-Segura & Sidorov 2025 supports a synopsis branch, a context branch compressed by an MLP, and a large MLP for final anime-domain prediction."
+    project_adaptation_component: "Project synopsis/text embeddings form the synopsis branch; project cover/banner image embeddings plus metadata form a project-context branch; both 768-dimensional branch outputs are concatenated and passed through an Armenta-shaped Big MLP."
+    claim_allowed: "Project-input Armenta-style branch-and-Big-MLP proxy for comparing whether the paper's fusion shape helps under this project's input contract."
+    claim_not_allowed: "Do not claim Figure 2 reproduction, GPT-2/ResNet-50 reproduction, or character-branch reproduction; this row uses project embeddings and metadata rather than the paper's character descriptions and portraits."
+
   - id: C2-CTNN-Lite
     enabled: false
     feature_set: text_image
