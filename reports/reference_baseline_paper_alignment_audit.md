@@ -1,6 +1,6 @@
 # Reference Baseline 論文對齊稽核
 
-更新日期：2026-05-12
+更新日期：2026-05-13
 
 本文件記錄目前已實作或規劃中的 reference baseline，是否真的對齊錨定論文中的架構。核心目的不是幫模型背書，而是把「可主張的程度」寫清楚，避免把 adaptation 或 proxy 誤寫成 reproduction。
 
@@ -11,7 +11,7 @@
 | `C1-Armenta-MLP` | Armenta-Segura & Sidorov 2025 anime multimodal deep model | 寬鬆 adaptation | 只能作為 anime-domain multimodal MLP 的 first-pass adaptation，不能稱框架重現。 |
 | `C1-Armenta-ProxyBranchMLP` | Armenta-Segura & Sidorov 2025 anime multimodal deep model | 較強 proxy adaptation | 可優先用來代表 Armenta 路線，但必須清楚標註缺少 main-character description / portrait artifacts。 |
 | `C2-CTNN-Lite` | Madongo, Tang & Hassan 2023 CTNN | partial adaptation | 只能稱 lightweight cross-modal transformer fusion adaptation，不能稱 CTNN reproduction。 |
-| `C3-RAG-*` | Xu et al. 2025 SKAPP | first-pass inspired baseline | 目前完成 `none/sparse/dense` retrieval baselines，只能稱 SKAPP-inspired。若要更強 claim，至少需要 RRCP-style selection 與 graph/attention fusion。 |
+| `C3-RAG-*` | Xu et al. 2025 SKAPP | first-pass inspired baseline | 目前完成 `none/sparse/dense/hybrid/selective` retrieval baselines，只能稱 SKAPP-inspired。`selective` 是 deterministic contribution proxy，不是 RRCP reproduction。若要更強 claim，至少需要 learned RRCP-style selection 與 graph/attention fusion。 |
 
 ## 復現可行性矩陣
 
@@ -19,7 +19,7 @@
 |---|---|---|---|---|
 | `C1` Armenta anime deep model | MAL-style dataset、synopsis、main-character descriptions、main-character portraits、GPT-2 text branches、ResNet-50 portrait branch、character MLP、Big MLP，以及原論文 split/target 設定。 | AniList processed metadata、project text embeddings、cover/banner image embeddings、raw AniList character JSON 覆蓋多數 split IDs、flat MLP 與 branch-wise proxy MLP。 | 目前 embedding artifacts 沒有 character-description 或 character-portrait branches；raw train coverage 不完整；target/split 與原論文不同。 | 建立 `C1-Armenta-Figure2Proxy`：從 raw character inputs 產生新 artifacts，之後用 strict subset 或補抓缺失 raw IDs 後重跑。 |
 | `C2` CTNN box-office model | movie poster + movie review dataset、poster/review transformer feature extraction、cross-modal attention transformer、recurrent fusion、metadata factors，以及 box-office class/range target。 | anime text embeddings、anime cover/banner image embeddings、two-token TransformerEncoder fusion、regression targets。 | domain、inputs、feature extractors、fusion architecture、target formulation 都不同；目前 pre-release anime dataset 沒有 movie review 等價訊號。 | 保留 `C2-CTNN-Lite`；若需要更強 proxy，可加 cross-attention blocks 與 metadata branch，但仍只能稱 CTNN-inspired/adapted。 |
-| `C3` SKAPP retrieval model | UGC knowledge base、multimodal/meta retriever、top-k retrieval、RRCP selective refiner、VL-GNN contextual learning、RRCP-Attention prediction network，以及 social-media popularity targets。 | Offline train-set knowledge base、`none/sparse/dense/hybrid` RAG feature artifacts、metadata sparse retrieval、text embedding dense retrieval、hybrid RRF retrieval、top-k aggregate RAG features、XGBoost fusion。 | 目前沒有 RRCP contribution scoring、沒有 selected retrieved-set graph、沒有 VL-GNN、沒有 RRCP-Attention。anime release metadata 也缺少 SKAPP 使用的 user/social context。 | 下一層做 `C3-RAG-Selective`：在 top-k aggregate retrieval 上加入 contribution filter。只有完成 RRCP + graph/attention 後才保留 SKAPP reproduction 的可能性。 |
+| `C3` SKAPP retrieval model | UGC knowledge base、multimodal/meta retriever、top-k retrieval、RRCP selective refiner、VL-GNN contextual learning、RRCP-Attention prediction network，以及 social-media popularity targets。 | Offline train-set knowledge base、`none/sparse/dense/hybrid/selective` RAG feature artifacts、metadata sparse retrieval、text embedding dense retrieval、hybrid RRF retrieval、top-k aggregate RAG features、median-threshold contribution proxy、XGBoost fusion。 | 目前沒有 learned RRCP contribution scoring、沒有 selected retrieved-set graph、沒有 VL-GNN、沒有 RRCP-Attention。anime release metadata 也缺少 SKAPP 使用的 user/social context。 | 下一層做 `C3-SKAPP-Proxy`：把 deterministic contribution proxy 升級成 RRCP-like learned scoring，再加入 retrieved-set graph/attention fusion。只有完成 RRCP + graph/attention 後才保留 SKAPP reproduction 的可能性。 |
 
 ## C1：Armenta-Segura & Sidorov 2025
 
@@ -182,12 +182,13 @@ src/fussion_branch/RAG/rag_query.py
 | `sparse` | 用 genre/studio/voice actor/source 做 metadata sparse retrieval，目前已跑通 reference baseline | partial meta retrieval proxy |
 | `dense` | text embedding semantic retrieval，目前已跑通 reference baseline | vanilla semantic retrieval proxy |
 | `hybrid` | sparse + dense RRF retrieval，目前已跑通 reference baseline | 較強 retrieval proxy，但仍不是 selective retrieval |
+| `selective` | 從 sparse top-k retrieved candidates 中，用候選分數中位數作為 deterministic contribution threshold，過濾低分候選後再聚合 | RRCP-style filtering motivation 的 simple proxy；不是 RRCP reproduction |
 
 差異：
 
 1. 目前 retrieval 只保留 aggregate RAG features，不會把 selected retrieved set 送進 neural contextual module。
-2. 沒有 RRCP score 估計 retrieved item 對 query prediction 是否有幫助。
-3. 沒有 selective refiner 依 contribution 過濾 noisy retrieved examples。
+2. 目前 `selective` 只有 deterministic score-threshold proxy，沒有 learned RRCP score 估計 retrieved item 對 query prediction 是否有幫助。
+3. 沒有真正 selective refiner 依 learned contribution 過濾 noisy retrieved examples。
 4. 沒有 VL-GNN，也沒有 query/retrieved multimodal nodes 的 graph construction。
 5. 沒有 RRCP-Attention prediction network。
 6. anime release metadata 缺少 SKAPP 用到的 social-media UGC contexts，例如 user/post dynamics、friends、platform interactions、social diffusion traces。
@@ -196,6 +197,7 @@ src/fussion_branch/RAG/rag_query.py
 
 ```text
 C3-RAG-Minimal / C3-RAG-Selective 是用於 anime popularity prediction 的 SKAPP-inspired retrieval baseline。
+C3-RAG-Selective 可寫成 simple RRCP-style contribution-filtering proxy，但不可稱 RRCP reproduction。
 ```
 
 若要更強 SKAPP-style claim，至少需要：
@@ -213,4 +215,4 @@ We reproduce SKAPP.
 
 ## 報告規則
 
-目前所有 C1/C2 rows 都應寫成 adaptations。現有 C3/RAG work 必須寫成 SKAPP-inspired，除非實作 RRCP-style selection 與 graph/attention fusion。這些 baseline 是有價值的 reference coordinates，但目前完成度最高、最穩定的 empirical floor 仍是 `F2-XGB-Concat`，不是 reproduced neural framework。
+目前所有 C1/C2 rows 都應寫成 adaptations。現有 C3/RAG work 必須寫成 SKAPP-inspired，除非實作 learned RRCP-style selection 與 graph/attention fusion。這些 baseline 是有價值的 reference coordinates；目前最強的 RAG reference row 是 `C3-RAG-Selective-XGB`，而 `F2-XGB-Concat` 仍可作為 no-RAG multimodal classical floor，不是 reproduced neural framework。

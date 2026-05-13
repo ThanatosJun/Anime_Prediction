@@ -1,6 +1,6 @@
 # Reference Baseline 狀態紀錄
 
-更新日期：2026-05-12
+更新日期：2026-05-13
 
 本文件記錄 `docs/baseline_reference_implementation_plan.md` 目前已實作與已跑通的 reference baseline 範圍。注意：這裡只記錄「文獻/外部比較 baseline」，不包含本專案自己的 ablation baseline。
 
@@ -11,11 +11,7 @@
 1. `0. Lowest Reference / 最低地板`
 2. `1.1 Metadata-only Classical ML`
 
-已經有 first-pass 結果，但尚未完整完成的是：
-
-1. `2.3 Retrieval / RAG Competitive Baseline` 的 selective retrieval 延伸
-
-換句話說：目前已完成 foundation/classical、single-modality、feature-concat、`C1-Armenta-MLP` first-pass adaptation、`C1-Armenta-ProxyBranchMLP` branch-wise proxy adaptation、lightweight `C2-CTNN-Lite` cross-modal transformer adaptation，以及 C3 的 first-pass `none/sparse/dense/hybrid` retrieval baselines。`C1-Armenta-ProxyBranchMLP` 比 flat C1 更接近 Armenta 的 branch-fusion 思路，但仍不是框架重現；C3 目前也只能稱 SKAPP-inspired。
+換句話說：目前已完成 foundation/classical、single-modality、feature-concat、`C1-Armenta-MLP` first-pass adaptation、`C1-Armenta-ProxyBranchMLP` branch-wise proxy adaptation、lightweight `C2-CTNN-Lite` cross-modal transformer adaptation，以及 C3 的 first-pass `none/sparse/dense/hybrid/selective` retrieval baselines。`C1-Armenta-ProxyBranchMLP` 比 flat C1 更接近 Armenta 的 branch-fusion 思路，但仍不是框架重現；C3 目前也只能稱 SKAPP-inspired。
 
 論文復現限制已統一記錄於：
 
@@ -36,7 +32,7 @@ reports/reference_baseline_paper_alignment_audit.md
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | 已完成，屬 adaptation | 使用 image embeddings + XGBoost；對應 implementation plan 的 `I1-Emb` 類型，不是 poster CNN exact reproduction |
 | `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP` | branch-wise proxy 已完成，屬 adaptation | flat C1 與 branch-wise proxy 均已跑通；proxy branch model 更接近 Armenta 的 branch-fusion pattern，但缺 main-character description / portrait artifacts，仍不能稱 reproduction |
 | `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | 已完成，屬 adaptation | 使用 text/image embedding token + lightweight TransformerEncoder；對應 Madongo et al. 2023 的 cross-modal transformer route，但不是 exact CTNN reproduction |
-| `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB` | first-pass 已完成，屬 inspired | 使用 offline train-set knowledge base + temporal filtering；目前完成 none/sparse/dense/hybrid，仍不是 SKAPP reproduction |
+| `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB`, `C3-RAG-Selective-XGB` | first-pass 已完成，屬 inspired | 使用 offline train-set knowledge base + temporal filtering；目前完成 none/sparse/dense/hybrid/selective，仍不是 SKAPP reproduction |
 
 ## 已實作程式
 
@@ -126,6 +122,7 @@ reports/reference_baseline_paper_alignment_audit.md
 .exp/baseline/results/22/baseline_results.csv  # C3-RAG-Sparse-XGB
 .exp/baseline/results/23/baseline_results.csv  # C3-RAG-Dense-XGB
 .exp/baseline/results/24/baseline_results.csv  # C3-RAG-Hybrid-XGB
+.exp/baseline/results/25/baseline_results.csv  # C3-RAG-Selective-XGB
 ```
 
 Strict intersection 使用的 embedding coverage：
@@ -207,6 +204,8 @@ Strict intersection 使用的 embedding coverage：
 | `C3-RAG-Dense-XGB` | meanScore | 8.2445 | 0.0464 | 0.5382 | ok |
 | `C3-RAG-Hybrid-XGB` | popularity | 10327.0456 | 0.4828 | 0.8537 | ok |
 | `C3-RAG-Hybrid-XGB` | meanScore | 8.3798 | 0.0307 | 0.5539 | ok |
+| `C3-RAG-Selective-XGB` | popularity | 9782.2338 | 0.5775 | 0.8746 | ok |
+| `C3-RAG-Selective-XGB` | meanScore | 8.0914 | 0.0905 | 0.5470 | ok |
 
 ### F2 架構 smoke test
 
@@ -379,14 +378,15 @@ n_features = 1408
 
 ### C3 first-pass retrieval runs
 
-2026-05-12 至 2026-05-13，新增 offline C3 RAG feature builder，並執行四組 first-pass retrieval baselines：
+2026-05-12 至 2026-05-13，新增 offline C3 RAG feature builder，並執行五組 first-pass retrieval baselines：
 
 ```text
-python -m src.reference_baseline_branch.build_c3_rag_features --modes none sparse dense hybrid --top-k 10
+python -m src.reference_baseline_branch.build_c3_rag_features --modes none sparse dense hybrid selective --top-k 10
 python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RAG-None-XGB --include-disabled
 python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RAG-Sparse-XGB --include-disabled
 python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RAG-Dense-XGB --include-disabled
 python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RAG-Hybrid-XGB --include-disabled
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RAG-Selective-XGB --include-disabled
 ```
 
 實作：
@@ -397,6 +397,7 @@ none   -> schema-compatible no-retrieval RAG features
 sparse -> genre/studio/voice_actor/source overlap retrieval
 dense  -> text embedding semantic retrieval
 hybrid -> sparse + dense reciprocal-rank fusion
+selective -> sparse top-k candidates with median-threshold contribution filtering
 top-k retrieved items -> aggregate RAG features -> XGBoost with metadata/text/image
 ```
 
@@ -408,21 +409,23 @@ top-k retrieved items -> aggregate RAG features -> XGBoost with metadata/text/im
 | `C3-RAG-Sparse-XGB` | popularity | 9736.1037 | 0.5725 | 0.8722 |
 | `C3-RAG-Dense-XGB` | popularity | 9704.8621 | 0.5084 | 0.8584 |
 | `C3-RAG-Hybrid-XGB` | popularity | 10327.0456 | 0.4828 | 0.8537 |
+| `C3-RAG-Selective-XGB` | popularity | 9782.2338 | 0.5775 | 0.8746 |
 | `C3-RAG-None-XGB` | meanScore | 8.3647 | 0.0132 | 0.5307 |
 | `C3-RAG-Sparse-XGB` | meanScore | 8.1703 | 0.0730 | 0.5384 |
 | `C3-RAG-Dense-XGB` | meanScore | 8.2445 | 0.0464 | 0.5382 |
 | `C3-RAG-Hybrid-XGB` | meanScore | 8.3798 | 0.0307 | 0.5539 |
+| `C3-RAG-Selective-XGB` | meanScore | 8.0914 | 0.0905 | 0.5470 |
 
 論文對齊註記：
 
 ```text
-這些是 SKAPP-inspired retrieval baselines，不是 SKAPP reproduction。它們沒有 RRCP selection、VL-GNN contextual learning 或 RRCP-Attention fusion。
+這些是 SKAPP-inspired retrieval baselines，不是 SKAPP reproduction。`C3-RAG-Selective-XGB` 只使用 deterministic median-threshold contribution proxy，仍沒有 SKAPP 的 RRCP selection、VL-GNN contextual learning 或 RRCP-Attention fusion。
 ```
 
 目前解讀：
 
 ```text
-Sparse metadata retrieval 是目前 C3 first-pass 最強版本，popularity test_R2 從 no-RAG 的 0.5064 提升到 0.5725，也略高於 F2-XGB-Concat 的 0.5194。Dense semantic retrieval 對 popularity 幾乎接近 no-RAG，但對 meanScore 有小幅改善。Hybrid RRF 沒有超過 sparse；在 popularity R2 上甚至低於 no-RAG，因此目前不支援「多訊號 retrieval 必然更好」的 claim。
+Selective sparse retrieval 是目前 C3 first-pass 最強版本，popularity test_R2 從 no-RAG 的 0.5064 提升到 0.5775，也高於 F2-XGB-Concat 的 0.5194。Plain sparse retrieval 已有穩定增益，selective filtering 又小幅改善；dense semantic retrieval 對 popularity 幾乎接近 no-RAG，但對 meanScore 有小幅改善。Hybrid RRF 沒有超過 sparse/selective；在 popularity R2 上甚至低於 no-RAG，因此目前不支援「多訊號 retrieval 必然更好」的 claim。
 ```
 
 ## 復現指令
@@ -449,14 +452,12 @@ python -m src.ablation_branch.run_ablation_baselines
 
 若要從已完成的 foundation/classical、single-modality、neural-fusion baselines 往下一條 reference route 推進：
 
-1. 若目標是補齊剩下的 anchor paper route，下一步應繼續 `2.3 Retrieval / RAG Competitive Baseline`。
+1. 若目標是補齊 reference map，目前 C3/SKAPP-inspired route 已可放進 baseline table。
 2. 只有在目標變成提升性能，而不是補完整 reference map 時，才優先 tune 或替換 C1/C2 neural fusion heads。
-3. 決定目前報告是否讓 `F2-XGB-Concat` 維持 primary competitive reference floor。
-
-只有完成第 1 點後，SKAPP-inspired retrieval anchor paper 才能被正式放進 baseline table。
+3. 決定目前報告是否讓 `C3-RAG-Selective-XGB` 作為 RAG route 的 strongest reference row，並把 `F2-XGB-Concat` 作為 no-RAG multimodal classical floor。
 
 如果目標從「cover the reference route」改成「closer reproduction」，優先順序應改為：
 
 1. `C1-Armenta-Figure2Proxy`：抽取 raw AniList main-character descriptions 與 portrait URLs，產生 separate character text/image embeddings，然後實作接近 Figure 2 的 character MLP + Big MLP。
-2. `C3-SKAPP-Inspired`：把目前 `none/sparse/dense/hybrid` retrieval 升級成 top-k aggregation + contribution filtering，再考慮比 vanilla retrieval 更強的 claim。
+2. `C3-SKAPP-Proxy`：若要更接近 SKAPP，需要把目前 `selective` contribution proxy 升級成 RRCP-like learned contribution scoring，再加入 graph/attention fusion。
 3. `C2-CTNN-Proxy`：只有在需要更強 transformer proxy 時，才加入 explicit cross-attention 與 metadata/recurrent-style fusion；exact CTNN reproduction 不太適合目前 anime dataset，因為原論文的 review/poster/movie box-office task 差異太大。

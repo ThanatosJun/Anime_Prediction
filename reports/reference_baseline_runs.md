@@ -1,6 +1,6 @@
 # Reference Baseline Runs
 
-Updated: 2026-05-12
+Updated: 2026-05-13
 
 This file records the tracked summary of reference baseline runs. Raw `.exp/`
 outputs are local experiment artifacts and are intentionally not committed.
@@ -29,6 +29,7 @@ reports/reference_baseline_results.csv
 | `.exp/baseline/results/22` | `C3-RAG-Sparse-XGB` | local raw output | Source for sparse metadata retrieval under the SKAPP-inspired C3 route. |
 | `.exp/baseline/results/23` | `C3-RAG-Dense-XGB` | local raw output | Source for dense semantic retrieval under the SKAPP-inspired C3 route. |
 | `.exp/baseline/results/24` | `C3-RAG-Hybrid-XGB` | local raw output | Source for hybrid sparse+dense retrieval under the SKAPP-inspired C3 route. |
+| `.exp/baseline/results/25` | `C3-RAG-Selective-XGB` | local raw output | Source for selective sparse retrieval under the SKAPP-inspired C3 route. |
 
 ## Completed Routes
 
@@ -41,7 +42,7 @@ reports/reference_baseline_results.csv
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | done as adaptation |
 | `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP` | first-pass and branch-wise proxy done as adaptations |
 | `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | done as adaptation |
-| `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB` | first-pass SKAPP-inspired retrieval baselines done |
+| `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB`, `C3-RAG-Selective-XGB` | first-pass SKAPP-inspired retrieval baselines done, including simple contribution filtering |
 
 ## C1 vs F2 Snapshot
 
@@ -89,14 +90,15 @@ These rows use full metadata + text + image features and only vary the RAG
 feature source. Retrieval is generated offline from train-set knowledge only,
 with temporal filtering so retrieved items are earlier than the query period.
 
-| Target | `C3-RAG-None-XGB` test R2 | `C3-RAG-Sparse-XGB` test R2 | `C3-RAG-Dense-XGB` test R2 | `C3-RAG-Hybrid-XGB` test R2 | Current interpretation |
-|---|---:|---:|---:|---:|---|
-| `popularity` | 0.5064 | 0.5725 | 0.5084 | 0.4828 | Sparse metadata retrieval improves over the no-RAG control and beats the F2 feature-concat reference on R2. Dense semantic retrieval is close to no-RAG, while hybrid RRF does not improve over sparse. |
-| `meanScore` | 0.0132 | 0.0730 | 0.0464 | 0.0307 | Sparse metadata retrieval is strongest in this first pass. Dense and hybrid both improve over no-RAG on rank correlation, but hybrid does not improve R2. |
+| Target | `C3-RAG-None-XGB` test R2 | `C3-RAG-Sparse-XGB` test R2 | `C3-RAG-Dense-XGB` test R2 | `C3-RAG-Hybrid-XGB` test R2 | `C3-RAG-Selective-XGB` test R2 | Current interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| `popularity` | 0.5064 | 0.5725 | 0.5084 | 0.4828 | 0.5775 | Selective sparse retrieval is currently strongest by R2 and Spearman. It improves slightly over plain sparse retrieval, while dense and hybrid do not. |
+| `meanScore` | 0.0132 | 0.0730 | 0.0464 | 0.0307 | 0.0905 | Selective sparse retrieval is also strongest by R2. Hybrid has competitive rank correlation, but the simple contribution filter gives the best regression result. |
 
 Paper alignment caveat: these are SKAPP-inspired retrieval baselines, not SKAPP
-reproduction. They do not implement RRCP selection, VL-GNN contextual learning,
-or RRCP-Attention fusion.
+reproduction. `C3-RAG-Selective-XGB` is only a deterministic median-threshold
+contribution proxy; it does not implement SKAPP RRCP, VL-GNN contextual
+learning, or RRCP-Attention fusion.
 
 ## Artifact Policy
 
