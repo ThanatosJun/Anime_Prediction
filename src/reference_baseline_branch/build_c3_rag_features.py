@@ -38,13 +38,20 @@ def main() -> None:
         default=10,
         help="Number of retrieved train items to aggregate.",
     )
+    parser.add_argument(
+        "--splits",
+        nargs="+",
+        choices=("train", "val", "test"),
+        default=None,
+        help="Optional split subset to generate. Defaults to config data.splits.",
+    )
     args = parser.parse_args()
 
     config = _load_config(Path(args.config))
     builder = OfflineRagFeatureBuilder(config, top_k=args.top_k)
     for mode in dict.fromkeys(args.modes):
         print(f"[c3-rag] build mode={mode}")
-        builder.build_mode(mode)
+        builder.build_mode(mode, splits=args.splits)
 
 
 class OfflineRagFeatureBuilder:
@@ -75,12 +82,14 @@ class OfflineRagFeatureBuilder:
         self.train_text_ids = self.text_emb.get("train_ids")
         self.dense_score_cache: Dict[str, Dict[int, Dict[int, float]]] = {}
 
-    def build_mode(self, mode: str) -> None:
+    def build_mode(self, mode: str, splits: Sequence[str] | None = None) -> None:
         if mode not in RAG_MODES:
             raise ValueError(f"Unknown mode: {mode}")
         out_dir = self.out_root / mode
         out_dir.mkdir(parents=True, exist_ok=True)
-        for split, df in self.meta.items():
+        split_names = list(splits) if splits is not None else list(self.meta)
+        for split in split_names:
+            df = self.meta[split]
             rows = [self._row_for_query(row, split, mode) for _, row in df.iterrows()]
             out_path = out_dir / f"rag_features_{split}.parquet"
             pd.DataFrame(rows).to_parquet(out_path, index=False)

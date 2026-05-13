@@ -124,19 +124,22 @@ python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RA
 python -m src.reference_baseline_branch.run_reference_baselines --baseline C3-RAG-Dense-XGB --include-disabled
 ```
 
-已完成 `none/sparse/dense`。`hybrid` 目前 train/val artifacts 已產生，但 test artifact 生成 timeout，暫不列入正式表。
+已完成 `none/sparse/dense/hybrid`。`hybrid` 的 test artifact 於 2026-05-13 補齊，並已列入正式表。
 
 | target | mode | test Spearman rho | test MAE | test R2 | test log_MAE |
 |---|---|---:|---:|---:|---:|
 | popularity | none | 0.8583 | 9664.2004 | 0.5064 | 0.9013 |
 | popularity | sparse | 0.8722 | 9736.1037 | 0.5725 | 0.9429 |
 | popularity | dense | 0.8584 | 9704.8621 | 0.5084 | 0.9016 |
+| popularity | hybrid | 0.8537 | 10327.0456 | 0.4828 | 0.9440 |
 | meanScore | none | 0.5307 | 8.3647 | 0.0132 | |
 | meanScore | sparse | 0.5384 | 8.1703 | 0.0730 | |
 | meanScore | dense | 0.5382 | 8.2445 | 0.0464 | |
+| meanScore | hybrid | 0.5539 | 8.3798 | 0.0307 | |
 
 目前判讀：
 
 - `sparse` metadata retrieval 是 first-pass 最強 C3 設定。
 - `dense` semantic retrieval 對 popularity 幾乎接近 no-RAG，但對 meanScore 有小幅增益。
+- `hybrid` 在 meanScore Spearman 最高，但 test R2 沒有超過 sparse；目前不支援「sparse + dense 一定比單一路徑更好」。
 - 這些結果仍是 SKAPP-inspired retrieval baselines，不是 SKAPP reproduction。

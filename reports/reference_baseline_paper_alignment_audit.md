@@ -19,7 +19,7 @@
 |---|---|---|---|---|
 | `C1` Armenta anime deep model | MAL-style dataset、synopsis、main-character descriptions、main-character portraits、GPT-2 text branches、ResNet-50 portrait branch、character MLP、Big MLP，以及原論文 split/target 設定。 | AniList processed metadata、project text embeddings、cover/banner image embeddings、raw AniList character JSON 覆蓋多數 split IDs、flat MLP 與 branch-wise proxy MLP。 | 目前 embedding artifacts 沒有 character-description 或 character-portrait branches；raw train coverage 不完整；target/split 與原論文不同。 | 建立 `C1-Armenta-Figure2Proxy`：從 raw character inputs 產生新 artifacts，之後用 strict subset 或補抓缺失 raw IDs 後重跑。 |
 | `C2` CTNN box-office model | movie poster + movie review dataset、poster/review transformer feature extraction、cross-modal attention transformer、recurrent fusion、metadata factors，以及 box-office class/range target。 | anime text embeddings、anime cover/banner image embeddings、two-token TransformerEncoder fusion、regression targets。 | domain、inputs、feature extractors、fusion architecture、target formulation 都不同；目前 pre-release anime dataset 沒有 movie review 等價訊號。 | 保留 `C2-CTNN-Lite`；若需要更強 proxy，可加 cross-attention blocks 與 metadata branch，但仍只能稱 CTNN-inspired/adapted。 |
-| `C3` SKAPP retrieval model | UGC knowledge base、multimodal/meta retriever、top-k retrieval、RRCP selective refiner、VL-GNN contextual learning、RRCP-Attention prediction network，以及 social-media popularity targets。 | Offline train-set knowledge base、`none/sparse/dense` RAG feature artifacts、metadata sparse retrieval、text embedding dense retrieval、top-k aggregate RAG features、XGBoost fusion。 | 目前沒有 RRCP contribution scoring、沒有 selected retrieved-set graph、沒有 VL-GNN、沒有 RRCP-Attention。anime release metadata 也缺少 SKAPP 使用的 user/social context；`hybrid` test artifact 尚未完成。 | 下一層做 `C3-RAG-Selective`：在 top-k aggregate retrieval 上加入 contribution filter。只有完成 RRCP + graph/attention 後才保留 SKAPP reproduction 的可能性。 |
+| `C3` SKAPP retrieval model | UGC knowledge base、multimodal/meta retriever、top-k retrieval、RRCP selective refiner、VL-GNN contextual learning、RRCP-Attention prediction network，以及 social-media popularity targets。 | Offline train-set knowledge base、`none/sparse/dense/hybrid` RAG feature artifacts、metadata sparse retrieval、text embedding dense retrieval、hybrid RRF retrieval、top-k aggregate RAG features、XGBoost fusion。 | 目前沒有 RRCP contribution scoring、沒有 selected retrieved-set graph、沒有 VL-GNN、沒有 RRCP-Attention。anime release metadata 也缺少 SKAPP 使用的 user/social context。 | 下一層做 `C3-RAG-Selective`：在 top-k aggregate retrieval 上加入 contribution filter。只有完成 RRCP + graph/attention 後才保留 SKAPP reproduction 的可能性。 |
 
 ## C1：Armenta-Segura & Sidorov 2025
 
@@ -181,7 +181,7 @@ src/fussion_branch/RAG/rag_query.py
 | `none` | 產生 schema-compatible no-retrieval features | 只是 non-retrieval control |
 | `sparse` | 用 genre/studio/voice actor/source 做 metadata sparse retrieval，目前已跑通 reference baseline | partial meta retrieval proxy |
 | `dense` | text embedding semantic retrieval，目前已跑通 reference baseline | vanilla semantic retrieval proxy |
-| `hybrid` | sparse + dense RRF retrieval，目前 artifact generation 缺 test | 較強 retrieval proxy，但仍不是 selective retrieval |
+| `hybrid` | sparse + dense RRF retrieval，目前已跑通 reference baseline | 較強 retrieval proxy，但仍不是 selective retrieval |
 
 差異：
 
