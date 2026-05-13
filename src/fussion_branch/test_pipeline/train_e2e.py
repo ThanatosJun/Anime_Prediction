@@ -1,14 +1,12 @@
 """
-Train FusionMLP for a single target (popularity or meanScore).
+Train FusionMLPE2E for a single target (popularity or meanScore).
 
-Output layout per target:
-    results/fusion/{run_id}/{target}/
-        best_model.pt        ← best val checkpoint (state dict)
-        model_config.json    ← architecture config (for inference reconstruction)
-        target_scaler.json   ← normalisation params
-        training_log.jsonl   ← per-epoch metrics
-        metrics_val.json
-        metrics_test.json
+Key difference from train.py:
+  - Text encoder backbone uses backbone_lr (much lower)
+  - Batch contains tokenized text tensors instead of pre-computed embeddings
+  - No text_emb parquet needed
+
+Output layout: same as train.py under results_e2e/{run_id}/{target}/
 """
 import json
 import os
@@ -21,16 +19,16 @@ import torch.nn as nn
 from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
+from transformers import AutoTokenizer
 
-from src.fussion_branch.fussion_training.dataset import FusionDataset
-from src.fussion_branch.fussion_training.model import FusionMLP
+from fussion_branch.test_pipeline.dataset_e2e import FusionDatasetE2E
+from fussion_branch.test_pipeline.model_e2e import FusionMLPE2E
 from src.fussion_branch.fussion_training.meta_encoder import MetaEncoder
 from src.fussion_branch.utilities.evaluate import compute_metrics, denormalize
 
 
 def _build_target_scaler(
-    meta_df: pd.DataFrame, target_col: str, log_transform: bool, winsor_pct: float | None = None
+    meta_df: pd.DataFrame, target_col: str, log_transform: bool, winsor_pct=None
 ) -> dict:
     y = meta_df[target_col].dropna().values.astype(np.float64)
     if log_transform:
@@ -46,24 +44,29 @@ def _build_target_scaler(
             "winsor_cap": winsor_cap}
 
 
-def train_one_target(config: dict, target_col: str) -> dict:
-    cfg_data  = config["data"]
-    cfg_model = config["model"]
-    cfg_train = config["training"]
-    cfg_out   = config["output"]
+def train_one_target_e2e(config: dict, target_col: str) -> dict:
+    cfg_data    = config["data"]
+    cfg_enc     = config["text_encoder"]
+    cfg_model   = config["model"]
+    cfg_train   = config["training"]
+    cfg_out     = config["output"]
     log_transform = config["targets"][target_col]["log_transform"]
     winsor_pct    = config["targets"][target_col].get("winsor_pct", None)
     use_amp = cfg_train.get("mixed_precision", True) and torch.cuda.is_available()
 
-    device = torch.device(
-        cfg_train["device"] if torch.cuda.is_available() else "cpu"
-    )
+    device = torch.device(cfg_train["device"] if torch.cuda.is_available() else "cpu")
     print(f"\n[{target_col}] device={device}  log_transform={log_transform}  amp={use_amp}")
 
     # ── output dir ────────────────────────────────────────────────────────────
     out_dir = Path(cfg_out["results_dir"]) / cfg_out["run_id"] / target_col
     out_dir.mkdir(parents=True, exist_ok=True)
     writer  = SummaryWriter(log_dir=str(out_dir / "tb"))
+
+    # ── tokenizer ─────────────────────────────────────────────────────────────
+    encoder_name = cfg_enc["model_name"]
+    max_length   = cfg_enc.get("max_length", 128)
+    tokenizer = AutoTokenizer.from_pretrained(encoder_name)
+    print(f"  Tokenizer: {encoder_name}  max_length={max_length}")
 
     # ── MetaEncoder ───────────────────────────────────────────────────────────
     encoder_path = cfg_data["meta_encoder_path"]
@@ -88,11 +91,12 @@ def train_one_target(config: dict, target_col: str) -> dict:
     image_emb_dir = cfg_data.get("image_emb_dir", "src/fussion_branch/embedding/image")
 
     def make_dataset(split, apply_winsor: bool = False):
-        return FusionDataset(
+        return FusionDatasetE2E(
             split=split,
             encoder=encoder,
+            tokenizer=tokenizer,
+            max_length=max_length,
             meta_dir=cfg_data["fusion_meta_dir"],
-            text_emb_dir=cfg_data["text_emb_dir"],
             rag_dir=cfg_data["rag_features_dir"],
             image_emb_dir=image_emb_dir,
             target_col=target_col,
@@ -105,69 +109,74 @@ def train_one_target(config: dict, target_col: str) -> dict:
     train_ds = make_dataset("train", apply_winsor=True)
     val_ds   = make_dataset("val",   apply_winsor=False)
 
-    num_workers = min(4, os.cpu_count() or 1)
+    # fewer workers to avoid tokenizer forking issues
+    num_workers = min(2, os.cpu_count() or 1)
     train_loader = DataLoader(train_ds, batch_size=cfg_train["batch_size"], shuffle=True,
-                              num_workers=num_workers, pin_memory=True, persistent_workers=True)
+                              num_workers=num_workers, pin_memory=True)
     val_loader   = DataLoader(val_ds,   batch_size=cfg_train["batch_size"], shuffle=False,
-                              num_workers=num_workers, pin_memory=True, persistent_workers=True)
+                              num_workers=num_workers, pin_memory=True)
 
     # ── model ─────────────────────────────────────────────────────────────────
-    model = FusionMLP(
-        text_dim=train_ds.text_dim,
+    model = FusionMLPE2E(
+        encoder_name=encoder_name,
+        freeze_layers=cfg_enc["freeze_layers"],
         image_dim=train_ds.image_dim,
         meta_dim=train_ds.meta_dim,
         **cfg_model,
     ).to(device)
     model.save_config(str(out_dir / "model_config.json"))
 
-    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    use_img  = train_ds.use_image
-    print(f"  Dims: text={train_ds.text_dim}  image={train_ds.image_dim} "
-          f"({'real' if use_img else 'zeros'})  meta={train_ds.meta_dim}")
-    print(f"  Trainable params: {n_params:,}")
+    n_backbone = sum(p.numel() for p in model.backbone_parameters())
+    n_head     = sum(p.numel() for p in model.head_parameters())
+    print(f"  Trainable: backbone={n_backbone:,}  head={n_head:,}  total={n_backbone+n_head:,}")
 
-    criterion = nn.HuberLoss(delta=1.0)
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=cfg_train["learning_rate"],
+    # ── differential optimizer ────────────────────────────────────────────────
+    backbone_lr = cfg_enc.get("backbone_lr", 1e-5)
+    head_lr     = cfg_train["learning_rate"]
+    criterion   = nn.HuberLoss(delta=1.0)
+    optimizer   = torch.optim.AdamW(
+        [
+            {"params": model.backbone_parameters(), "lr": backbone_lr},
+            {"params": model.head_parameters(),     "lr": head_lr},
+        ],
         weight_decay=cfg_train["weight_decay"],
     )
     plateau_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
+        optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-7,
     )
     scaler_amp = GradScaler("cuda") if use_amp else None
 
     # ── training loop ─────────────────────────────────────────────────────────
-    warmup_epochs   = cfg_train.get("warmup_epochs", 5)
-    base_lr         = cfg_train["learning_rate"]
-    best_val_mae    = float("inf")
-    patience_cnt    = 0
-    best_epoch      = 0
-    log_path        = out_dir / "training_log.jsonl"
-    ckpt_path       = out_dir / "best_model.pt"
+    warmup_epochs = cfg_train.get("warmup_epochs", 5)
+    best_val_mae  = float("inf")
+    patience_cnt  = 0
+    best_epoch    = 0
+    log_path      = out_dir / "training_log.jsonl"
+    ckpt_path     = out_dir / "best_model.pt"
 
-    # save initial state as fallback so ckpt_path always exists after training
     torch.save(model.state_dict(), ckpt_path)
 
     for epoch in range(1, cfg_train["epochs"] + 1):
 
-        # linear LR warmup
+        # linear warmup (head LR only; backbone LR stays at configured value)
         if epoch <= warmup_epochs:
-            warmup_lr = base_lr * epoch / warmup_epochs
-            for pg in optimizer.param_groups:
-                pg["lr"] = warmup_lr
+            optimizer.param_groups[1]["lr"] = head_lr * epoch / warmup_epochs
 
         # ── train ─────────────────────────────────────────────────────────────
         model.train()
         train_loss = 0.0
         for batch in train_loader:
-            x = batch["features"].to(device)
-            y = batch["target"].to(device)
+            input_ids      = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            image_emb      = batch["image_emb"].to(device)
+            meta_feat      = batch["meta_feat"].to(device)
+            y              = batch["target"].to(device)
+
             optimizer.zero_grad()
 
             if use_amp:
                 with autocast("cuda"):
-                    pred = model(x)
+                    pred = model(input_ids, attention_mask, image_emb, meta_feat)
                     loss = criterion(pred, y)
                 scaler_amp.scale(loss).backward()
                 scaler_amp.unscale_(optimizer)
@@ -175,7 +184,7 @@ def train_one_target(config: dict, target_col: str) -> dict:
                 scaler_amp.step(optimizer)
                 scaler_amp.update()
             else:
-                pred = model(x)
+                pred = model(input_ids, attention_mask, image_emb, meta_feat)
                 loss = criterion(pred, y)
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), cfg_train["grad_clip"])
@@ -186,30 +195,29 @@ def train_one_target(config: dict, target_col: str) -> dict:
 
         # ── validate ──────────────────────────────────────────────────────────
         val_mae, val_loss = _eval_loss_mae(model, val_loader, criterion, device, use_amp)
-        current_lr = optimizer.param_groups[0]["lr"]
+        current_lr_head = optimizer.param_groups[1]["lr"]
 
         if epoch > warmup_epochs:
             plateau_scheduler.step(val_mae)
 
-        writer.add_scalar("loss/train", train_loss, epoch)
-        writer.add_scalar("loss/val",   val_loss,   epoch)
-        writer.add_scalar("MAE/val",    val_mae,    epoch)
-        writer.add_scalar("lr",         current_lr, epoch)
+        writer.add_scalar("loss/train",  train_loss, epoch)
+        writer.add_scalar("loss/val",    val_loss,   epoch)
+        writer.add_scalar("MAE/val",     val_mae,    epoch)
+        writer.add_scalar("lr/backbone", optimizer.param_groups[0]["lr"], epoch)
+        writer.add_scalar("lr/head",     current_lr_head, epoch)
 
-        # per-epoch log
         log_entry = {
             "epoch": epoch, "train_loss": round(train_loss, 6),
             "val_loss": round(val_loss, 6), "val_mae": round(val_mae, 4),
-            "lr": current_lr,
+            "lr_head": current_lr_head,
         }
         with open(log_path, "a") as f:
             f.write(json.dumps(log_entry) + "\n")
 
         if epoch % 10 == 0 or epoch == 1:
             print(f"  epoch {epoch:3d}  train_loss={train_loss:.4f}  "
-                  f"val_MAE={val_mae:.4f}  lr={current_lr:.2e}")
+                  f"val_MAE={val_mae:.4f}  lr_head={current_lr_head:.2e}")
 
-        # ── early stopping ────────────────────────────────────────────────────
         if val_mae < best_val_mae:
             best_val_mae = val_mae
             best_epoch   = epoch
@@ -225,12 +233,11 @@ def train_one_target(config: dict, target_col: str) -> dict:
     writer.close()
     print(f"  Best epoch: {best_epoch}  best val_MAE: {best_val_mae:.4f}")
 
-    # ── final evaluation (val only — test evaluated separately via run_evaluate.py) ──
+    # ── final evaluation ──────────────────────────────────────────────────────
     best_state = torch.load(ckpt_path, map_location=device, weights_only=True)
     model.load_state_dict(best_state)
 
-    metrics_val = _full_eval(model, val_loader, scaler, target_col, meta_train, device, use_amp, "val")
-
+    metrics_val = _full_eval(model, val_loader, scaler, target_col, device, use_amp, "val")
     with open(out_dir / "metrics_val.json", "w") as f:
         json.dump(metrics_val, f, indent=2)
 
@@ -241,18 +248,20 @@ def train_one_target(config: dict, target_col: str) -> dict:
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _eval_loss_mae(model, loader, criterion, device, use_amp):
-    """MAE and loss in normalized space — no denormalization needed for early stopping."""
     model.eval()
     y_true_list, y_pred_list = [], []
     with torch.no_grad():
         for batch in loader:
-            x = batch["features"].to(device)
-            y = batch["target"].to(device)
+            input_ids      = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            image_emb      = batch["image_emb"].to(device)
+            meta_feat      = batch["meta_feat"].to(device)
+            y              = batch["target"].to(device)
             if use_amp:
                 with autocast("cuda"):
-                    pred = model(x)
+                    pred = model(input_ids, attention_mask, image_emb, meta_feat)
             else:
-                pred = model(x)
+                pred = model(input_ids, attention_mask, image_emb, meta_feat)
             y_true_list.append(y.cpu().numpy())
             y_pred_list.append(pred.cpu().numpy())
     y_true = np.concatenate(y_true_list)
@@ -262,17 +271,20 @@ def _eval_loss_mae(model, loader, criterion, device, use_amp):
     return mae, val_loss
 
 
-def _full_eval(model, loader, scaler, target_col, train_meta_df, device, use_amp, split_name):
+def _full_eval(model, loader, scaler, target_col, device, use_amp, split_name):
     model.eval()
     y_true_list, y_pred_list = [], []
     with torch.no_grad():
         for batch in loader:
-            x = batch["features"].to(device)
+            input_ids      = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            image_emb      = batch["image_emb"].to(device)
+            meta_feat      = batch["meta_feat"].to(device)
             if use_amp:
                 with autocast("cuda"):
-                    pred = model(x)
+                    pred = model(input_ids, attention_mask, image_emb, meta_feat)
             else:
-                pred = model(x)
+                pred = model(input_ids, attention_mask, image_emb, meta_feat)
             y_true_list.append(batch["target"].numpy())
             y_pred_list.append(pred.cpu().numpy())
     y_true_norm = np.concatenate(y_true_list)

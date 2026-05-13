@@ -1,50 +1,50 @@
 # ── Data ──────────────────────────────────────────────────────────────────────
 data:
-  # fusion_meta_dir:   data/fussion
   fusion_meta_dir:   data/fussion
-  text_emb_dir:      src/fussion_branch/embedding/text
   rag_features_dir:  src/fussion_branch/RAG/return
   image_emb_dir:     src/fussion_branch/embedding/image   # zeros if missing
   meta_encoder_path: .exp/fussion/meta_encoder.json
-  # meta_encoder_path: .exp/fussion/meta_encoder_post2000.json
 
+# ── Text Encoder (E2E fine-tune) ───────────────────────────────────────────────
+text_encoder:
+  model_name:    "sentence-transformers/all-MiniLM-L6-v2"
+  freeze_layers: 4       # freeze bottom 4 of 6 transformer layers (train top 2 only)
+  max_length:    128     # tokenizer max sequence length
+  backbone_lr:   1.0e-5  # much lower LR for pre-trained backbone
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 model:
-  # per-modality projection dims → fused 448 (after modality gate)
   text_proj:   128   # 384  → 128
   image_proj:   64   # 1024 → 64
   meta_proj:    64   # 65   → 64
-  # backbone hidden dims after fusion (fused_dim = 128+64+64 = 256)
   hidden_dims: [256, 128, 64]
   dropout:     0.4
 
 # ── Training ──────────────────────────────────────────────────────────────────
 training:
-  batch_size:               256
-  epochs:                   150
-  learning_rate:            5.0e-4
-  weight_decay:             1.0e-3
-  warmup_epochs:            5          # linear LR ramp before ReduceLROnPlateau
+  batch_size:               64     # smaller batch for tokenizer overhead
+  epochs:                   100
+  learning_rate:            5.0e-4  # for projection + head layers
+  weight_decay:             1.0e-2  # stronger regularization for E2E
+  warmup_epochs:            5
   early_stopping_patience:  20
   grad_clip:                1.0
-  mixed_precision:          true       # FP16 autocast + GradScaler (RTX GPU)
+  mixed_precision:          true
   device:                   cuda
 
 # ── Targets ───────────────────────────────────────────────────────────────────
-# active_targets controls which targets are trained when --target is not given
-active_targets: ["popularity", "meanScore"]   # change to ["popularity"] or ["meanScore"] to train only one
+active_targets: ["popularity"]   # start with popularity only to validate faster
 
 targets:
   popularity:
     log_transform:  true
-    winsor_pct:     99      # cap training target at this percentile (log1p space), null = disabled
+    winsor_pct:     99
   meanScore:
     log_transform:  false
     winsor_pct:     null
 
 # ── Output ────────────────────────────────────────────────────────────────────
 output:
-  results_dir: .exp/fussion/results
-  run_id:      "11"
-  notes:       "RAG sparse 混合加權（genre/studio/source=IDF，voice=df）；MetaEncoder 新增 is_new_studio（66維）"
+  results_dir: .exp/fussion/results_e2e
+  run_id:      "01"
+  notes:       "E2E fine-tune MiniLM-L6-v2; freeze_layers=4 (train top 2 of 6); backbone_lr=1e-5"

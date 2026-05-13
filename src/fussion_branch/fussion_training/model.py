@@ -2,12 +2,14 @@
 FusionMLP: modality-aware fusion MLP for anime popularity / score prediction.
 
 Architecture:
-  text_emb  (384) ──→ text_proj  (Linear → LayerNorm → GELU) → 128 ──→ × α_t   ─┐
-  image_emb (1024) ─→ image_proj (Linear → LayerNorm → GELU) → 256 ──→ × α_img  ─┤→ concat(449) → backbone → head
-  meta_rag  (65)  ──→ meta_proj  (Linear → LayerNorm → GELU) →  64 ──→ × α_meta ─┘
+  text_emb  (384) ──→ text_proj  (Linear → LayerNorm → GELU) → text_proj  ──→ × α_t   ─┐
+  image_emb (1024) ─→ image_proj (Linear → LayerNorm → GELU) → image_proj ──→ × α_img  ─┤→ concat(fused_dim) → backbone → head
+  meta_rag  (65)  ──→ meta_proj  (Linear → LayerNorm → GELU) → meta_proj  ──→ × α_meta ─┘
+
+  fused_dim = text_proj + image_proj + meta_proj  (e.g. 128+64+64=256)
 
   Modality gate (independent per modality, sees only its own projection):
-    α_t   = softmax( [Linear(128→1)(t),   Linear(256→1)(img), Linear(64→1)(m)] )[0]
+    α_t   = softmax( [Linear(text_proj→1)(t), Linear(image_proj→1)(img), Linear(meta_proj→1)(m)] )[0]
     α_img = softmax( ... )[1]
     α_meta= softmax( ... )[2]
 
@@ -98,7 +100,7 @@ class FusionMLP(nn.Module):
             gates[:, 0:1] * t,
             gates[:, 1:2] * img,
             gates[:, 2:3] * m,
-        ], dim=1)  # (B, 448)
+        ], dim=1)  # (B, fused_dim)
 
         return self.head(self.backbone(fused)).squeeze(-1)
 

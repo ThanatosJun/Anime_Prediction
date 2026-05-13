@@ -13,6 +13,7 @@ Feature layout (in order):
   [binary]             3 dims  isAdult, is_sequel, has_sequel
   [genres multi-hot]  19 dims
   [studio TE]          2 dims  standardized mean_pop, mean_score of this anime's studios
+  [is_new_studio]      1 dim   1 if all studios are OOV (not in training set), else 0
   [va TE]              2 dims  standardized mean_pop, mean_score of this anime's voice actors
   [rag numerical]      4 dims  rag_popularity, rag_score, rag_release_year, rag_episodes
   [rag_found]          1 dim
@@ -21,7 +22,7 @@ Feature layout (in order):
   [format_match]       1 dim   meta format == RAG format (binary)
   [rag_studio TE]      2 dims  standardized mean_pop, mean_score of RAG result's studios
 
-Total: 65 dims
+Total: 66 dims
 """
 import ast
 import json
@@ -162,8 +163,8 @@ class MetaEncoder:
             genres.update(_parse_genres(v))
         self.genre_vocab = sorted(genres)
 
-        # target values for TE — log1p(popularity) for scale consistency with training target
-        pop_col   = np.log1p(pd.to_numeric(meta_df["popularity"], errors="coerce"))
+        # target values for TE — raw popularity (z-scored internally; log1p would compress signal)
+        pop_col   = pd.to_numeric(meta_df["popularity"], errors="coerce")
         score_col = pd.to_numeric(meta_df["meanScore"],  errors="coerce")
         fallback_pop   = float(pop_col.mean())
         fallback_score = float(score_col.mean())
@@ -239,6 +240,7 @@ class MetaEncoder:
             + len(BOOL_COLS)                                #  3
             + len(self.genre_vocab)                         # 19
             + 2                                             #  studio TE
+            + 1                                             #  is_new_studio
             + 2                                             #  va TE
             + len(RAG_NUMERICAL_COLS)                       #  4
             + 1                                             #  rag_found
@@ -266,7 +268,7 @@ class MetaEncoder:
             names.append(col)
         for g in self.genre_vocab:
             names.append(f"genre_{g}")
-        names += ["studio_te_pop", "studio_te_score"]
+        names += ["studio_te_pop", "studio_te_score", "is_new_studio"]
         names += ["va_te_pop", "va_te_score"]
         for col in RAG_NUMERICAL_COLS:
             names.append(f"rag_{col}" if not col.startswith("rag_") else col)
@@ -330,15 +332,20 @@ class MetaEncoder:
                     genre_mat[i, g_idx[g]] = 1.0
         parts.append(genre_mat)
 
-        # studio target encoding (2 dims)
-        studio_te_mat = np.zeros((N, 2), dtype=np.float32)
+        # studio target encoding (2 dims) + is_new_studio (1 dim)
+        studio_te_mat  = np.zeros((N, 2), dtype=np.float32)
+        is_new_studio  = np.zeros((N, 1), dtype=np.float32)
         for i, val in enumerate(meta_df["studios"]):
             studios = _parse_studios_meta(val)
             raw_pop, raw_score = _te_lookup(studios, self.studio_te, fallback_pop, fallback_score)
             std_pop, std_score = _standardize(raw_pop, raw_score, self.te_stats)
             studio_te_mat[i, 0] = std_pop
             studio_te_mat[i, 1] = std_score
+            # 1 if ALL studios are OOV (not seen in training), else 0
+            if studios and not any(s in self.studio_te for s in studios):
+                is_new_studio[i, 0] = 1.0
         parts.append(studio_te_mat)
+        parts.append(is_new_studio)
 
         # voice actor target encoding (2 dims)
         va_te_mat = np.zeros((N, 2), dtype=np.float32)
