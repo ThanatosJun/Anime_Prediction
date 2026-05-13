@@ -13,7 +13,7 @@ import pandas as pd
 import yaml
 
 
-RAG_MODES = ("none", "sparse", "dense", "hybrid")
+RAG_MODES = ("none", "sparse", "dense", "hybrid", "selective")
 
 
 def main() -> None:
@@ -111,7 +111,7 @@ class OfflineRagFeatureBuilder:
             return []
 
         sparse_scores: Dict[int, float] = {}
-        if mode in {"sparse", "hybrid"}:
+        if mode in {"sparse", "hybrid", "selective"}:
             query_tokens = set(_sparse_tokens(row))
             sparse_scores = self._sparse_scores(query_tokens, allowed)
 
@@ -123,6 +123,8 @@ class OfflineRagFeatureBuilder:
             scores = sparse_scores
         elif mode == "dense":
             scores = dense_scores
+        elif mode == "selective":
+            return self._select_sparse_candidates(sparse_scores)
         else:
             scores = self._rrf_scores(sparse_scores, dense_scores)
 
@@ -233,6 +235,18 @@ class OfflineRagFeatureBuilder:
             for rank, (idx, _) in enumerate(ranked, start=1):
                 combined[idx] += 1.0 / (k + rank)
         return dict(combined)
+
+    def _select_sparse_candidates(self, sparse_scores: Dict[int, float]) -> List[tuple[int, float]]:
+        ranked = sorted(sparse_scores.items(), key=lambda item: item[1], reverse=True)
+        top_candidates = ranked[: self.top_k]
+        if not top_candidates:
+            return []
+        scores = np.array([score for _, score in top_candidates], dtype=np.float64)
+        threshold = float(np.median(scores))
+        selected = [(idx, score) for idx, score in top_candidates if score >= threshold]
+        if selected:
+            return selected
+        return top_candidates[:1]
 
     def _aggregate_row(self, anime_id: int, candidates: Sequence[tuple[int, float]]) -> dict:
         indices = [idx for idx, _ in candidates]

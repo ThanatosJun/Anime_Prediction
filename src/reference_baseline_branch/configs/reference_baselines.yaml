@@ -130,6 +130,12 @@ feature_sets:
     image_embedding: true
     rag: true
     rag_features_dir: .exp/baseline/rag_features/hybrid
+  metadata_text_image_rag_selective:
+    metadata: true
+    text_embedding: true
+    image_embedding: true
+    rag: true
+    rag_features_dir: .exp/baseline/rag_features/selective
 
 baselines:
   - id: F0-Mean
@@ -398,3 +404,22 @@ baselines:
     project_adaptation_component: "Offline hybrid retrieval fusing sparse metadata overlap and dense text-embedding retrieval with reciprocal-rank fusion."
     claim_allowed: "Hybrid retrieval baseline inspired by SKAPP's meta retrieval motivation."
     claim_not_allowed: "Do not claim SKAPP reproduction; this lacks RRCP selection, VL-GNN context learning, and RRCP-Attention."
+
+  - id: C3-RAG-Selective-XGB
+    enabled: false
+    feature_set: metadata_text_image_rag_selective
+    model: xgboost
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.9
+      colsample_bytree: 0.9
+      random_state: 42
+      objective: reg:squarederror
+    reference: Xu et al. 2025 SKAPP
+    reproduction_level: inspired
+    paper_supported_component: "SKAPP motivates selective retrieval knowledge augmentation to reduce noisy retrieved context."
+    project_adaptation_component: "Offline sparse metadata retrieval with temporal filtering, followed by median-threshold filtering of low-contribution top-k candidates before feature aggregation."
+    claim_allowed: "Selective sparse retrieval baseline inspired by SKAPP's RRCP-style filtering motivation."
+    claim_not_allowed: "Do not claim SKAPP or RRCP reproduction; this uses a simple deterministic contribution proxy and lacks VL-GNN context learning and RRCP-Attention."
