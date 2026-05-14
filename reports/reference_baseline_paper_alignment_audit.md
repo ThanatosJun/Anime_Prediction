@@ -1,6 +1,6 @@
 # Reference Baseline 論文對齊稽核
 
-更新日期：2026-05-13
+更新日期：2026-05-14
 
 本文件記錄目前已實作或規劃中的 reference baseline，是否真的對齊錨定論文中的架構。核心目的不是幫模型背書，而是把「可主張的程度」寫清楚，避免把 adaptation 或 proxy 誤寫成 reproduction。
 
@@ -18,9 +18,11 @@ C1、C2、C3 一律只用兩個條件判斷是否能當主線 reference baseline
 | `C1-Armenta-MLP` | Armenta-Segura & Sidorov 2025 anime multimodal deep model | 寬鬆 adaptation | 只能作為 anime-domain multimodal MLP 的 first-pass adaptation，不能稱框架重現。 |
 | `C1-Armenta-ProxyBranchMLP` | Armenta-Segura & Sidorov 2025 anime multimodal deep model | project-aligned proxy adaptation | 代表本專案早期 C1 branch-fusion route；三個 project feature groups 平行分支後融合，但還不是 Armenta 的 character/context MLP + Big MLP 形狀。 |
 | `C1-Armenta-ProjectInputProxy` | Armenta-Segura & Sidorov 2025 anime multimodal deep model | stronger project-input proxy adaptation | 目前較適合代表 C1 主線：保留本專案 metadata / synopsis-text / cover-banner image artifacts，同時改成 synopsis branch + project-context MLP + Big MLP。仍不可稱 Figure 2 或 GPT-2/ResNet-50 復現。 |
+| `C1-Armenta-ProjectInputProxy-ResNet50` | Armenta-Segura & Sidorov 2025 anime multimodal deep model | stronger project-input proxy adaptation | 目前 C1 中 visual encoder 最接近原論文的一版：保留本專案 metadata / synopsis-text / cover-banner inputs，並用 ImageNet ResNet-50 抽 cover/banner features；仍不可稱 Figure 2、GPT-2 或 character-branch 復現。 |
 | `C1-Armenta-Figure2Proxy` | Armenta-Segura & Sidorov 2025 Figure 2 | 非主線旁支分析 | 因為輸入會轉向 main-character descriptions / portraits，不符合本專案 cover/banner 主輸入契約；除非另有分析需求，否則不作為主線 baseline。 |
 | `C2-CTNN-Lite` | Madongo, Tang & Hassan 2023 CTNN | first-pass project-input adaptation | 只能稱 lightweight cross-modal transformer fusion adaptation；它對齊本專案 text/image inputs，但還沒有 explicit cross-attention、metadata fusion、recurrent-style fusion，不能稱 CTNN reproduction。 |
-| `C2-ProjectInputCrossAttention` | Madongo, Tang & Hassan 2023 CTNN | planned stronger project-input proxy | 若要繼續 C2，應優先做這條：先滿足本專案 synopsis/cover-banner/metadata inputs，再把模型往 explicit cross-attention 與 metadata fusion 靠近；改用 movie reviews 的版本不列主線，因為違反條件 1。 |
+| `C2-ProjectInputCrossAttention` | Madongo, Tang & Hassan 2023 CTNN | stronger project-input proxy adaptation | 目前較適合代表 C2 主線：先滿足本專案 synopsis/cover-banner/metadata inputs，再用 explicit bidirectional text-image cross-attention 與 metadata-conditioned fusion 往 CTNN 靠近；改用 movie reviews 的版本不列主線，因為違反條件 1。 |
+| `C2-ProjectInputRecurrentFusion` | Madongo, Tang & Hassan 2023 CTNN | stronger project-input proxy adaptation | 在 CrossAttention 之上補 GRU recurrent fusion，覆蓋原文 recurrent-fusion 動機；結果上 meanScore 略優、popularity Spearman 略優，但 popularity R2 低於 CrossAttention。 |
 | `C3-RAG-*` | Xu et al. 2025 SKAPP | project-aligned retrieval baseline | 目前完成 `none/sparse/dense/hybrid/selective` retrieval baselines；`selective` 可作本專案 RAG 主線，但只能稱 SKAPP-inspired/project retrieval proxy，不是 RRCP/VL-GNN/RRCP-Attention reproduction。 |
 | `C3-ProjectInputSKAPPProxy` | Xu et al. 2025 SKAPP | planned stronger project-input proxy | 若要繼續 C3，應保留 project historical-anime retrieval，再把模型往 learned contribution scoring + retrieved-set graph/attention fusion 靠近；改用 social-media UGC 的版本不列主線，因為違反條件 1。 |
 
@@ -28,8 +30,8 @@ C1、C2、C3 一律只用兩個條件判斷是否能當主線 reference baseline
 
 | 路線 | 若要 exact reproduction 需要什麼 | 目前專案已有什麼 | 主要限制 | 實務上下一層可做什麼 |
 |---|---|---|---|---|
-| `C1` Armenta anime deep model | MAL-style dataset、synopsis、main-character descriptions、main-character portraits、GPT-2 text branches、ResNet-50 portrait branch、character MLP、Big MLP，以及原論文 split/target 設定。 | AniList processed metadata、project text embeddings、cover/banner image embeddings、`voice_actor_names` cast metadata、raw AniList character JSON 覆蓋多數 split IDs、flat MLP、branch-wise proxy MLP、project-input Armenta-shaped proxy MLP。 | 目前主線 embedding artifacts 沒有 character-description 或 character-portrait branches；raw train coverage 不完整；target/split 與原論文不同。若硬做 Figure 2，會更貼近論文，但會偏離本專案主框架的 cover/banner image setup。現階段 image fetch 已在背景跑，供後續 ResNet-50/project-image artifact 評估。 | 主線使用 `C1-Armenta-ProjectInputProxy`：先守住本專案輸入契約，再盡量還原 Armenta 的 synopsis branch + context/character MLP + Big MLP 形狀。`C1-Armenta-Figure2Proxy` 不列主線。 |
-| `C2` CTNN box-office model | movie poster + movie review dataset、poster/review transformer feature extraction、cross-modal attention transformer、recurrent fusion、metadata factors，以及 box-office class/range target。 | anime text embeddings、anime cover/banner image embeddings、two-token TransformerEncoder fusion、regression targets。 | domain、inputs、feature extractors、fusion architecture、target formulation 都不同；目前 pre-release anime dataset 沒有 movie review 等價訊號。若硬改成 movie-review CTNN，會偏離本專案輸入契約。 | `C2-CTNN-Lite` 保留為 first-pass；若要繼續 C2，做 `C2-ProjectInputCrossAttention`：project text/image inputs + explicit cross-attention + metadata fusion。 |
+| `C1` Armenta anime deep model | MAL-style dataset、synopsis、main-character descriptions、main-character portraits、GPT-2 text branches、ResNet-50 portrait branch、character MLP、Big MLP，以及原論文 split/target 設定。 | AniList processed metadata、project text embeddings、cover/banner raw images、cover/banner ResNet-50 features、`voice_actor_names` cast metadata、raw AniList character JSON 覆蓋多數 split IDs、flat MLP、branch-wise proxy MLP、project-input Armenta-shaped proxy MLP。 | 目前主線 artifacts 仍沒有 character-description 或 character-portrait branches；target/split 與原論文不同。若硬做 Figure 2，會更貼近論文，但會偏離本專案主框架的 cover/banner image setup。 | 主線使用 `C1-Armenta-ProjectInputProxy-ResNet50` 作為對齊版：先守住本專案輸入契約，再盡量還原 Armenta 的 synopsis branch + context/character MLP + Big MLP 形狀，並用 ResNet-50 補上 visual encoder 對齊。`C1-Armenta-Figure2Proxy` 不列主線。 |
+| `C2` CTNN box-office model | movie poster + movie review dataset、poster/review transformer feature extraction、cross-modal attention transformer、recurrent fusion、metadata factors，以及 box-office class/range target。 | anime metadata、anime text embeddings、anime cover/banner image embeddings、two-token TransformerEncoder fusion、project-input cross-attention fusion、project-input recurrent fusion、regression targets。 | domain、inputs、feature extractors、fusion architecture、target formulation 都不同；目前 pre-release anime dataset 沒有 movie review 等價訊號。若硬改成 movie-review CTNN，會偏離本專案輸入契約。 | `C2-CTNN-Lite` 保留為 first-pass；`C2-ProjectInputCrossAttention` 與 `C2-ProjectInputRecurrentFusion` 作為目前較強 C2 主線 proxies。 |
 | `C3` SKAPP retrieval model | UGC knowledge base、multimodal/meta retriever、top-k retrieval、RRCP selective refiner、VL-GNN contextual learning、RRCP-Attention prediction network，以及 social-media popularity targets。 | Offline train-set knowledge base、`none/sparse/dense/hybrid/selective` RAG feature artifacts、metadata sparse retrieval、text embedding dense retrieval、hybrid RRF retrieval、top-k aggregate RAG features、median-threshold contribution proxy、XGBoost fusion。 | 目前沒有 learned RRCP contribution scoring、沒有 selected retrieved-set graph、沒有 VL-GNN、沒有 RRCP-Attention。anime release metadata 也缺少 SKAPP 使用的 user/social context。若硬改成 social-media UGC SKAPP，會換成另一個任務。 | `C3-RAG-Selective-XGB` 先作 project-aligned RAG 主線；若要更接近 SKAPP，做 `C3-ProjectInputSKAPPProxy`：在 project historical-anime retrieval 上加入 learned contribution scoring + retrieved-set graph/attention fusion。 |
 
 ## C1：Armenta-Segura & Sidorov 2025
@@ -79,6 +81,18 @@ C1-Armenta-ProjectInputProxy =
 
 這條線仍使用 project embeddings，不是重新抽 GPT-2 / ResNet-50，因此不能稱 encoder reproduction。不過它比 `C1-Armenta-ProxyBranchMLP` 更貼近原論文「主文字分支 + context/character MLP + Big MLP」的融合形狀，也比較不會偏離本專案的 project input contract。
 
+visual encoder 更貼近原論文的 project-input proxy：
+
+```text
+C1-Armenta-ProjectInputProxy-ResNet50 =
+    project synopsis/text embedding -> synopsis branch -> 768-dim synopsis vector
+  + project cover/banner raw images -> ImageNet ResNet-50 avg-pool features
+  + project metadata + ResNet-50 cover/banner features -> project-context MLP -> 768-dim context vector
+  -> concat -> Big MLP -> regression
+```
+
+這條線把 image branch 從本專案既有 image embeddings 換成 ImageNet ResNet-50 features，是目前 C1 中 visual encoder 對齊最好的主線版本。但它仍不是 Figure 2 reproduction，因為影像輸入是 cover/banner 而不是 main-character portraits，文字 branch 仍不是 GPT-2 synopsis / character-description branches。
+
 非主線旁支分析：
 
 ```text
@@ -94,8 +108,8 @@ C1-Armenta-Figure2Proxy =
 差異：
 
 1. 使用 project metadata，但 metadata 並不是原論文三輸入 neural architecture 的核心 branch。
-2. 使用 precomputed project text/image embeddings，不是 end-to-end GPT-2 與 ResNet-50 branches。
-3. 使用 anime cover/banner image embeddings，不是 main-character portraits。
+2. 文字 branch 使用 precomputed project text embeddings，不是 end-to-end GPT-2。
+3. ResNet-50 版使用 anime cover/banner raw images，不是 main-character portraits。
 4. `voice_actor_names` 是 cast metadata，能作為 character/cast proxy，但不能取代 main-character descriptions 或 portraits。
 5. 沒有把 main-character descriptions 作為獨立 branch。
 6. 使用本專案 temporal split 與 `popularity` / `meanScore` targets，不是原論文 split 與 MAL score target。
@@ -110,14 +124,14 @@ C1-Armenta-Figure2Proxy =
 Proxy 改善點：
 
 ```text
-C1-Armenta-ProxyBranchMLP 比 flat C1 更接近原論文 branch-fusion 思路，因為它先分別處理各 input group，再做 final fusion。C1-Armenta-ProjectInputProxy 則進一步把融合形狀改成 synopsis branch + project-context MLP + Big MLP，因此目前較適合作為 C1 主線版本。
+C1-Armenta-ProxyBranchMLP 比 flat C1 更接近原論文 branch-fusion 思路，因為它先分別處理各 input group，再做 final fusion。C1-Armenta-ProjectInputProxy 則進一步把融合形狀改成 synopsis branch + project-context MLP + Big MLP。C1-Armenta-ProjectInputProxy-ResNet50 再把 visual encoder 往原論文 ResNet-50 靠近，因此是目前 C1 對齊版主線；性能上則與 ProjectInputProxy 接近，不能因此宣稱優於 F2/C3。
 ```
 
 剩餘限制：
 
 1. metadata branch 是本專案 proxy，不是原論文 input branch。
 2. text branch 使用 project embeddings，不是 end-to-end GPT-2 synopsis branch。
-3. image branch 使用 cover/banner embeddings，不是 main-character portraits。
+3. image branch 使用 cover/banner ResNet-50 features，不是 main-character portraits。
 4. 仍然沒有 separate main-character description branch。
 
 可允許的寫法：
@@ -125,6 +139,7 @@ C1-Armenta-ProxyBranchMLP 比 flat C1 更接近原論文 branch-fusion 思路，
 ```text
 C1-Armenta-MLP 是受 Armenta-Segura & Sidorov 2025 啟發的寬鬆 anime-domain multimodal MLP adaptation。
 C1-Armenta-ProxyBranchMLP 是受 Armenta-Segura & Sidorov 2025 啟發、較接近 branch-wise fusion 的 project-aligned proxy adaptation。
+C1-Armenta-ProjectInputProxy-ResNet50 是 project-input Armenta-style proxy with ResNet-50 visual features；可說 visual encoder 比既有 project-image-embedding 版本更接近原論文。
 C1-Armenta-Figure2Proxy 若未來實作，應寫成非主線 character-centric side analysis，而不是本專案主框架 baseline 的替代品。
 ```
 
@@ -172,39 +187,54 @@ C2-CTNN-Lite =
   -> regression head
 ```
 
-這條線有價值，但只是 first-pass。若要繼續 C2，下一個有意義的 project-aligned proxy 應是：
+這條線有價值，但只是 first-pass。目前已完成的較強 project-aligned proxy 是：
 
 ```text
 C2-ProjectInputCrossAttention =
     project synopsis/text embedding branch
   + project cover/banner image embedding branch
-  + explicit text-image cross-attention blocks
-  + metadata branch / metadata-conditioned fusion
+  + explicit bidirectional text-image cross-attention blocks
+  + metadata-conditioned modality-gated fusion
   -> regression head
 ```
 
 這樣同時滿足條件 1 的 project input contract，並在條件 2 下比 `C2-CTNN-Lite` 更接近 CTNN 的跨模態 transformer 動機。
 
+補齊 recurrent-fusion 動機的 project-aligned proxy：
+
+```text
+C2-ProjectInputRecurrentFusion =
+    project synopsis/text embedding branch
+  + project cover/banner image embedding branch
+  + explicit bidirectional text-image cross-attention blocks
+  + metadata token
+  + GRU recurrent fusion over [text, image, metadata] tokens
+  -> regression head
+```
+
+這條線補上原論文提到的 recurrent fusion 動機，但仍維持本專案輸入契約。
+
 差異：
 
 1. 使用 precomputed anime embeddings，不是原論文 poster/review deep feature extraction pipeline。
-2. 使用 two-token TransformerEncoder，不是完整 CTNN 的 cross-modal attention + recurrent fusion。
+2. `C2-CTNN-Lite` 使用 two-token TransformerEncoder，不是完整 CTNN 的 cross-modal attention + recurrent fusion；`C2-ProjectInputCrossAttention` 已補 explicit cross-attention；`C2-ProjectInputRecurrentFusion` 已補 recurrent token fusion proxy。
 3. 沒有 movie metadata factors，也沒有原論文 classification/range target structure。
 4. 使用 anime description/image embeddings 與 regression targets，不是 movie reviews/posters 與 weekend box-office classes。
 5. 本專案目前沒有 review-equivalent pre-release text source；synopsis/descriptions 不是 audience 或 critic reviews。
 
 如果要做更接近的 C2 proxy：
 
-1. 加 explicit cross-attention module，不只是在兩個 modality tokens 上做 self-attention。
-2. 加 metadata branch 與 fusion weighting step，對齊 CTNN/recurrent-fusion 的動機。
-3. target 仍可維持 project regression，但報告必須標成 transfer/adaptation，因為 domain 與 target 仍然不同。
+1. 已完成 explicit cross-attention module，不只是在兩個 modality tokens 上做 self-attention。
+2. 已完成 metadata-conditioned fusion weighting step，並補上 GRU recurrent-fusion proxy。
+3. target 仍維持 project regression，報告必須標成 transfer/adaptation，因為 domain 與 target 仍然不同。
 4. 不建議追求 movie-review/poster exact reproduction，除非另外建立 movie-style benchmark；這已超出目前 anime project 範圍，且不適合拿來當本專案主線比較。
 
 可允許的寫法：
 
 ```text
 C2-CTNN-Lite 是受 Madongo, Tang & Hassan 2023 啟發的 lightweight cross-modal transformer fusion adaptation。
-C2-ProjectInputCrossAttention 若未來實作，應寫成 project-input CTNN-style cross-attention proxy，而不是 CTNN reproduction。
+C2-ProjectInputCrossAttention 應寫成 project-input CTNN-style cross-attention proxy，而不是 CTNN reproduction。
+C2-ProjectInputRecurrentFusion 應寫成 project-input CTNN-style recurrent-fusion proxy，而不是 CTNN reproduction。
 ```
 
 不可寫：

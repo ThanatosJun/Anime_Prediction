@@ -1,19 +1,19 @@
 # Reference Baseline 狀態紀錄
 
-更新日期：2026-05-13
+更新日期：2026-05-14
 
 本文件記錄 `docs/baseline_reference_implementation_plan.md` 目前已實作與已跑通的 reference baseline 範圍。注意：這裡只記錄「文獻/外部比較 baseline」，不包含本專案自己的 ablation baseline。
 
 ## 摘要
 
-目前已完成 foundation/classical、single-modality、feature-concat、`C1-Armenta-MLP` first-pass adaptation、`C1-Armenta-ProxyBranchMLP` branch-wise proxy adaptation、`C1-Armenta-ProjectInputProxy` project-input Armenta-shaped proxy、lightweight `C2-CTNN-Lite` cross-modal transformer adaptation，以及 C3 的 first-pass `none/sparse/dense/hybrid/selective` retrieval baselines。
+目前已完成 foundation/classical、single-modality、feature-concat、`C1-Armenta-MLP` first-pass adaptation、`C1-Armenta-ProxyBranchMLP` branch-wise proxy adaptation、`C1-Armenta-ProjectInputProxy` project-input Armenta-shaped proxy、`C1-Armenta-ProjectInputProxy-ResNet50` ResNet-50 visual-encoder proxy、lightweight `C2-CTNN-Lite` cross-modal transformer adaptation、`C2-ProjectInputCrossAttention` project-input cross-attention proxy、`C2-ProjectInputRecurrentFusion` recurrent-fusion proxy，以及 C3 的 first-pass `none/sparse/dense/hybrid/selective` retrieval baselines。
 
 目前主線判準只有兩條：
 
 1. Baseline 輸入必須對齊本專案主框架，也就是 metadata、synopsis/text embedding、cover/banner image，以及必要時的 project retrieval context。
 2. 在輸入固定為本專案主框架的前提下，模型方法才往原論文設計盡量還原。
 
-`C1-Armenta-ProjectInputProxy` 目前比舊 branch proxy 更適合作為 C1 主線，但仍不是 Figure 2 或 GPT-2/ResNet-50 復現；C3 目前也只能稱 SKAPP-inspired/project-input retrieval proxy。
+`C1-Armenta-ProjectInputProxy-ResNet50` 已把影像 encoder 換成 ImageNet ResNet-50 cover/banner features，比 `C1-Armenta-ProjectInputProxy` 更接近原論文 visual encoder；但它仍不是 Figure 2 或 GPT-2/character branch 復現。C3 目前也只能稱 SKAPP-inspired/project-input retrieval proxy。
 
 論文復現限制已統一記錄於：
 
@@ -21,7 +21,7 @@
 reports/reference_baseline_paper_alignment_audit.md
 ```
 
-該 audit 覆蓋 C1、C2、C3 的復現限制。簡單說：C1 主線先採 project-aligned ProjectInputProxy，不把 character-only Figure 2 route 當主線；C2 主線保留本專案 synopsis/cover-banner/metadata inputs，再補 cross-attention；C3 主線保留 project historical-anime retrieval，再補 learned contribution scoring 與 graph/attention fusion。任何換掉本專案主輸入契約的版本都不能列為主線 baseline。
+該 audit 覆蓋 C1、C2、C3 的復現限制。簡單說：C1 主線先採 project-aligned ProjectInputProxy，不把 character-only Figure 2 route 當主線；C2 主線目前採 project-input cross-attention proxy，保留本專案 synopsis/cover-banner/metadata inputs；C3 主線保留 project historical-anime retrieval，再補 learned contribution scoring 與 graph/attention fusion。任何換掉本專案主輸入契約的版本都不能列為主線 baseline。
 
 ## 規劃對照
 
@@ -32,8 +32,8 @@ reports/reference_baseline_paper_alignment_audit.md
 | `1.2 Feature-concat Classical ML` | `F2-XGB-Concat` | 已完成，屬 adaptation | 已補 `docs/reference_baselines/f2_feature_concat_plan.md`；metadata + text embedding + image embedding concat 架構已用真實 embeddings 與 XGBoost 跑通 `popularity`、`meanScore` |
 | `1.3 Text-only Baseline` | `T2-XGB-TextEmb` | 已完成，屬 adaptation | 使用 text embeddings + XGBoost；對應 implementation plan 的 `T2-Emb` 類型，不是 TF-IDF exact reproduction |
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | 已完成，屬 adaptation | 使用 image embeddings + XGBoost；對應 implementation plan 的 `I1-Emb` 類型，不是 poster CNN exact reproduction |
-| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP`, `C1-Armenta-ProjectInputProxy` | project-input proxy 已完成，屬 adaptation | flat C1、branch-wise proxy、project-input Armenta-shaped proxy 均已跑通；ProjectInputProxy 對齊本專案 metadata/text/image artifacts，並借用 Armenta 的 synopsis branch + context MLP + Big MLP pattern；`C1-Armenta-Figure2Proxy` 因輸入不對齊本專案 cover/banner 主框架，不列主線 |
-| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | first-pass 已完成，屬 adaptation | 使用 text/image embedding token + lightweight TransformerEncoder；它是 project-input CTNN-style first pass，不是 exact CTNN reproduction；若要繼續 C2，下一步是 `C2-ProjectInputCrossAttention`：保留 project inputs，再補 explicit cross-attention 與 metadata-conditioned fusion |
+| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP`, `C1-Armenta-ProjectInputProxy`, `C1-Armenta-ProjectInputProxy-ResNet50` | project-input proxy 已完成，屬 adaptation | flat C1、branch-wise proxy、project-input Armenta-shaped proxy、ResNet-50 visual-encoder proxy 均已跑通；ResNet50 版對齊本專案 metadata/text/cover-banner artifacts，並把 visual features 往原論文 ResNet-50 靠近；`C1-Armenta-Figure2Proxy` 因輸入不對齊本專案 cover/banner 主框架，不列主線 |
+| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite`, `C2-ProjectInputCrossAttention`, `C2-ProjectInputRecurrentFusion` | project-input proxy 已完成，屬 adaptation | CTNN-Lite 是 text/image two-token first pass；ProjectInputCrossAttention 保留 metadata/text/image inputs，加入 explicit bidirectional text-image cross-attention 與 metadata-conditioned modality-gated fusion；ProjectInputRecurrentFusion 再補 GRU recurrent token fusion；仍不是 exact CTNN reproduction |
 | `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB`, `C3-RAG-Selective-XGB` | project-aligned RAG 主線已完成，屬 inspired | 使用 offline train-set knowledge base + temporal filtering；`C3-RAG-Selective-XGB` 是目前 RAG route strongest row，但仍不是 SKAPP reproduction；若要繼續 C3，下一步是 learned contribution scoring + retrieved-set graph/attention fusion |
 
 ## 已實作程式
@@ -108,6 +108,12 @@ reports/reference_baseline_paper_alignment_audit.md
 
 ```text
 .exp/baseline/results/26/baseline_results.csv
+```
+
+最新 C1 project-input ResNet-50 visual-encoder proxy run：
+
+```text
+.exp/baseline/results/30/baseline_results.csv
 ```
 
 最新 single-modality runs：
@@ -200,12 +206,18 @@ Strict intersection 使用的 embedding coverage：
 | `C1-Armenta-ProxyBranchMLP` | meanScore | 8.2724 | 0.0398 | 0.4763 | ok |
 | `C1-Armenta-ProjectInputProxy` | popularity | 11951.3799 | 0.3819 | 0.8366 | ok |
 | `C1-Armenta-ProjectInputProxy` | meanScore | 8.7567 | -0.0678 | 0.4591 | ok |
+| `C1-Armenta-ProjectInputProxy-ResNet50` | popularity | 11482.0224 | 0.3817 | 0.8152 | ok |
+| `C1-Armenta-ProjectInputProxy-ResNet50` | meanScore | 8.7347 | -0.0633 | 0.4586 | ok |
 | `T2-XGB-TextEmb` | popularity | 14908.8897 | -0.0152 | 0.6488 | ok |
 | `T2-XGB-TextEmb` | meanScore | 10.3206 | -0.3846 | 0.2427 | ok |
 | `I1-XGB-ImageEmb` | popularity | 13815.0865 | 0.0158 | 0.6046 | ok |
 | `I1-XGB-ImageEmb` | meanScore | 9.4042 | -0.1559 | 0.2918 | ok |
 | `C2-CTNN-Lite` | popularity | 13764.4086 | 0.1716 | 0.7410 | ok |
 | `C2-CTNN-Lite` | meanScore | 9.5102 | -0.2602 | 0.3107 | ok |
+| `C2-ProjectInputCrossAttention` | popularity | 12755.1921 | 0.3704 | 0.8379 | ok |
+| `C2-ProjectInputCrossAttention` | meanScore | 8.0600 | 0.0597 | 0.4663 | ok |
+| `C2-ProjectInputRecurrentFusion` | popularity | 12493.3574 | 0.3545 | 0.8498 | ok |
+| `C2-ProjectInputRecurrentFusion` | meanScore | 8.0768 | 0.0670 | 0.4723 | ok |
 | `C3-RAG-None-XGB` | popularity | 9664.2004 | 0.5064 | 0.8583 | ok |
 | `C3-RAG-None-XGB` | meanScore | 8.3647 | 0.0132 | 0.5307 | ok |
 | `C3-RAG-Sparse-XGB` | popularity | 9736.1037 | 0.5725 | 0.8722 | ok |
@@ -364,6 +376,54 @@ n_features = 1559
 `C1-Armenta-ProjectInputProxy` 在 popularity 上明顯優於舊的 `C1-Armenta-ProxyBranchMLP`，test_R2 從 0.2600 提升到 0.3819，但仍低於 `F2-XGB-Concat` 與目前最強的 C3 selective retrieval。meanScore 則退步到 -0.0678，表示 Armenta-shaped Big MLP 對 project inputs 不是全面改善。
 ```
 
+### C1 project-input ResNet-50 visual-encoder proxy run
+
+2026-05-14，新增並執行 `C1-Armenta-ProjectInputProxy-ResNet50`：
+
+```text
+$env:TORCH_HOME='.cache/torch'
+python -m src.reference_baseline_branch.build_resnet50_image_embeddings --splits train val test --batch-size 128 --device cuda
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C1-Armenta-ProjectInputProxy-ResNet50 --include-disabled
+```
+
+ResNet-50 feature artifacts：
+
+```text
+.exp/baseline/image_features/resnet50/resnet50_image_embeddings_train.parquet  # shape=(9583, 4099)
+.exp/baseline/image_features/resnet50/resnet50_image_embeddings_val.parquet    # shape=(2918, 4099)
+.exp/baseline/image_features/resnet50/resnet50_image_embeddings_test.parquet   # shape=(3087, 4099)
+```
+
+實作：
+
+```text
+project cover image -> ImageNet ResNet-50 avg-pool 2048-dim
+project banner image -> ImageNet ResNet-50 avg-pool 2048-dim
+cover/banner availability masks -> 2 dims
+project synopsis/text embedding -> synopsis branch -> 768-dim synopsis vector
+project metadata + ResNet-50 cover/banner features -> project-context MLP -> 768-dim context vector
+synopsis vector + context vector -> Big MLP -> regression head
+```
+
+結果：
+
+| target | n_train | n_val | n_test | n_features | test_MAE | test_R2 | test_Spearman_rho |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `popularity` | 9205 | 2637 | 2808 | 4633 | 11482.0224 | 0.3817 | 0.8152 |
+| `meanScore` | 9205 | 2637 | 2808 | 4633 | 8.7347 | -0.0633 | 0.4586 |
+
+論文對齊註記：
+
+```text
+這是目前 C1 中 visual encoder 最接近 Armenta-Segura & Sidorov 2025 的 project-input proxy，因為它用 ImageNet ResNet-50 抽 cover/banner raw images，而不是直接沿用專案既有 image embeddings。不過它仍不是 Figure 2 reproduction：輸入仍是本專案 cover/banner，不是 main-character portraits；文字也仍是 project text embeddings，不是 GPT-2 synopsis/character-description branches。
+```
+
+目前解讀：
+
+```text
+ResNet-50 版讓 C1 的 image encoder 更接近原論文，但 popularity test_R2 幾乎等同 `C1-Armenta-ProjectInputProxy`（0.3817 vs 0.3819），Spearman 反而較低（0.8152 vs 0.8366）。meanScore 有極小改善（-0.0633 vs -0.0678），但仍不是強 row。因此它有論文對齊價值，性能上不能取代 F2 或 C3。
+```
+
 ### Single-modality runs
 
 2026-05-12，新增並執行 text-only 與 image-only embedding baselines：
@@ -386,7 +446,7 @@ python -m src.reference_baseline_branch.run_reference_baselines --baseline I1-XG
 Text-only 與 image-only embeddings 都含有 ranking signal，特別是 popularity；但單獨使用時都不足以產生強 R2。`F2` 的增益看起來主要來自 metadata 與 embeddings 的組合，而不是任一 embedding modality 單獨造成。
 ```
 
-### C2 cross-modal transformer run
+### C2 cross-modal transformer runs
 
 2026-05-12，新增並執行 `C2-CTNN-Lite`：
 
@@ -427,7 +487,86 @@ n_features = 1408
 C2 目前主線判斷：
 
 ```text
-`C2-CTNN-Lite` 可保留為 project-input CTNN-style first pass，但不能作為完整 C2 對齊終點。照兩條主線判準，C2 應先保留 project synopsis/text embedding、cover/banner image embedding 與 metadata，再加入 explicit text-image cross-attention 與 metadata-conditioned fusion。合理下一步是 `C2-ProjectInputCrossAttention`，不是把輸入換成 movie reviews。
+`C2-CTNN-Lite` 可保留為 project-input CTNN-style first pass，但不能作為完整 C2 對齊終點。照兩條主線判準，C2 應先保留 project synopsis/text embedding、cover/banner image embedding 與 metadata，再加入 explicit text-image cross-attention 與 metadata-conditioned fusion。
+```
+
+2026-05-14，新增並執行 `C2-ProjectInputCrossAttention`：
+
+```text
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C2-ProjectInputCrossAttention --include-disabled
+```
+
+實作：
+
+```text
+metadata -> metadata token
+text embedding -> text token
+image embedding -> image token
+text token <-> image token explicit bidirectional cross-attention
+metadata token -> modality gates over text/image/metadata tokens
+gated fusion vector -> regression head
+```
+
+結果：
+
+```text
+status = ok
+n_train = 9205
+n_val = 2637
+n_test = 2808
+n_features = 1559
+```
+
+論文對齊註記：
+
+```text
+這是 project-input CTNN-style cross-attention proxy，不是 CTNN reproduction。它保留本專案 metadata/text/image inputs，並比 CTNN-Lite 更接近原文 cross-modal attention 與 metadata factors 的動機；但仍使用 anime embeddings/regression target，不是 movie poster/review + box-office class setup。
+```
+
+目前解讀：
+
+```text
+`C2-ProjectInputCrossAttention` 明顯優於 `C2-CTNN-Lite`：popularity test_R2 從 0.1716 提升到 0.3704，meanScore test_R2 從 -0.2602 提升到 0.0597。不過它仍低於 `F2-XGB-Concat` 的 popularity 0.5194，也低於目前最強的 C3 selective retrieval 0.5775。
+```
+
+2026-05-14，補上並執行 `C2-ProjectInputRecurrentFusion`：
+
+```text
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C2-ProjectInputRecurrentFusion --include-disabled
+```
+
+實作：
+
+```text
+metadata -> metadata token
+text embedding -> text token
+image embedding -> image token
+text token <-> image token explicit bidirectional cross-attention
+[text, image, metadata] token sequence -> GRU recurrent fusion
+metadata-conditioned gate over recurrent context
+recurrent summary + gated context -> regression head
+```
+
+結果：
+
+```text
+status = ok
+n_train = 9205
+n_val = 2637
+n_test = 2808
+n_features = 1559
+```
+
+論文對齊註記：
+
+```text
+這是 project-input CTNN-style recurrent-fusion proxy，不是 CTNN reproduction。它補上原文 recurrent fusion 的模型動機，但仍保留本專案 metadata/text/image inputs、anime embeddings 與 regression targets。
+```
+
+目前解讀：
+
+```text
+`C2-ProjectInputRecurrentFusion` 補齊 recurrent-fusion proxy 後，meanScore test_R2 從 CrossAttention 的 0.0597 小幅提升到 0.0670，popularity Spearman 從 0.8379 提升到 0.8498；但 popularity test_R2 從 0.3704 降到 0.3545。因此 recurrent fusion 有對齊價值，但不是整體性能明顯勝出的 C2 版本。
 ```
 
 ### C3 first-pass retrieval runs
@@ -518,8 +657,7 @@ python -m src.ablation_branch.run_ablation_baselines
 
 如果目標從「cover the reference route」改成「在本專案輸入下更貼近原論文模型」，優先順序應改為：
 
-1. `C1-Armenta-ProjectInputProxy` 作為 C1 主線：它對齊本專案 metadata / synopsis-text / cover-banner image artifacts，也保留 Armenta-style synopsis branch + context MLP + Big MLP 思路。
-2. 圖片下載程序已在背景執行；下載完成後可決定是否用 project cover/banner 圖片重新抽 ResNet-50 image artifacts，形成更接近原論文 encoder 的 `C1-Armenta-ProjectInputProxy-ResNet`。
-3. `C2-ProjectInputCrossAttention`：若要繼續 C2，保留 project inputs，加入 explicit cross-attention 與 metadata-conditioned fusion。
-4. `C3-ProjectInputSKAPPProxy`：若要繼續 C3，保留 project historical-anime retrieval，將目前 `selective` contribution proxy 升級成 learned contribution scoring，再加入 retrieved-set graph/attention fusion。
-5. `C1-Armenta-Figure2Proxy` 不列主線：它需要 main-character descriptions 與 portrait URLs，輸入契約已不等同本專案 cover/banner 主框架；只有在明確要做 character-centric side analysis 時才考慮。
+1. `C1-Armenta-ProjectInputProxy-ResNet50` 作為 C1 對齊版主線：它對齊本專案 metadata / synopsis-text / cover-banner image artifacts，也保留 Armenta-style synopsis branch + context MLP + Big MLP 思路，並把 visual encoder 換成 ImageNet ResNet-50。
+2. `C2-ProjectInputCrossAttention` / `C2-ProjectInputRecurrentFusion` 作為 C2 主線 proxies：前者 R2 較佳，後者補齊 recurrent-fusion 動機且 meanScore/排名略好；後續只在需要提升 neural fusion 性能時再 tune。
+3. `C3-ProjectInputSKAPPProxy`：若要繼續 C3，保留 project historical-anime retrieval，將目前 `selective` contribution proxy 升級成 learned contribution scoring，再加入 retrieved-set graph/attention fusion。
+4. `C1-Armenta-Figure2Proxy` 不列主線：它需要 main-character descriptions 與 portrait URLs，輸入契約已不等同本專案 cover/banner 主框架；只有在明確要做 character-centric side analysis 時才考慮。

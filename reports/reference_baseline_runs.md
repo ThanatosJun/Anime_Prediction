@@ -1,6 +1,6 @@
 # Reference Baseline Runs
 
-Updated: 2026-05-13
+Updated: 2026-05-14
 
 本文件是 reference baseline 的閱讀入口與 run ledger。Raw `.exp/`
 outputs 是本機實驗產物，不提交；可報告的數字統一整理到
@@ -38,6 +38,8 @@ reports/reference_baseline_results.csv
 | `.exp/baseline/results/16` | `T2-XGB-TextEmb` | local raw output | Source for completed text-embedding-only XGBoost results. |
 | `.exp/baseline/results/17` | `I1-XGB-ImageEmb` | local raw output | Source for completed image-embedding-only XGBoost results. |
 | `.exp/baseline/results/18` | `C2-CTNN-Lite` | local raw output | Source for completed lightweight cross-modal transformer fusion results. |
+| `.exp/baseline/results/27` | `C2-ProjectInputCrossAttention` | local raw output | Source for completed project-input cross-attention fusion results. |
+| `.exp/baseline/results/28` | `C2-ProjectInputRecurrentFusion` | local raw output | Source for completed project-input recurrent fusion results. |
 | `.exp/baseline/results/19` | `C1-Armenta-ProxyBranchMLP` | local raw output | Source for branch-wise anime-domain multimodal MLP proxy adaptation results. |
 | `.exp/baseline/results/21` | `C3-RAG-None-XGB` | local raw output | Source for no-retrieval control under the SKAPP-inspired C3 route. |
 | `.exp/baseline/results/22` | `C3-RAG-Sparse-XGB` | local raw output | Source for sparse metadata retrieval under the SKAPP-inspired C3 route. |
@@ -45,6 +47,7 @@ reports/reference_baseline_results.csv
 | `.exp/baseline/results/24` | `C3-RAG-Hybrid-XGB` | local raw output | Source for hybrid sparse+dense retrieval under the SKAPP-inspired C3 route. |
 | `.exp/baseline/results/25` | `C3-RAG-Selective-XGB` | local raw output | Source for selective sparse retrieval under the SKAPP-inspired C3 route. |
 | `.exp/baseline/results/26` | `C1-Armenta-ProjectInputProxy` | local raw output | Source for project-input Armenta-shaped C1 proxy results. |
+| `.exp/baseline/results/30` | `C1-Armenta-ProjectInputProxy-ResNet50` | local raw output | Source for project-input Armenta-shaped C1 proxy with ImageNet ResNet-50 cover/banner features. |
 
 ## Completed Routes
 
@@ -55,8 +58,8 @@ reports/reference_baseline_results.csv
 | `1.2 Feature-concat Classical ML` | `F2-XGB-Concat` | done as adaptation |
 | `1.3 Text-only Baseline` | `T2-XGB-TextEmb` | done as adaptation |
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | done as adaptation |
-| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP`, `C1-Armenta-ProjectInputProxy` | first-pass, branch-wise proxy, and project-input Armenta-shaped proxy done as adaptations |
-| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | done as adaptation |
+| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP`, `C1-Armenta-ProjectInputProxy`, `C1-Armenta-ProjectInputProxy-ResNet50` | first-pass, branch-wise proxy, project-input Armenta-shaped proxy, and ResNet-50 visual-encoder proxy done as adaptations |
+| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite`, `C2-ProjectInputCrossAttention`, `C2-ProjectInputRecurrentFusion` | first-pass, project-input cross-attention, and recurrent-fusion proxies done as adaptations |
 | `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB`, `C3-RAG-Selective-XGB` | first-pass SKAPP-inspired retrieval baselines done, including simple contribution filtering |
 
 ## C1 vs F2 Snapshot
@@ -72,16 +75,17 @@ branch, ResNet-50 character-portrait branch, or exact PyTorch MLP design.
 
 ## C1 Branch Proxy Snapshot
 
-| Target | `F2-XGB-Concat` test R2 | `C1-Armenta-ProxyBranchMLP` test R2 | `C1-Armenta-ProjectInputProxy` test R2 | Current interpretation |
-|---|---:|---:|---:|---|
-| `popularity` | 0.5194 | 0.2600 | 0.3819 | Project-input Armenta-shaped fusion improves over the earlier branch proxy but still trails XGBoost concat. |
-| `meanScore` | 0.0193 | 0.0398 | -0.0678 | The Armenta-shaped Big MLP does not improve score regression in this first project-input run. |
+| Target | `F2-XGB-Concat` test R2 | `C1-Armenta-ProxyBranchMLP` test R2 | `C1-Armenta-ProjectInputProxy` test R2 | `C1-Armenta-ProjectInputProxy-ResNet50` test R2 | Current interpretation |
+|---|---:|---:|---:|---:|---|
+| `popularity` | 0.5194 | 0.2600 | 0.3819 | 0.3817 | ResNet-50 cover/banner features make the visual encoder closer to Armenta, but do not materially improve popularity R2 over the existing project-input proxy. |
+| `meanScore` | 0.0193 | 0.0398 | -0.0678 | -0.0633 | ResNet-50 slightly improves score R2/MAE versus ProjectInputProxy, but remains below the earlier branch proxy and F2 concat on score. |
 
-Paper alignment caveat: `C1-Armenta-ProjectInputProxy` is closer to the paper's
-synopsis-branch plus context/character-MLP plus Big-MLP fusion shape, but it
-remains a project-input proxy because current artifacts use project text/image
-embeddings and metadata rather than GPT-2, ResNet-50, main-character
-descriptions, and main-character portraits.
+Paper alignment caveat: `C1-Armenta-ProjectInputProxy-ResNet50` improves the
+visual encoder alignment by using ImageNet ResNet-50 avg-pool features from
+project cover/banner images. It still remains a project-input proxy because it
+uses project synopsis embeddings and metadata rather than GPT-2 synopsis /
+character-description branches, main-character portraits, and the original
+split/target formulation.
 
 ## Single-Modality Snapshot
 
@@ -92,17 +96,17 @@ descriptions, and main-character portraits.
 
 ## C2 Snapshot
 
-| Target | `C2-CTNN-Lite` test R2 | `C2-CTNN-Lite` test Spearman | Current interpretation |
-|---|---:|---:|---|
-| `popularity` | 0.1716 | 0.7410 | Lightweight text-image transformer fusion improves over single-modality embedding baselines but still trails metadata+embedding XGBoost. |
-| `meanScore` | -0.2602 | 0.3107 | The text-image transformer route remains weak for score regression in this first adaptation. |
+| Target | `C2-CTNN-Lite` test R2 | `C2-ProjectInputCrossAttention` test R2 | `C2-ProjectInputRecurrentFusion` test R2 | Recurrent test Spearman | Current interpretation |
+|---|---:|---:|---:|---:|---|
+| `popularity` | 0.1716 | 0.3704 | 0.3545 | 0.8498 | Recurrent fusion improves rank correlation but does not beat CrossAttention by R2; both stronger proxies still trail `F2-XGB-Concat` and C3 selective retrieval. |
+| `meanScore` | -0.2602 | 0.0597 | 0.0670 | 0.4723 | Recurrent fusion slightly improves score R2/Spearman over CrossAttention and turns C2 into a positive score-regression baseline. |
 
-Paper alignment caveat: `C2-CTNN-Lite` is not a CTNN reproduction. It is a
-project-input first pass that keeps this project's synopsis/text and
-cover/banner image inputs. The next useful C2 step is
-`C2-ProjectInputCrossAttention`: keep the project inputs first, then move the
-model closer to CTNN via explicit cross-attention and metadata-conditioned
-fusion.
+Paper alignment caveat: neither C2 row is a CTNN reproduction.
+`C2-ProjectInputCrossAttention` and `C2-ProjectInputRecurrentFusion` are the
+stronger project-input proxies because they keep this project's metadata,
+synopsis/text, and cover/banner inputs while adding explicit bidirectional
+text-image cross-attention, metadata-conditioned fusion, and in the recurrent
+row a GRU token-fusion step.
 
 ## C3 Retrieval Snapshot
 
