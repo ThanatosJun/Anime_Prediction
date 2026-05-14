@@ -13,10 +13,19 @@
 - **重跑資料流程 / 改規則**
   - `pipeline/data_pipeline_handoff.md`
   - `../scripts/README.md`
+- **Reference baseline / 文獻對照實驗**
+  - `../reports/reference_baseline_runs.md`：第一入口，列出已跑 route、run 來源與目前結論。
+  - `../reports/reference_baseline_results.csv`：可攜帶的數字結果表，取代本機 `.exp/` raw outputs。
+  - `../reports/reference_baseline_paper_alignment_audit.md`：判斷 C1/C2/C3 是否能主張對齊論文，避免把 proxy 寫成 reproduction。
+  - `../reports/reference_baseline_status.md`：詳細工作紀錄與歷史脈絡，只有需要追溯決策時再看。
 - **論文方法章與處理細節**
   - `pipeline/data_processing_for_paper.md`
+- **Baseline 目錄與 ablation 分工**
+  - `baseline_directory_planning.md`：說明 `src/reference_baseline_branch/`、`src/ablation_branch/`、`src/experiment_common/` 的存在理由。
+  - `baseline_reference_implementation_plan.md`：reference baseline 初始路線圖；目前進度以 `../reports/reference_baseline_runs.md` 為準。
+  - `rq2_rag_ablation_plan.md`：RAG 有無與檢索策略 ablation 的設計，不作為 reference baseline 總覽。
 - **簡報與專案進度**
-  - `reports/missing_value_status_latest.md`
+  - `../reports/missing_value_status_latest.md`
 - **外部資料轉換**
   - `pipeline/external_dataset_transform_flow.md`
   - `pipeline/external_schema_mapping_example.json`

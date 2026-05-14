@@ -6,12 +6,14 @@
 
 ## 摘要
 
-目前完成的是：
+目前已完成 foundation/classical、single-modality、feature-concat、`C1-Armenta-MLP` first-pass adaptation、`C1-Armenta-ProxyBranchMLP` branch-wise proxy adaptation、`C1-Armenta-ProjectInputProxy` project-input Armenta-shaped proxy、lightweight `C2-CTNN-Lite` cross-modal transformer adaptation，以及 C3 的 first-pass `none/sparse/dense/hybrid/selective` retrieval baselines。
 
-1. `0. Lowest Reference / 最低地板`
-2. `1.1 Metadata-only Classical ML`
+目前主線判準只有兩條：
 
-換句話說：目前已完成 foundation/classical、single-modality、feature-concat、`C1-Armenta-MLP` first-pass adaptation、`C1-Armenta-ProxyBranchMLP` branch-wise proxy adaptation、lightweight `C2-CTNN-Lite` cross-modal transformer adaptation，以及 C3 的 first-pass `none/sparse/dense/hybrid/selective` retrieval baselines。`C1-Armenta-ProxyBranchMLP` 比 flat C1 更接近 Armenta 的 branch-fusion 思路，但仍不是框架重現；C3 目前也只能稱 SKAPP-inspired。
+1. Baseline 輸入必須對齊本專案主框架，也就是 metadata、synopsis/text embedding、cover/banner image，以及必要時的 project retrieval context。
+2. 在輸入固定為本專案主框架的前提下，模型方法才往原論文設計盡量還原。
+
+`C1-Armenta-ProjectInputProxy` 目前比舊 branch proxy 更適合作為 C1 主線，但仍不是 Figure 2 或 GPT-2/ResNet-50 復現；C3 目前也只能稱 SKAPP-inspired/project-input retrieval proxy。
 
 論文復現限制已統一記錄於：
 
@@ -19,7 +21,7 @@
 reports/reference_baseline_paper_alignment_audit.md
 ```
 
-該 audit 覆蓋 C1、C2、C3 的復現限制。簡單說：C1 目前缺 character-description / portrait artifacts；C2 是 lightweight cross-modal transformer transfer，不是完整 CTNN；C3/RAG 在沒有 RRCP-style selection 與 graph/attention fusion 前，只能稱為 SKAPP-inspired。
+該 audit 覆蓋 C1、C2、C3 的復現限制。簡單說：C1 主線先採 project-aligned ProjectInputProxy，不把 character-only Figure 2 route 當主線；C2 主線保留本專案 synopsis/cover-banner/metadata inputs，再補 cross-attention；C3 主線保留 project historical-anime retrieval，再補 learned contribution scoring 與 graph/attention fusion。任何換掉本專案主輸入契約的版本都不能列為主線 baseline。
 
 ## 規劃對照
 
@@ -30,9 +32,9 @@ reports/reference_baseline_paper_alignment_audit.md
 | `1.2 Feature-concat Classical ML` | `F2-XGB-Concat` | 已完成，屬 adaptation | 已補 `docs/reference_baselines/f2_feature_concat_plan.md`；metadata + text embedding + image embedding concat 架構已用真實 embeddings 與 XGBoost 跑通 `popularity`、`meanScore` |
 | `1.3 Text-only Baseline` | `T2-XGB-TextEmb` | 已完成，屬 adaptation | 使用 text embeddings + XGBoost；對應 implementation plan 的 `T2-Emb` 類型，不是 TF-IDF exact reproduction |
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | 已完成，屬 adaptation | 使用 image embeddings + XGBoost；對應 implementation plan 的 `I1-Emb` 類型，不是 poster CNN exact reproduction |
-| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP` | branch-wise proxy 已完成，屬 adaptation | flat C1 與 branch-wise proxy 均已跑通；proxy branch model 更接近 Armenta 的 branch-fusion pattern，但缺 main-character description / portrait artifacts，仍不能稱 reproduction |
-| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | 已完成，屬 adaptation | 使用 text/image embedding token + lightweight TransformerEncoder；對應 Madongo et al. 2023 的 cross-modal transformer route，但不是 exact CTNN reproduction |
-| `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB`, `C3-RAG-Selective-XGB` | first-pass 已完成，屬 inspired | 使用 offline train-set knowledge base + temporal filtering；目前完成 none/sparse/dense/hybrid/selective，仍不是 SKAPP reproduction |
+| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP`, `C1-Armenta-ProjectInputProxy` | project-input proxy 已完成，屬 adaptation | flat C1、branch-wise proxy、project-input Armenta-shaped proxy 均已跑通；ProjectInputProxy 對齊本專案 metadata/text/image artifacts，並借用 Armenta 的 synopsis branch + context MLP + Big MLP pattern；`C1-Armenta-Figure2Proxy` 因輸入不對齊本專案 cover/banner 主框架，不列主線 |
+| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | first-pass 已完成，屬 adaptation | 使用 text/image embedding token + lightweight TransformerEncoder；它是 project-input CTNN-style first pass，不是 exact CTNN reproduction；若要繼續 C2，下一步是 `C2-ProjectInputCrossAttention`：保留 project inputs，再補 explicit cross-attention 與 metadata-conditioned fusion |
+| `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB`, `C3-RAG-Selective-XGB` | project-aligned RAG 主線已完成，屬 inspired | 使用 offline train-set knowledge base + temporal filtering；`C3-RAG-Selective-XGB` 是目前 RAG route strongest row，但仍不是 SKAPP reproduction；若要繼續 C3，下一步是 learned contribution scoring + retrieved-set graph/attention fusion |
 
 ## 已實作程式
 
@@ -100,6 +102,12 @@ reports/reference_baseline_paper_alignment_audit.md
 
 ```text
 .exp/baseline/results/19/baseline_results.csv
+```
+
+最新 C1 project-input proxy run：
+
+```text
+.exp/baseline/results/26/baseline_results.csv
 ```
 
 最新 single-modality runs：
@@ -190,6 +198,8 @@ Strict intersection 使用的 embedding coverage：
 | `C1-Armenta-MLP` | meanScore | 9.0610 | -0.1173 | 0.4494 | ok |
 | `C1-Armenta-ProxyBranchMLP` | popularity | 13663.7819 | 0.2600 | 0.8490 | ok |
 | `C1-Armenta-ProxyBranchMLP` | meanScore | 8.2724 | 0.0398 | 0.4763 | ok |
+| `C1-Armenta-ProjectInputProxy` | popularity | 11951.3799 | 0.3819 | 0.8366 | ok |
+| `C1-Armenta-ProjectInputProxy` | meanScore | 8.7567 | -0.0678 | 0.4591 | ok |
 | `T2-XGB-TextEmb` | popularity | 14908.8897 | -0.0152 | 0.6488 | ok |
 | `T2-XGB-TextEmb` | meanScore | 10.3206 | -0.3846 | 0.2427 | ok |
 | `I1-XGB-ImageEmb` | popularity | 13815.0865 | 0.0158 | 0.6046 | ok |
@@ -316,6 +326,44 @@ n_features = 1559
 `C1-Armenta-ProxyBranchMLP` 明顯優於 flat C1 MLP。它在 popularity R2 仍落後 `F2-XGB-Concat`，但 meanScore R2 略有改善，同時犧牲部分 rank correlation。
 ```
 
+### C1 project-input Armenta-shaped proxy run
+
+2026-05-13，新增並執行 `C1-Armenta-ProjectInputProxy`：
+
+```text
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C1-Armenta-ProjectInputProxy --include-disabled
+```
+
+實作：
+
+```text
+project synopsis/text embedding -> synopsis branch -> 768-dim synopsis vector
+project metadata + cover/banner image embedding -> project-context MLP -> 768-dim context vector
+synopsis vector + context vector -> Big MLP -> regression head
+```
+
+結果：
+
+```text
+status = ok
+n_train = 9205
+n_val = 2637
+n_test = 2808
+n_features = 1559
+```
+
+論文對齊註記：
+
+```text
+這是 project-input Armenta-shaped proxy，不是 Figure 2 reproduction。它仍使用 project embeddings，尚未重新抽 GPT-2 / ResNet-50 encoder outputs，也沒有 character-description / portrait branches；但它比 C1-Armenta-ProxyBranchMLP 更接近原論文的 synopsis branch + context/character MLP + Big MLP 融合形狀。
+```
+
+目前解讀：
+
+```text
+`C1-Armenta-ProjectInputProxy` 在 popularity 上明顯優於舊的 `C1-Armenta-ProxyBranchMLP`，test_R2 從 0.2600 提升到 0.3819，但仍低於 `F2-XGB-Concat` 與目前最強的 C3 selective retrieval。meanScore 則退步到 -0.0678，表示 Armenta-shaped Big MLP 對 project inputs 不是全面改善。
+```
+
 ### Single-modality runs
 
 2026-05-12，新增並執行 text-only 與 image-only embedding baselines：
@@ -376,6 +424,12 @@ n_features = 1408
 `C2-CTNN-Lite` 在 popularity 上優於 text-only/image-only embeddings，但仍落後 `F2-XGB-Concat`。對 meanScore 來說，第一版 cross-modal transformer adaptation 仍偏弱。
 ```
 
+C2 目前主線判斷：
+
+```text
+`C2-CTNN-Lite` 可保留為 project-input CTNN-style first pass，但不能作為完整 C2 對齊終點。照兩條主線判準，C2 應先保留 project synopsis/text embedding、cover/banner image embedding 與 metadata，再加入 explicit text-image cross-attention 與 metadata-conditioned fusion。合理下一步是 `C2-ProjectInputCrossAttention`，不是把輸入換成 movie reviews。
+```
+
 ### C3 first-pass retrieval runs
 
 2026-05-12 至 2026-05-13，新增 offline C3 RAG feature builder，並執行五組 first-pass retrieval baselines：
@@ -428,6 +482,12 @@ top-k retrieved items -> aggregate RAG features -> XGBoost with metadata/text/im
 Selective sparse retrieval 是目前 C3 first-pass 最強版本，popularity test_R2 從 no-RAG 的 0.5064 提升到 0.5775，也高於 F2-XGB-Concat 的 0.5194。Plain sparse retrieval 已有穩定增益，selective filtering 又小幅改善；dense semantic retrieval 對 popularity 幾乎接近 no-RAG，但對 meanScore 有小幅改善。Hybrid RRF 沒有超過 sparse/selective；在 popularity R2 上甚至低於 no-RAG，因此目前不支援「多訊號 retrieval 必然更好」的 claim。
 ```
 
+C3 目前主線判斷：
+
+```text
+`C3-RAG-Selective-XGB` 可作為目前 RAG route 的 strongest project-aligned reference row。照兩條主線判準，C3 應先保留 project query anime + historical anime retrieval，再加入 learned contribution scoring/filtering 與 retrieved-set graph/attention fusion。合理下一步是 `C3-ProjectInputSKAPPProxy`，不是把任務換成 social-media UGC popularity。
+```
+
 ## 復現指令
 
 執行所有 enabled reference baselines：
@@ -456,8 +516,10 @@ python -m src.ablation_branch.run_ablation_baselines
 2. 只有在目標變成提升性能，而不是補完整 reference map 時，才優先 tune 或替換 C1/C2 neural fusion heads。
 3. 決定目前報告是否讓 `C3-RAG-Selective-XGB` 作為 RAG route 的 strongest reference row，並把 `F2-XGB-Concat` 作為 no-RAG multimodal classical floor。
 
-如果目標從「cover the reference route」改成「closer reproduction」，優先順序應改為：
+如果目標從「cover the reference route」改成「在本專案輸入下更貼近原論文模型」，優先順序應改為：
 
-1. `C1-Armenta-Figure2Proxy`：抽取 raw AniList main-character descriptions 與 portrait URLs，產生 separate character text/image embeddings，然後實作接近 Figure 2 的 character MLP + Big MLP。
-2. `C3-SKAPP-Proxy`：若要更接近 SKAPP，需要把目前 `selective` contribution proxy 升級成 RRCP-like learned contribution scoring，再加入 graph/attention fusion。
-3. `C2-CTNN-Proxy`：只有在需要更強 transformer proxy 時，才加入 explicit cross-attention 與 metadata/recurrent-style fusion；exact CTNN reproduction 不太適合目前 anime dataset，因為原論文的 review/poster/movie box-office task 差異太大。
+1. `C1-Armenta-ProjectInputProxy` 作為 C1 主線：它對齊本專案 metadata / synopsis-text / cover-banner image artifacts，也保留 Armenta-style synopsis branch + context MLP + Big MLP 思路。
+2. 圖片下載程序已在背景執行；下載完成後可決定是否用 project cover/banner 圖片重新抽 ResNet-50 image artifacts，形成更接近原論文 encoder 的 `C1-Armenta-ProjectInputProxy-ResNet`。
+3. `C2-ProjectInputCrossAttention`：若要繼續 C2，保留 project inputs，加入 explicit cross-attention 與 metadata-conditioned fusion。
+4. `C3-ProjectInputSKAPPProxy`：若要繼續 C3，保留 project historical-anime retrieval，將目前 `selective` contribution proxy 升級成 learned contribution scoring，再加入 retrieved-set graph/attention fusion。
+5. `C1-Armenta-Figure2Proxy` 不列主線：它需要 main-character descriptions 與 portrait URLs，輸入契約已不等同本專案 cover/banner 主框架；只有在明確要做 character-centric side analysis 時才考慮。

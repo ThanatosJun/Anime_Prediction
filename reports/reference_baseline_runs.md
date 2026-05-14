@@ -2,11 +2,25 @@
 
 Updated: 2026-05-13
 
-This file records the tracked summary of reference baseline runs. Raw `.exp/`
-outputs are local experiment artifacts and are intentionally not committed.
-Use `reports/reference_baseline_results.csv` as the portable result table.
-Use `reports/reference_baseline_paper_alignment_audit.md` for the claim
-boundary between implemented adaptations and paper framework reproductions.
+本文件是 reference baseline 的閱讀入口與 run ledger。Raw `.exp/`
+outputs 是本機實驗產物，不提交；可報告的數字統一整理到
+`reports/reference_baseline_results.csv`。
+
+## 文件用途與閱讀順序
+
+| 文件 | 必須存在的理由 | 何時閱讀 |
+|---|---|---|
+| `reports/reference_baseline_runs.md` | Reference baseline 入口；整理已跑哪些 route、每個 run 的來源、目前結論。 | 組員第一次接手或要快速同步時先看。 |
+| `reports/reference_baseline_results.csv` | 可攜帶的數字結果表；取代 ignored `.exp/` raw outputs。 | 要畫表、比較 R2/MAE/Spearman、寫實驗結果時看。 |
+| `reports/reference_baseline_paper_alignment_audit.md` | 定義 C1/C2/C3 是否對齊論文、哪些話可以寫、哪些不能寫。 | 要寫論文/報告 claim，或決定下一條 reference route 時看。 |
+| `reports/reference_baseline_status.md` | 詳細工作紀錄；保留實作脈絡、指令、歷史解讀。 | 需要追溯「為什麼這樣做」或 debug 舊決策時看，不作為第一入口。 |
+| `docs/baseline_reference_implementation_plan.md` | 初始 reference baseline roadmap；說明 route 0、1、2 的設計來源。 | 要理解原始規劃時看；目前狀態以本文件與 status 為準。 |
+| `docs/baseline_directory_planning.md` | 說明 `reference_baseline_branch`、`ablation_branch`、`experiment_common` 的目錄分工。 | 新增 baseline 程式或調整目錄時看。 |
+| `docs/reference_baselines/f2_feature_concat_plan.md` | F2 feature-concat route 的實作規劃與輸入契約。 | 只在維護 F2 或解釋 no-RAG multimodal floor 時看。 |
+| `docs/rq2_rag_ablation_plan.md` | RQ2/RAG ablation 的問題定義與實驗設計。 | 只在處理 EXP2/RAG ablation，不是 reference overview 時看。 |
+| `reports/reference_baseline_weekly_sync_2026-05-12.md` | dated snapshot；保留當日同步紀錄。 | 僅供歷史追溯；不要當作最新狀態。 |
+
+目前主線判準只有兩條：第一，baseline 輸入要對齊本專案主框架；第二，在該輸入限制下，模型方法要盡量還原原論文設計。
 
 ## Tracked Result Table
 
@@ -30,6 +44,7 @@ reports/reference_baseline_results.csv
 | `.exp/baseline/results/23` | `C3-RAG-Dense-XGB` | local raw output | Source for dense semantic retrieval under the SKAPP-inspired C3 route. |
 | `.exp/baseline/results/24` | `C3-RAG-Hybrid-XGB` | local raw output | Source for hybrid sparse+dense retrieval under the SKAPP-inspired C3 route. |
 | `.exp/baseline/results/25` | `C3-RAG-Selective-XGB` | local raw output | Source for selective sparse retrieval under the SKAPP-inspired C3 route. |
+| `.exp/baseline/results/26` | `C1-Armenta-ProjectInputProxy` | local raw output | Source for project-input Armenta-shaped C1 proxy results. |
 
 ## Completed Routes
 
@@ -40,7 +55,7 @@ reports/reference_baseline_results.csv
 | `1.2 Feature-concat Classical ML` | `F2-XGB-Concat` | done as adaptation |
 | `1.3 Text-only Baseline` | `T2-XGB-TextEmb` | done as adaptation |
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | done as adaptation |
-| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP` | first-pass and branch-wise proxy done as adaptations |
+| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP`, `C1-Armenta-ProjectInputProxy` | first-pass, branch-wise proxy, and project-input Armenta-shaped proxy done as adaptations |
 | `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite` | done as adaptation |
 | `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB`, `C3-RAG-Selective-XGB` | first-pass SKAPP-inspired retrieval baselines done, including simple contribution filtering |
 
@@ -57,14 +72,16 @@ branch, ResNet-50 character-portrait branch, or exact PyTorch MLP design.
 
 ## C1 Branch Proxy Snapshot
 
-| Target | `F2-XGB-Concat` test R2 | `C1-Armenta-ProxyBranchMLP` test R2 | Current interpretation |
-|---|---:|---:|---|
-| `popularity` | 0.5194 | 0.2600 | Branch-wise neural fusion is much stronger than the flat C1 MLP but still trails XGBoost concat. |
-| `meanScore` | 0.0193 | 0.0398 | Branch-wise neural fusion slightly improves R2 over F2, though rank correlation is lower. |
+| Target | `F2-XGB-Concat` test R2 | `C1-Armenta-ProxyBranchMLP` test R2 | `C1-Armenta-ProjectInputProxy` test R2 | Current interpretation |
+|---|---:|---:|---:|---|
+| `popularity` | 0.5194 | 0.2600 | 0.3819 | Project-input Armenta-shaped fusion improves over the earlier branch proxy but still trails XGBoost concat. |
+| `meanScore` | 0.0193 | 0.0398 | -0.0678 | The Armenta-shaped Big MLP does not improve score regression in this first project-input run. |
 
-Paper alignment caveat: `C1-Armenta-ProxyBranchMLP` is closer to the paper's
-branch-fusion pattern, but it remains a proxy because current artifacts lack
-main-character descriptions and main-character portraits.
+Paper alignment caveat: `C1-Armenta-ProjectInputProxy` is closer to the paper's
+synopsis-branch plus context/character-MLP plus Big-MLP fusion shape, but it
+remains a project-input proxy because current artifacts use project text/image
+embeddings and metadata rather than GPT-2, ResNet-50, main-character
+descriptions, and main-character portraits.
 
 ## Single-Modality Snapshot
 
@@ -80,9 +97,12 @@ main-character descriptions and main-character portraits.
 | `popularity` | 0.1716 | 0.7410 | Lightweight text-image transformer fusion improves over single-modality embedding baselines but still trails metadata+embedding XGBoost. |
 | `meanScore` | -0.2602 | 0.3107 | The text-image transformer route remains weak for score regression in this first adaptation. |
 
-Paper alignment caveat: `C2-CTNN-Lite` is not a CTNN reproduction. It omits
-the full poster/review feature extraction, recurrent fusion component,
-metadata-related movie factors, and box-office classification setup.
+Paper alignment caveat: `C2-CTNN-Lite` is not a CTNN reproduction. It is a
+project-input first pass that keeps this project's synopsis/text and
+cover/banner image inputs. The next useful C2 step is
+`C2-ProjectInputCrossAttention`: keep the project inputs first, then move the
+model closer to CTNN via explicit cross-attention and metadata-conditioned
+fusion.
 
 ## C3 Retrieval Snapshot
 
@@ -98,7 +118,10 @@ with temporal filtering so retrieved items are earlier than the query period.
 Paper alignment caveat: these are SKAPP-inspired retrieval baselines, not SKAPP
 reproduction. `C3-RAG-Selective-XGB` is only a deterministic median-threshold
 contribution proxy; it does not implement SKAPP RRCP, VL-GNN contextual
-learning, or RRCP-Attention fusion.
+learning, or RRCP-Attention fusion. The next useful C3 step is
+`C3-ProjectInputSKAPPProxy`: keep project historical-anime retrieval first,
+then move the model closer to SKAPP via learned contribution scoring and
+retrieved-set graph/attention fusion.
 
 ## Artifact Policy
 
