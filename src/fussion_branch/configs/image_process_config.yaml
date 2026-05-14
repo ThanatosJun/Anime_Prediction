@@ -68,6 +68,19 @@ training:
   val_interval: 1             # 每幾個 epoch 跑一次 validation
   checkpoint_interval: 5      # 每幾個 epoch 存一次 checkpoint
 
+# ── YOLO ──────────────────────────────────────────────────────────────────────
+# Applied only to coverImage_medium before Swin encoding.
+# When a character is detected: crop → encode → mean-pool all crops.
+# When no character is detected: fallback to full image (fallback_full_image=true).
+yolo:
+  use: false                    # true = enable YOLO preprocessing for coverImage_medium
+  level: m                      # n (fastest) / s / m / x (most accurate)
+  version: v1.1
+  conf_threshold: 0.2           # detection confidence threshold
+  iou_threshold:  0.8           # NMS IoU threshold
+  max_persons:    5             # keep top-N detections per image (by confidence)
+  fallback_full_image: true     # use full image when no detection
+
 # ── Output ────────────────────────────────────────────────────────────────────
 output:
   results_dir: results          # 根目錄，子路徑由程式碼以 run_id 組合

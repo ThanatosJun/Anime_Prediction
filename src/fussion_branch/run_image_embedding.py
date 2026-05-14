@@ -14,6 +14,7 @@ Usage:
   python -m src.fussion_branch.run_image_embedding
   python -m src.fussion_branch.run_image_embedding --checkpoint src/fussion_branch/model/best
   python -m src.fussion_branch.run_image_embedding --splits train val
+  python -m src.fussion_branch.run_image_embedding --use_yolo          # YOLO on coverImage
 """
 import argparse
 from pathlib import Path
@@ -34,13 +35,28 @@ SPLIT_IMAGE_DIR = {
 }
 
 
+def _load_yolo_cfg(config_path: str) -> dict:
+    """Read YOLO params from image_process_config.yaml."""
+    import yaml
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+    return cfg.get("yolo", {})
+
+
 def run(
     splits: tuple = ("train", "val", "test", "holdout_unknown"),
     checkpoint_dir: str = "src/fussion_branch/model/best",
     batch_size: int = 64,
+    use_yolo: bool = False,
+    yolo_config: str = "src/fussion_branch/configs/image_process_config.yaml",
 ) -> None:
-    embedder = ImageEmbedder(checkpoint_dir=checkpoint_dir)
-    print(f"Model dim: {embedder.dim}  device: {embedder.device}")
+    yolo_cfg = _load_yolo_cfg(yolo_config) if use_yolo else None
+    embedder = ImageEmbedder(
+        checkpoint_dir=checkpoint_dir,
+        use_yolo=use_yolo,
+        yolo_cfg=yolo_cfg,
+    )
+    print(f"Model dim: {embedder.dim}  device: {embedder.device}  yolo: {use_yolo}")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     for split in splits:
@@ -60,6 +76,7 @@ def run(
         missing = sum(1 for p in paths if not Path(p).exists())
         print(f"[{split}] {len(ids)} anime  |  images missing: {missing}")
 
+        # YOLO processes image-by-image; non-YOLO uses batched forward
         embs = embedder.encode_paths(paths, batch_size=batch_size)  # (N, 1024)
 
         img_cols = [f"img_{j}" for j in range(embs.shape[1])]
@@ -84,8 +101,23 @@ def main() -> None:
         help="Fine-tuned Swin checkpoint dir (default: src/fussion_branch/model/best)",
     )
     parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument(
+        "--use_yolo", action="store_true",
+        help="Apply YOLO character detection before encoding coverImage_medium",
+    )
+    parser.add_argument(
+        "--yolo_config",
+        default="src/fussion_branch/configs/image_process_config.yaml",
+        help="Path to config containing [yolo] section",
+    )
     args = parser.parse_args()
-    run(splits=tuple(args.splits), checkpoint_dir=args.checkpoint, batch_size=args.batch_size)
+    run(
+        splits=tuple(args.splits),
+        checkpoint_dir=args.checkpoint,
+        batch_size=args.batch_size,
+        use_yolo=args.use_yolo,
+        yolo_config=args.yolo_config,
+    )
 
 
 if __name__ == "__main__":
