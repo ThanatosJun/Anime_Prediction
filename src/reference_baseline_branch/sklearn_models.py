@@ -37,6 +37,10 @@ def make_model(model_name: str, params: dict):
         return ArmentaProjectInputMLPRegressor(**params)
     if model_name == "cross_modal_transformer":
         return CrossModalTransformerRegressor(**params)
+    if model_name == "project_input_cross_attention":
+        return ProjectInputCrossAttentionRegressor(**params)
+    if model_name == "project_input_recurrent_fusion":
+        return ProjectInputRecurrentFusionRegressor(**params)
     if model_name == "xgboost":
         try:
             from xgboost import XGBRegressor
@@ -216,6 +220,191 @@ class CrossModalTransformerRegressor:
         val_idx = order[:n_val]
         train_idx = order[n_val:]
         return train_idx, val_idx
+
+
+class ProjectInputCrossAttentionRegressor:
+    """Project-input CTNN-style proxy with explicit cross-attention and metadata-conditioned fusion."""
+
+    model_label = "project_input_cross_attention"
+    baseline_label = "C2-ProjectInputCrossAttention"
+
+    def __init__(
+        self,
+        metadata_dim: int = 151,
+        text_dim: int = 384,
+        image_dim: int = 1024,
+        d_model: int = 128,
+        nhead: int = 4,
+        num_layers: int = 2,
+        dim_feedforward: int = 256,
+        dropout: float = 0.1,
+        learning_rate: float = 1e-3,
+        weight_decay: float = 1e-4,
+        batch_size: int = 256,
+        max_epochs: int = 90,
+        patience: int = 10,
+        validation_fraction: float = 0.15,
+        random_state: int = 42,
+        device: str = "cpu",
+        torch_num_threads: int | None = 1,
+        verbose: bool = False,
+    ):
+        self.metadata_dim = metadata_dim
+        self.text_dim = text_dim
+        self.image_dim = image_dim
+        self.d_model = d_model
+        self.nhead = nhead
+        self.num_layers = num_layers
+        self.dim_feedforward = dim_feedforward
+        self.dropout = dropout
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.batch_size = batch_size
+        self.max_epochs = max_epochs
+        self.patience = patience
+        self.validation_fraction = validation_fraction
+        self.random_state = random_state
+        self.device = device
+        self.torch_num_threads = torch_num_threads
+        self.verbose = verbose
+
+    def fit(self, x, y):
+        try:
+            import torch
+            from torch import nn
+        except Exception as exc:
+            raise ImportError(f"torch is not installed; install it or disable {self.baseline_label}") from exc
+
+        if self.torch_num_threads:
+            torch.set_num_threads(int(self.torch_num_threads))
+        self._torch = torch
+        self._device = torch.device(self._resolve_device(torch))
+        self._set_seed(torch)
+
+        x = np.asarray(x, dtype=np.float32)
+        y = np.asarray(y, dtype=np.float32).reshape(-1, 1)
+        expected_dim = self.metadata_dim + self.text_dim + self.image_dim
+        if x.shape[1] != expected_dim:
+            raise ValueError(
+                f"{self.model_label} expects {expected_dim} features "
+                f"({self.metadata_dim} metadata + {self.text_dim} text + {self.image_dim} image), "
+                f"got {x.shape[1]}"
+            )
+
+        train_idx, val_idx = self._train_val_indices(len(x))
+        self.x_scaler_ = StandardScaler().fit(x[train_idx])
+        x_scaled = self.x_scaler_.transform(x).astype(np.float32)
+        self.y_mean_ = float(y[train_idx].mean())
+        y_std = float(y[train_idx].std())
+        self.y_std_ = y_std if y_std > 1e-8 else 1.0
+        y_scaled = ((y - self.y_mean_) / self.y_std_).astype(np.float32)
+
+        self.model_ = self._make_net(
+            metadata_dim=self.metadata_dim,
+            text_dim=self.text_dim,
+            image_dim=self.image_dim,
+            d_model=self.d_model,
+            nhead=self.nhead,
+            num_layers=self.num_layers,
+            dim_feedforward=self.dim_feedforward,
+            dropout=self.dropout,
+        ).to(self._device)
+
+        optimizer = torch.optim.AdamW(
+            self.model_.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
+        )
+        loss_fn = nn.MSELoss()
+        x_train = torch.from_numpy(x_scaled[train_idx])
+        y_train = torch.from_numpy(y_scaled[train_idx])
+        x_val = torch.from_numpy(x_scaled[val_idx]).to(self._device)
+        y_val = torch.from_numpy(y_scaled[val_idx]).to(self._device)
+
+        best_loss = np.inf
+        best_state = None
+        epochs_without_improvement = 0
+        rng = np.random.default_rng(self.random_state)
+        for epoch in range(1, self.max_epochs + 1):
+            self.model_.train()
+            order = rng.permutation(len(train_idx))
+            batch_losses = []
+            for start in range(0, len(order), self.batch_size):
+                batch_idx = order[start : start + self.batch_size]
+                xb = x_train[batch_idx].to(self._device)
+                yb = y_train[batch_idx].to(self._device)
+                optimizer.zero_grad(set_to_none=True)
+                loss = loss_fn(self.model_(xb), yb)
+                loss.backward()
+                optimizer.step()
+                batch_losses.append(float(loss.detach().cpu().item()))
+
+            self.model_.eval()
+            with torch.no_grad():
+                val_loss = float(loss_fn(self.model_(x_val), y_val).detach().cpu().item())
+            if self.verbose:
+                train_loss = float(np.mean(batch_losses)) if batch_losses else np.nan
+                print(f"epoch={epoch} train_loss={train_loss:.6f} val_loss={val_loss:.6f}")
+
+            if val_loss < best_loss - 1e-5:
+                best_loss = val_loss
+                best_state = deepcopy(self.model_.state_dict())
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement >= self.patience:
+                    break
+
+        if best_state is not None:
+            self.model_.load_state_dict(best_state)
+        self.best_val_loss_ = best_loss
+        return self
+
+    def predict(self, x):
+        torch = self._torch
+        x = np.asarray(x, dtype=np.float32)
+        x_scaled = self.x_scaler_.transform(x).astype(np.float32)
+        preds = []
+        self.model_.eval()
+        with torch.no_grad():
+            for start in range(0, len(x_scaled), self.batch_size):
+                xb = torch.from_numpy(x_scaled[start : start + self.batch_size]).to(self._device)
+                pred = self.model_(xb).detach().cpu().numpy().reshape(-1)
+                preds.append(pred)
+        y_scaled = np.concatenate(preds, axis=0)
+        return y_scaled * self.y_std_ + self.y_mean_
+
+    def _resolve_device(self, torch) -> str:
+        if self.device == "auto":
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        return self.device
+
+    def _set_seed(self, torch) -> None:
+        np.random.seed(self.random_state)
+        torch.manual_seed(self.random_state)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.random_state)
+
+    def _train_val_indices(self, n_rows: int):
+        rng = np.random.default_rng(self.random_state)
+        order = rng.permutation(n_rows)
+        n_val = max(1, int(round(n_rows * self.validation_fraction)))
+        val_idx = order[:n_val]
+        train_idx = order[n_val:]
+        return train_idx, val_idx
+
+    def _make_net(self, **kwargs):
+        return _make_project_input_cross_attention_net(**kwargs)
+
+
+class ProjectInputRecurrentFusionRegressor(ProjectInputCrossAttentionRegressor):
+    """Project-input CTNN-style proxy with cross-attention followed by recurrent token fusion."""
+
+    model_label = "project_input_recurrent_fusion"
+    baseline_label = "C2-ProjectInputRecurrentFusion"
+
+    def _make_net(self, **kwargs):
+        return _make_project_input_recurrent_fusion_net(**kwargs)
 
 
 class BranchMLPRegressor:
@@ -706,3 +895,210 @@ def _make_cross_modal_transformer_net(
             return self.head(fused.mean(dim=1))
 
     return Net()
+
+
+def _make_project_input_cross_attention_net(
+    metadata_dim: int,
+    text_dim: int,
+    image_dim: int,
+    d_model: int,
+    nhead: int,
+    num_layers: int,
+    dim_feedforward: int,
+    dropout: float,
+):
+    import torch
+    from torch import nn
+
+    class CrossAttentionBlock(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.text_to_image = nn.MultiheadAttention(
+                embed_dim=d_model,
+                num_heads=nhead,
+                dropout=dropout,
+                batch_first=True,
+            )
+            self.image_to_text = nn.MultiheadAttention(
+                embed_dim=d_model,
+                num_heads=nhead,
+                dropout=dropout,
+                batch_first=True,
+            )
+            self.text_norm = nn.LayerNorm(d_model)
+            self.image_norm = nn.LayerNorm(d_model)
+            self.text_ffn = _feedforward_block(d_model, dim_feedforward, dropout)
+            self.image_ffn = _feedforward_block(d_model, dim_feedforward, dropout)
+
+        def forward(self, text_token, image_token):
+            text_delta, _ = self.text_to_image(text_token, image_token, image_token, need_weights=False)
+            image_delta, _ = self.image_to_text(image_token, text_token, text_token, need_weights=False)
+            text_token = self.text_norm(text_token + text_delta)
+            image_token = self.image_norm(image_token + image_delta)
+            text_token = text_token + self.text_ffn(text_token)
+            image_token = image_token + self.image_ffn(image_token)
+            return text_token, image_token
+
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.metadata_proj = nn.Sequential(
+                nn.Linear(metadata_dim, d_model),
+                nn.LayerNorm(d_model),
+                nn.GELU(),
+                nn.Dropout(dropout),
+            )
+            self.text_proj = nn.Sequential(nn.Linear(text_dim, d_model), nn.LayerNorm(d_model), nn.GELU())
+            self.image_proj = nn.Sequential(nn.Linear(image_dim, d_model), nn.LayerNorm(d_model), nn.GELU())
+            self.cross_blocks = nn.ModuleList([CrossAttentionBlock() for _ in range(num_layers)])
+            self.gate = nn.Sequential(
+                nn.Linear(d_model, d_model),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(d_model, 3),
+            )
+            self.head = nn.Sequential(
+                nn.LayerNorm(d_model),
+                nn.Linear(d_model, d_model),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(d_model, d_model // 2),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(d_model // 2, 1),
+            )
+
+        def forward(self, x):
+            metadata = x[:, :metadata_dim]
+            text_start = metadata_dim
+            image_start = metadata_dim + text_dim
+            text = x[:, text_start:image_start]
+            image = x[:, image_start : image_start + image_dim]
+
+            metadata_token = self.metadata_proj(metadata).unsqueeze(1)
+            text_token = self.text_proj(text).unsqueeze(1)
+            image_token = self.image_proj(image).unsqueeze(1)
+            for block in self.cross_blocks:
+                text_token, image_token = block(text_token, image_token)
+
+            tokens = torch.cat([text_token, image_token, metadata_token], dim=1)
+            weights = torch.softmax(self.gate(metadata_token.squeeze(1)), dim=1).unsqueeze(-1)
+            fused = (tokens * weights).sum(dim=1)
+            return self.head(fused)
+
+    return Net()
+
+
+def _make_project_input_recurrent_fusion_net(
+    metadata_dim: int,
+    text_dim: int,
+    image_dim: int,
+    d_model: int,
+    nhead: int,
+    num_layers: int,
+    dim_feedforward: int,
+    dropout: float,
+):
+    import torch
+    from torch import nn
+
+    class CrossAttentionBlock(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.text_to_image = nn.MultiheadAttention(
+                embed_dim=d_model,
+                num_heads=nhead,
+                dropout=dropout,
+                batch_first=True,
+            )
+            self.image_to_text = nn.MultiheadAttention(
+                embed_dim=d_model,
+                num_heads=nhead,
+                dropout=dropout,
+                batch_first=True,
+            )
+            self.text_norm = nn.LayerNorm(d_model)
+            self.image_norm = nn.LayerNorm(d_model)
+            self.text_ffn = _feedforward_block(d_model, dim_feedforward, dropout)
+            self.image_ffn = _feedforward_block(d_model, dim_feedforward, dropout)
+
+        def forward(self, text_token, image_token):
+            text_delta, _ = self.text_to_image(text_token, image_token, image_token, need_weights=False)
+            image_delta, _ = self.image_to_text(image_token, text_token, text_token, need_weights=False)
+            text_token = self.text_norm(text_token + text_delta)
+            image_token = self.image_norm(image_token + image_delta)
+            text_token = text_token + self.text_ffn(text_token)
+            image_token = image_token + self.image_ffn(image_token)
+            return text_token, image_token
+
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.metadata_proj = nn.Sequential(
+                nn.Linear(metadata_dim, d_model),
+                nn.LayerNorm(d_model),
+                nn.GELU(),
+                nn.Dropout(dropout),
+            )
+            self.text_proj = nn.Sequential(nn.Linear(text_dim, d_model), nn.LayerNorm(d_model), nn.GELU())
+            self.image_proj = nn.Sequential(nn.Linear(image_dim, d_model), nn.LayerNorm(d_model), nn.GELU())
+            self.cross_blocks = nn.ModuleList([CrossAttentionBlock() for _ in range(num_layers)])
+            self.recurrent_fusion = nn.GRU(
+                input_size=d_model,
+                hidden_size=d_model,
+                num_layers=1,
+                dropout=0.0,
+                batch_first=True,
+            )
+            self.metadata_gate = nn.Sequential(
+                nn.Linear(d_model, d_model),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(d_model, d_model),
+                nn.Sigmoid(),
+            )
+            self.head = nn.Sequential(
+                nn.LayerNorm(d_model * 2),
+                nn.Linear(d_model * 2, d_model),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(d_model, d_model // 2),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(d_model // 2, 1),
+            )
+
+        def forward(self, x):
+            metadata = x[:, :metadata_dim]
+            text_start = metadata_dim
+            image_start = metadata_dim + text_dim
+            text = x[:, text_start:image_start]
+            image = x[:, image_start : image_start + image_dim]
+
+            metadata_token = self.metadata_proj(metadata).unsqueeze(1)
+            text_token = self.text_proj(text).unsqueeze(1)
+            image_token = self.image_proj(image).unsqueeze(1)
+            for block in self.cross_blocks:
+                text_token, image_token = block(text_token, image_token)
+
+            token_sequence = torch.cat([text_token, image_token, metadata_token], dim=1)
+            recurrent_outputs, recurrent_state = self.recurrent_fusion(token_sequence)
+            recurrent_summary = recurrent_state[-1]
+            metadata_gate = self.metadata_gate(metadata_token.squeeze(1))
+            gated_context = recurrent_outputs.mean(dim=1) * metadata_gate
+            return self.head(torch.cat([recurrent_summary, gated_context], dim=1))
+
+    return Net()
+
+
+def _feedforward_block(d_model: int, dim_feedforward: int, dropout: float):
+    from torch import nn
+
+    return nn.Sequential(
+        nn.LayerNorm(d_model),
+        nn.Linear(d_model, dim_feedforward),
+        nn.GELU(),
+        nn.Dropout(dropout),
+        nn.Linear(dim_feedforward, d_model),
+        nn.Dropout(dropout),
+    )

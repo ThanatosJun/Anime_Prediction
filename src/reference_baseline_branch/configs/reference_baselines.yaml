@@ -6,8 +6,10 @@
 
 data:
   meta_dir: data/fussion/post2000
+  image_dir: data/image
   text_emb_dir: src/fussion_branch/embedding/text
   image_emb_dir: src/fussion_branch/embedding/image
+  resnet50_image_emb_dir: .exp/baseline/image_features/resnet50
   rag_features_root: .exp/baseline/rag_features
   splits: ["train", "val", "test"]
   id_col: id
@@ -60,6 +62,10 @@ features:
     prefix: emb_
   image_embedding:
     file_template: image_embeddings_{split}.parquet
+  image_embedding_resnet50:
+    file_template: resnet50_image_embeddings_{split}.parquet
+    prefix: resnet_
+    feature_name_prefix: resnet50_image
   rag:
     numeric:
       - rag_popularity
@@ -106,6 +112,11 @@ feature_sets:
     metadata: true
     text_embedding: true
     image_embedding: true
+  metadata_text_resnet50_image:
+    metadata: true
+    text_embedding: true
+    image_embedding: false
+    image_embedding_resnet50: true
   metadata_text_image_rag_none:
     metadata: true
     text_embedding: true
@@ -328,6 +339,34 @@ baselines:
     claim_allowed: "Project-input Armenta-style branch-and-Big-MLP proxy for comparing whether the paper's fusion shape helps under this project's input contract."
     claim_not_allowed: "Do not claim Figure 2 reproduction, GPT-2/ResNet-50 reproduction, or character-branch reproduction; this row uses project embeddings and metadata rather than the paper's character descriptions and portraits."
 
+  - id: C1-Armenta-ProjectInputProxy-ResNet50
+    enabled: false
+    feature_set: metadata_text_resnet50_image
+    model: armenta_project_input_mlp
+    params:
+      metadata_dim: 151
+      text_dim: 384
+      image_dim: 4098
+      branch_dim: 768
+      big_mlp_hidden_dims: [768, 384, 192, 96, 48, 24, 12, 6]
+      dropout: 0.1
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 100
+      patience: 12
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Armenta-Segura & Sidorov 2025
+    reproduction_level: adapted
+    paper_supported_component: "Armenta-Segura & Sidorov 2025 uses ResNet-50 visual features, a synopsis text branch, a context branch, and a large MLP for final anime-domain prediction."
+    project_adaptation_component: "Project synopsis/text embeddings remain the synopsis branch; project cover/banner raw images are encoded with ImageNet-pretrained ResNet-50 avg-pool features, concatenated with availability masks, then fused with metadata in the context branch before the Armenta-shaped Big MLP."
+    claim_allowed: "Project-input Armenta-style proxy with a ResNet-50 visual encoder, suitable for testing whether a visual branch closer to the paper improves under this project's input contract."
+    claim_not_allowed: "Do not claim Figure 2 reproduction, GPT-2 reproduction, character-description reproduction, or numerical comparability; this still uses project synopsis/metadata and cover/banner images instead of main-character descriptions and portraits."
+
   - id: C2-CTNN-Lite
     enabled: false
     feature_set: text_image
@@ -356,6 +395,66 @@ baselines:
     project_adaptation_component: "Project text and image embeddings are projected into two modality tokens and fused with a lightweight TransformerEncoder regression head; this omits the paper's full CTNN/recurrent-fusion design."
     claim_allowed: "Lightweight cross-modal transformer fusion baseline adapted from poster-text box-office prediction literature."
     claim_not_allowed: "Do not claim exact CTNN reproduction; this implementation uses precomputed project embeddings, a simplified two-token transformer fusion head, and anime regression targets."
+
+  - id: C2-ProjectInputCrossAttention
+    enabled: false
+    feature_set: metadata_text_image
+    model: project_input_cross_attention
+    params:
+      metadata_dim: 151
+      text_dim: 384
+      image_dim: 1024
+      d_model: 128
+      nhead: 4
+      num_layers: 2
+      dim_feedforward: 256
+      dropout: 0.1
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 90
+      patience: 10
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Madongo, Tang & Hassan 2023
+    reproduction_level: adapted
+    paper_supported_component: "Madongo et al. 2023 supports cross-modal attention transformer fusion with auxiliary metadata-related factors for box-office prediction."
+    project_adaptation_component: "Project synopsis/text and cover/banner image embeddings are fused through explicit bidirectional text-image cross-attention blocks, then metadata conditions the final modality-gated fusion."
+    claim_allowed: "Project-input CTNN-style cross-attention proxy that keeps this project's metadata/text/image input contract while moving closer to the paper's cross-modal attention motivation."
+    claim_not_allowed: "Do not claim exact CTNN reproduction; this implementation uses anime project embeddings, metadata-conditioned gating, and regression targets instead of the paper's movie review/poster pipeline and box-office class setup."
+
+  - id: C2-ProjectInputRecurrentFusion
+    enabled: false
+    feature_set: metadata_text_image
+    model: project_input_recurrent_fusion
+    params:
+      metadata_dim: 151
+      text_dim: 384
+      image_dim: 1024
+      d_model: 128
+      nhead: 4
+      num_layers: 2
+      dim_feedforward: 256
+      dropout: 0.1
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 90
+      patience: 10
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Madongo, Tang & Hassan 2023
+    reproduction_level: adapted
+    paper_supported_component: "Madongo et al. 2023 describes cross-modal attention transformer fusion together with recurrent-style fusion and metadata-related factors."
+    project_adaptation_component: "Project metadata/text/image embeddings are fused with bidirectional text-image cross-attention, then a GRU recurrent fusion step refines the text/image/metadata token sequence before regression."
+    claim_allowed: "Project-input CTNN-style recurrent fusion proxy that keeps this project's input contract while covering the paper's recurrent-fusion motivation."
+    claim_not_allowed: "Do not claim exact CTNN reproduction; this row keeps anime embeddings and regression targets and does not use the paper's movie review/poster feature extraction or box-office class setup."
 
   - id: C3-RAG-None-XGB
     enabled: false

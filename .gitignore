@@ -54,6 +54,7 @@ data/image
 qdrant_db/
 results/
 .exp/
+.cache/
 src/fussion_branch/RAG/return/
 src/fussion_branch/embedding/
 data/fussion/fusion_meta_test.csv

@@ -11,6 +11,20 @@ from typing import Dict, Iterable, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+EMBEDDING_FEATURE_KEYS = ("text_embedding", "image_embedding", "image_embedding_resnet50")
+
+EMBEDDING_DATA_DIR_KEYS = {
+    "text_embedding": "text_emb_dir",
+    "image_embedding": "image_emb_dir",
+    "image_embedding_resnet50": "resnet50_image_emb_dir",
+}
+
+EMBEDDING_FEATURE_PREFIXES = {
+    "text_embedding": "text",
+    "image_embedding": "image",
+    "image_embedding_resnet50": "resnet50_image",
+}
+
 
 @dataclass
 class SplitFeatures:
@@ -266,7 +280,7 @@ class BaselineFeatureStore:
                 parts.append(encoder.transform(df))
             if rag_encoder is not None:
                 parts.append(rag_encoder.transform(rag_cache[split].loc[ids]))
-            for key in ("text_embedding", "image_embedding"):
+            for key in EMBEDDING_FEATURE_KEYS:
                 if feature_set.get(key, False):
                     parts.append(emb_cache[key][split].loc[ids].values.astype(np.float32))
             x = None if not parts else np.concatenate(parts, axis=1)
@@ -282,13 +296,12 @@ class BaselineFeatureStore:
             split: pd.Index(df[self.id_col].values, name=self.id_col)
             for split, df in self.meta.items()
         }
-        for key in ("text_embedding", "image_embedding"):
+        for key in EMBEDDING_FEATURE_KEYS:
             if not feature_set.get(key, False):
                 continue
-            emb_dir_key = "text_emb_dir" if key == "text_embedding" else "image_emb_dir"
-            emb_cfg_key = "text_embedding" if key == "text_embedding" else "image_embedding"
-            emb_dir = Path(self.data_cfg[emb_dir_key])
-            template = self.feature_cfg[emb_cfg_key]["file_template"]
+            emb_cfg = self.feature_cfg[key]
+            emb_dir = Path(self.data_cfg[_embedding_dir_key(key, emb_cfg)])
+            template = emb_cfg["file_template"]
             if not emb_dir.exists():
                 return split_ids, f"Missing {key} directory: {emb_dir}"
             for split in split_ids:
@@ -327,12 +340,11 @@ class BaselineFeatureStore:
         split_ids: Dict[str, pd.Index],
     ) -> Dict[str, Dict[str, pd.DataFrame]]:
         cache: Dict[str, Dict[str, pd.DataFrame]] = {}
-        for key in ("text_embedding", "image_embedding"):
+        for key in EMBEDDING_FEATURE_KEYS:
             if not feature_set.get(key, False):
                 continue
-            emb_dir_key = "text_emb_dir" if key == "text_embedding" else "image_emb_dir"
             emb_cfg = self.feature_cfg[key]
-            emb_dir = Path(self.data_cfg[emb_dir_key])
+            emb_dir = Path(self.data_cfg[_embedding_dir_key(key, emb_cfg)])
             cache[key] = {}
             for split, ids in split_ids.items():
                 path = emb_dir / emb_cfg["file_template"].format(split=split)
@@ -345,8 +357,9 @@ class BaselineFeatureStore:
         self,
         cache: Dict[str, Dict[str, pd.DataFrame]],
     ) -> Iterable[Tuple[str, int]]:
-        for key, prefix in (("text_embedding", "text"), ("image_embedding", "image")):
+        for key in EMBEDDING_FEATURE_KEYS:
             if key in cache:
+                prefix = self.feature_cfg[key].get("feature_name_prefix", EMBEDDING_FEATURE_PREFIXES[key])
                 yield prefix, cache[key]["train"].shape[1]
 
     def _df_for_ids(self, split: str, ids: pd.Index) -> pd.DataFrame:
@@ -360,6 +373,10 @@ def _embedding_columns(df: pd.DataFrame, emb_cfg: dict) -> List[str]:
         if cols:
             return cols
     return [col for col in df.columns if col != "id"]
+
+
+def _embedding_dir_key(key: str, emb_cfg: dict) -> str:
+    return emb_cfg.get("data_dir_key", EMBEDDING_DATA_DIR_KEYS[key])
 
 
 def _parse_multi_value(value, parser: str) -> List[str]:
