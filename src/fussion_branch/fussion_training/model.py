@@ -48,9 +48,6 @@ class FusionMLP(nn.Module):
         if hidden_dims is None:
             hidden_dims = [256, 128, 64]
 
-        self._text_dim  = text_dim
-        self._image_dim = image_dim
-
         # per-modality projection
         self.text_proj  = _proj_block(text_dim,  text_proj)
         self.image_proj = _proj_block(image_dim, image_proj)
@@ -83,12 +80,15 @@ class FusionMLP(nn.Module):
             "hidden_dims": hidden_dims, "dropout": dropout,
         }
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        s1 = self._text_dim
-        s2 = self._text_dim + self._image_dim
-        t   = self.text_proj(x[:, :s1])
-        img = self.image_proj(x[:, s1:s2])
-        m   = self.meta_proj(x[:, s2:])
+    def forward(
+        self,
+        text: torch.Tensor,   # (B, text_dim)  — GNN-enhanced text embedding
+        image: torch.Tensor,  # (B, image_dim) — GNN-enhanced image embedding
+        meta: torch.Tensor,   # (B, meta_dim)
+    ) -> torch.Tensor:
+        t   = self.text_proj(text)
+        img = self.image_proj(image)
+        m   = self.meta_proj(meta)
 
         # modality gate: each scalar from its own projection, softmax across 3
         gates = F.softmax(
@@ -104,15 +104,18 @@ class FusionMLP(nn.Module):
 
         return self.head(self.backbone(fused)).squeeze(-1)
 
-    def get_gates(self, x: torch.Tensor) -> torch.Tensor:
-        """Return gate weights (B, 3) for inspection: [α_text, α_image, α_meta]."""
+    def get_gates(
+        self,
+        text: torch.Tensor,
+        image: torch.Tensor,
+        meta: torch.Tensor,
+    ) -> torch.Tensor:
+        """Return gate weights (B, 3): [α_text, α_image, α_meta]."""
         self.eval()
         with torch.no_grad():
-            s1 = self._text_dim
-            s2 = self._text_dim + self._image_dim
-            t   = self.text_proj(x[:, :s1])
-            img = self.image_proj(x[:, s1:s2])
-            m   = self.meta_proj(x[:, s2:])
+            t   = self.text_proj(text)
+            img = self.image_proj(image)
+            m   = self.meta_proj(meta)
             return F.softmax(
                 torch.cat([self.text_gate(t), self.image_gate(img), self.meta_gate(m)], dim=1),
                 dim=1,
@@ -134,8 +137,14 @@ class FusionMLP(nn.Module):
 
     @classmethod
     def load(cls, config_path: str, checkpoint_path: str, map_location=None) -> "FusionMLP":
-        """Reconstruct model from saved config + state dict (for inference)."""
+        """Reconstruct FusionMLP from saved config + checkpoint.
+
+        Handles both checkpoint formats:
+          - new: {"fusion_mlp": ..., "text_gnn": ..., "image_gnn": ...}
+          - old: state_dict directly (backward compat)
+        """
         model = cls.from_config(config_path)
-        state = torch.load(checkpoint_path, map_location=map_location, weights_only=True)
+        ckpt  = torch.load(checkpoint_path, map_location=map_location, weights_only=True)
+        state = ckpt["fusion_mlp"] if isinstance(ckpt, dict) and "fusion_mlp" in ckpt else ckpt
         model.load_state_dict(state)
         return model

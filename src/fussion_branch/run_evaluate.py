@@ -16,17 +16,27 @@ import os
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import torch
 from torch.amp import autocast
 from torch.utils.data import DataLoader
 
 from src.fussion_branch.fussion_training.dataset import FusionDataset
+from src.fussion_branch.fussion_training.gnn import TextGNN, ImageGNN
 from src.fussion_branch.fussion_training.meta_encoder import MetaEncoder
 from src.fussion_branch.fussion_training.model import FusionMLP
 from src.fussion_branch.utilities.config import load_config
 from src.fussion_branch.utilities.evaluate import compute_metrics, denormalize
 from src.fussion_branch.utilities.summarize_experiments import collect
+
+
+def _forward(batch, model, text_gnn, img_gnn, device):
+    text  = batch["text_emb"].to(device)
+    image = batch["image_emb"].to(device)
+    meta  = batch["meta_feat"].to(device)
+    r_txt = batch["ret_text"].to(device)
+    r_img = batch["ret_image"].to(device)
+    mask  = batch["ret_mask"].to(device)
+    return model(text_gnn(text, r_txt, mask), img_gnn(image, r_img, mask), meta)
 
 
 def evaluate_target(config: dict, target_col: str):
@@ -48,12 +58,34 @@ def evaluate_target(config: dict, target_col: str):
         if not Path(p).exists():
             raise FileNotFoundError(f"Missing required file: {p}\nRun training first.")
 
-    model   = FusionMLP.load(str(model_config_path), str(checkpoint_path), map_location=device)
-    model   = model.to(device).eval()
-    encoder = MetaEncoder.load(encoder_path)
-
+    with open(model_config_path) as f:
+        model_cfg = json.load(f)
     with open(scaler_path) as f:
         scaler = json.load(f)
+
+    # ── reconstruct models from saved config ──────────────────────────────────
+    gnn_num_layers = model_cfg.get("gnn_num_layers", 1)
+    gnn_dropout    = model_cfg.get("gnn_dropout", 0.1)
+    top_k_ids      = model_cfg.get("top_k_ids", 5)
+
+    mlp_keys = {"text_dim", "image_dim", "meta_dim", "text_proj", "image_proj",
+                "meta_proj", "hidden_dims", "dropout"}
+    mlp_cfg  = {k: v for k, v in model_cfg.items() if k in mlp_keys}
+
+    model    = FusionMLP(**mlp_cfg).to(device)
+    text_gnn = TextGNN(num_layers=gnn_num_layers, dropout=gnn_dropout).to(device)
+    img_gnn  = ImageGNN(num_layers=gnn_num_layers, dropout=gnn_dropout).to(device)
+
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=True)
+    if isinstance(ckpt, dict) and "fusion_mlp" in ckpt:
+        model.load_state_dict(ckpt["fusion_mlp"])
+        text_gnn.load_state_dict(ckpt["text_gnn"])
+        img_gnn.load_state_dict(ckpt["image_gnn"])
+    else:
+        model.load_state_dict(ckpt)
+
+    model.eval(); text_gnn.eval(); img_gnn.eval()
+    encoder = MetaEncoder.load(encoder_path)
 
     # ── test dataset ──────────────────────────────────────────────────────────
     image_emb_dir = cfg_data.get("image_emb_dir", "src/fussion_branch/embedding/image")
@@ -70,6 +102,7 @@ def evaluate_target(config: dict, target_col: str):
         log_transform_target=log_transform,
         target_mean=scaler["mean"],
         target_std=scaler["std"],
+        top_k_ids=top_k_ids,
     )
 
     num_workers = min(4, os.cpu_count() or 1)
@@ -77,17 +110,14 @@ def evaluate_target(config: dict, target_col: str):
                              num_workers=num_workers, pin_memory=True)
 
     # ── evaluate ──────────────────────────────────────────────────────────────
-    meta_train = pd.read_csv(f"{cfg_data['fusion_meta_dir']}/fusion_meta_clean_train.csv")
-
     y_true_list, y_pred_list = [], []
     with torch.no_grad():
         for batch in test_loader:
-            x = batch["features"].to(device)
             if use_amp:
                 with autocast("cuda"):
-                    pred = model(x)
+                    pred = _forward(batch, model, text_gnn, img_gnn, device)
             else:
-                pred = model(x)
+                pred = _forward(batch, model, text_gnn, img_gnn, device)
             y_true_list.append(batch["target"].numpy())
             y_pred_list.append(pred.cpu().numpy())
 

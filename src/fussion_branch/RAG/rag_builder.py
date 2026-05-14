@@ -18,15 +18,26 @@ def _load_rag_config() -> dict:
         return yaml.safe_load(f)
 
 
+def _load_emb_map(parquet_path: str, col_prefix: str) -> dict:
+    """Load embedding parquet → {id: np.ndarray}. Returns {} if file missing."""
+    p = Path(parquet_path)
+    if not p.exists():
+        return {}
+    df    = pd.read_parquet(p)
+    cols  = [c for c in df.columns if c.startswith(col_prefix)]
+    return dict(zip(df["id"].astype(int), df[cols].values.astype(np.float32)))
+
+
 def build_collection():
     cfg = _load_rag_config()
     collection_name = cfg["qdrant"]["collection_name"]
     encoder_path    = cfg["paths"]["encoder_path"]
     train_csv       = cfg["paths"]["train_csv"]
     text_emb_dir    = cfg["paths"]["text_emb_dir"]
+    image_emb_dir   = cfg["paths"].get("image_emb_dir", "")
     text_emb_dim    = cfg["embedding"]["text_emb_dim"]
+    image_emb_dim   = cfg["embedding"].get("image_emb_dim", 1024)
     batch_size      = cfg["indexing"]["batch_size"]
-    text_emb_path   = str(Path(text_emb_dir) / "text_embeddings_train.parquet")
 
     df = pd.read_csv(train_csv)
 
@@ -35,19 +46,23 @@ def build_collection():
     encoder.save(encoder_path)
     print(f"Sparse vocab size: {encoder.dim}  (saved → {encoder_path})")
 
-    # Load text embeddings (optional — hybrid search if available)
-    text_emb_map: dict = {}
-    if Path(text_emb_path).exists():
-        text_df   = pd.read_parquet(text_emb_path)
-        emb_cols  = [c for c in text_df.columns if c.startswith("emb_")]
-        text_emb_map = dict(
-            zip(text_df["id"].astype(int), text_df[emb_cols].values.astype(np.float32))
-        )
-        print(f"Text embeddings loaded: {len(text_emb_map)} entries → dense vector enabled")
+    # Load text embeddings (optional)
+    text_emb_map = _load_emb_map(
+        str(Path(text_emb_dir) / "text_embeddings_train.parquet"), "emb_"
+    )
+    if text_emb_map:
+        print(f"Text embeddings loaded: {len(text_emb_map)} entries")
     else:
-        print(f"Text embeddings not found at {text_emb_path} — sparse-only mode")
+        print(f"Text embeddings not found → sparse-only mode")
 
-    use_dense = len(text_emb_map) > 0
+    # Load image embeddings (optional)
+    image_emb_map = _load_emb_map(
+        str(Path(image_emb_dir) / "image_embeddings_train.parquet"), "img_"
+    ) if image_emb_dir else {}
+    if image_emb_map:
+        print(f"Image embeddings loaded: {len(image_emb_map)} entries → image dense vector enabled")
+    else:
+        print(f"Image embeddings not found → image vector disabled")
 
     # Connect to Qdrant server
     client = QdrantClient(host=cfg["qdrant"]["host"], port=cfg["qdrant"]["port"])
@@ -55,12 +70,15 @@ def build_collection():
     if client.collection_exists(collection_name):
         client.delete_collection(collection_name)
 
+    vectors_config: dict = {}
+    if text_emb_map:
+        vectors_config["text"]  = VectorParams(size=text_emb_dim,  distance=Distance.COSINE)
+    if image_emb_map:
+        vectors_config["image"] = VectorParams(size=image_emb_dim, distance=Distance.COSINE)
+
     client.create_collection(
         collection_name=collection_name,
-        vectors_config=(
-            {"text": VectorParams(size=text_emb_dim, distance=Distance.COSINE)}
-            if use_dense else {}
-        ),
+        vectors_config=vectors_config,
         sparse_vectors_config={"genre_studio": models.SparseVectorParams()},
     )
 
@@ -90,16 +108,18 @@ def build_collection():
             continue
 
         payload = row.to_dict()
-        payload["genres_parsed"]        = genres
-        payload["studios_parsed"]       = studios
-        payload["voice_actors_parsed"]  = voice_actors
+        payload["genres_parsed"]       = genres
+        payload["studios_parsed"]      = studios
+        payload["voice_actors_parsed"] = voice_actors
 
         anime_id = int(row["id"])
         vector: dict = {
             "genre_studio": models.SparseVector(indices=indices, values=values)
         }
-        if use_dense and anime_id in text_emb_map:
-            vector["text"] = text_emb_map[anime_id].tolist()
+        if text_emb_map and anime_id in text_emb_map:
+            vector["text"]  = text_emb_map[anime_id].tolist()
+        if image_emb_map and anime_id in image_emb_map:
+            vector["image"] = image_emb_map[anime_id].tolist()
 
         points.append(
             models.PointStruct(id=anime_id, vector=vector, payload=payload)
@@ -113,5 +133,8 @@ def build_collection():
         client.upsert(collection_name=collection_name, points=points)
 
     count = client.count(collection_name).count
-    mode  = "hybrid (sparse + dense text 384-dim)" if use_dense else "sparse only"
-    print(f"Collection '{collection_name}': {count} points indexed  (skipped={skipped})  mode={mode}")
+    modalities = ["sparse(genre/studio/voice/source)"]
+    if text_emb_map:  modalities.append("dense-text(384)")
+    if image_emb_map: modalities.append("dense-image(1024)")
+    print(f"Collection '{collection_name}': {count} points indexed  (skipped={skipped})")
+    print(f"  Retrieval mode: {' + '.join(modalities)}")

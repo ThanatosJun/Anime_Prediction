@@ -264,7 +264,8 @@ fit 階段從訓練集統計每個製作公司 / 聲優的歷史 mean_popularity
 | 08 | 0.8682 | 1.0313 | 0.8619 | TE 改回 raw popularity |
 | 09 | 0.8601 | 1.0104 | 0.8654 | image_proj 256→64；fused_dim 448→256 |
 | 10 | 0.8358 | — | 0.8647 | RAG sparse：multi-hot → IDF 加權 |
-| **11** | **0.8383** | **0.9766** | **0.8637** | RAG sparse 混合加權（IDF+df）；MetaEncoder 新增 `is_new_studio`（65→66 維）|
+| 11 | 0.8383 | 0.9766 | 0.8637 | RAG sparse 混合加權（IDF+df）；MetaEncoder 新增 `is_new_studio`（65→66 維）|
+| **12** | **0.8505** | **1.0227** | **0.8655** | TextGNN + ImageGNN（star-topology, cosine attention）；RAG 三路混合（sparse+text dense+image dense）→ top-5 retrieved_ids |
 
 ### meanScore（指標：MAE，越低越好）
 
@@ -280,10 +281,10 @@ fit 階段從訓練集統計每個製作公司 / 聲優的歷史 mean_popularity
 | 08 | 6.8100 | 8.2085 | 0.6394 | TE raw popularity |
 | 09 | 6.7996 | 8.1903 | 0.6417 | image_proj 256→64 |
 | 10 | 6.7724 | — | 0.6415 | RAG sparse IDF |
-| **11** | **6.7212** | **8.0691** | **0.6428** | RAG 混合加權；`is_new_studio` |
+| 11 | 6.7212 | 8.0691 | 0.6428 | RAG 混合加權；`is_new_studio` |
+| **12** | **7.006** | **8.3455** | **0.6137** | TextGNN + ImageGNN；RAG 三路混合 |
 
-> Run 10、11 的 RAG 需要 Qdrant 重建，test 評估在 RAG 重建後執行。
-> 目前 **Run 11 在 val 兩個 target 均達最佳**，popularity test 亦為歷史最佳（0.9766）。
+> 目前 **Run 11 在兩個 target 的 val 均達最佳**；Run 12 引入 GNN 架構，val 表現略退，後續可調整 GNN 超參數或 RAG 品質改善。
 
 ---
 

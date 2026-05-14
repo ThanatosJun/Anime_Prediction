@@ -17,13 +17,13 @@ def _load_rag_config() -> dict:
         return yaml.safe_load(f)
 
 
-def _load_text_emb(split: str, text_emb_dir: str) -> dict:
-    path = Path(text_emb_dir) / f"text_embeddings_{split}.parquet"
-    if not path.exists():
+def _load_emb_map(path: str, col_prefix: str) -> dict:
+    p = Path(path)
+    if not p.exists():
         return {}
-    df = pd.read_parquet(path)
-    emb_cols = [c for c in df.columns if c.startswith("emb_")]
-    return dict(zip(df["id"].astype(int), df[emb_cols].values.astype(np.float32)))
+    df   = pd.read_parquet(p)
+    cols = [c for c in df.columns if c.startswith(col_prefix)]
+    return dict(zip(df["id"].astype(int), df[cols].values.astype(np.float32)))
 
 
 def _build_time_filter(target_year: int, target_quarter, anime_id: int) -> models.Filter:
@@ -55,15 +55,17 @@ def query_split(
     df: pd.DataFrame,
     split: str,
     text_emb_map: dict,
+    image_emb_map: dict,
     fallback_popularity: float,
     fallback_score: float,
     fallback_episodes: float,
     collection_name: str,
     top_k: int,
+    top_k_ids: int,
     prefetch_k: int,
 ) -> pd.DataFrame:
     rows = []
-    use_dense = len(text_emb_map) > 0
+    fetch_limit = max(top_k, top_k_ids)
 
     for _, row in tqdm(df.iterrows(), total=len(df), desc=f"RAG query [{split}]"):
         genres       = parse_genres(row["genres"])
@@ -84,6 +86,7 @@ def query_split(
             "rag_format":       None,
             "rag_studios":      json.dumps([]),
             "rag_found":        False,
+            "retrieved_ids":    json.dumps([]),
         }
 
         if not indices:
@@ -93,28 +96,40 @@ def query_split(
         query_filter = _build_time_filter(
             int(row["release_year"]), row["release_quarter"], anime_id
         )
-        text_vec = text_emb_map.get(anime_id) if use_dense else None
+        text_vec  = text_emb_map.get(anime_id)
+        image_vec = image_emb_map.get(anime_id)
 
+        # Build prefetch list (sparse always; text/image if available)
+        prefetch = [
+            models.Prefetch(
+                query=models.SparseVector(indices=indices, values=values),
+                using="genre_studio",
+                limit=prefetch_k,
+                filter=query_filter,
+            ),
+        ]
         if text_vec is not None:
+            prefetch.append(models.Prefetch(
+                query=text_vec.tolist(),
+                using="text",
+                limit=prefetch_k,
+                filter=query_filter,
+            ))
+        if image_vec is not None:
+            prefetch.append(models.Prefetch(
+                query=image_vec.tolist(),
+                using="image",
+                limit=prefetch_k,
+                filter=query_filter,
+            ))
+
+        if len(prefetch) > 1:
             results = client.query_points(
                 collection_name=collection_name,
-                prefetch=[
-                    models.Prefetch(
-                        query=models.SparseVector(indices=indices, values=values),
-                        using="genre_studio",
-                        limit=prefetch_k,
-                        filter=query_filter,
-                    ),
-                    models.Prefetch(
-                        query=text_vec.tolist(),
-                        using="text",
-                        limit=prefetch_k,
-                        filter=query_filter,
-                    ),
-                ],
+                prefetch=prefetch,
                 query=models.FusionQuery(fusion=models.Fusion.RRF),
                 query_filter=query_filter,
-                limit=top_k,
+                limit=fetch_limit,
             ).points
         else:
             results = client.query_points(
@@ -122,7 +137,7 @@ def query_split(
                 query=models.SparseVector(indices=indices, values=values),
                 using="genre_studio",
                 query_filter=query_filter,
-                limit=top_k,
+                limit=fetch_limit,
             ).points
 
         if results:
@@ -137,6 +152,7 @@ def query_split(
                 "rag_format":       top1.get("format"),
                 "rag_studios":      json.dumps(top1.get("studios_parsed", [])),
                 "rag_found":        True,
+                "retrieved_ids":    json.dumps([int(r.id) for r in results[:top_k_ids]]),
             })
 
         rows.append(rag_row)
@@ -150,8 +166,10 @@ def query_all_splits(splits=("train", "val", "test")):
     encoder_path    = cfg["paths"]["encoder_path"]
     train_csv       = cfg["paths"]["train_csv"]
     text_emb_dir    = cfg["paths"]["text_emb_dir"]
+    image_emb_dir   = cfg["paths"].get("image_emb_dir", "")
     out_dir         = Path(cfg["paths"]["out_dir"])
     top_k           = cfg["query"]["top_k"]
+    top_k_ids       = cfg["query"].get("top_k_ids", 5)
     prefetch_k      = cfg["query"]["prefetch_k"]
 
     encoder = SparseEncoder.load(encoder_path)
@@ -165,15 +183,25 @@ def query_all_splits(splits=("train", "val", "test")):
 
     meta_dir = Path(cfg["paths"].get("meta_dir", "data/fussion"))
     for split in splits:
-        df           = pd.read_csv(meta_dir / f"fusion_meta_clean_{split}.csv")
-        text_emb_map = _load_text_emb(split, text_emb_dir)
-        mode         = "hybrid (sparse+dense)" if text_emb_map else "sparse only"
-        print(f"  [{split}] query mode: {mode}  ({len(text_emb_map)} text embeddings)")
+        df = pd.read_csv(meta_dir / f"fusion_meta_clean_{split}.csv")
 
-        out_df   = query_split(
-            client, encoder, df, split, text_emb_map,
+        text_emb_map = _load_emb_map(
+            str(Path(text_emb_dir) / f"text_embeddings_{split}.parquet"), "emb_"
+        )
+        image_emb_map = _load_emb_map(
+            str(Path(image_emb_dir) / f"image_embeddings_{split}.parquet"), "img_"
+        ) if image_emb_dir else {}
+
+        modalities = ["sparse"]
+        if text_emb_map:  modalities.append("text")
+        if image_emb_map: modalities.append("image")
+        print(f"  [{split}] mode: {'+'.join(modalities)}  "
+              f"(text={len(text_emb_map)}, image={len(image_emb_map)})")
+
+        out_df = query_split(
+            client, encoder, df, split, text_emb_map, image_emb_map,
             fallback_popularity, fallback_score, fallback_episodes,
-            collection_name, top_k, prefetch_k,
+            collection_name, top_k, top_k_ids, prefetch_k,
         )
         out_path = out_dir / f"rag_features_{split}.parquet"
         out_df.to_parquet(out_path, index=False)

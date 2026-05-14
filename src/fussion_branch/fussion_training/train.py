@@ -1,10 +1,15 @@
 """
-Train FusionMLP for a single target (popularity or meanScore).
+Train FusionMLP + TextGNN + ImageGNN for a single target (popularity or meanScore).
+
+Pipeline per batch:
+    1. TextGNN(query_text, retrieved_text, mask) → enhanced_text
+    2. ImageGNN(query_image, retrieved_image, mask) → enhanced_image
+    3. FusionMLP(enhanced_text, enhanced_image, meta) → prediction
 
 Output layout per target:
     results/fusion/{run_id}/{target}/
-        best_model.pt        ← best val checkpoint (state dict)
-        model_config.json    ← architecture config (for inference reconstruction)
+        best_model.pt        ← combined checkpoint {fusion_mlp, text_gnn, image_gnn}
+        model_config.json    ← architecture config (FusionMLP + GNN params)
         target_scaler.json   ← normalisation params
         training_log.jsonl   ← per-epoch metrics
         metrics_val.json
@@ -24,6 +29,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from src.fussion_branch.fussion_training.dataset import FusionDataset
+from src.fussion_branch.fussion_training.gnn import TextGNN, ImageGNN
 from src.fussion_branch.fussion_training.model import FusionMLP
 from src.fussion_branch.fussion_training.meta_encoder import MetaEncoder
 from src.fussion_branch.utilities.evaluate import compute_metrics, denormalize
@@ -44,6 +50,29 @@ def _build_target_scaler(
     std  = float(y.std())
     return {"mean": mean, "std": max(std, 1e-8), "log_transform": log_transform,
             "winsor_cap": winsor_cap}
+
+
+def _forward(
+    batch: dict,
+    model: FusionMLP,
+    text_gnn: TextGNN,
+    img_gnn: ImageGNN,
+    device: torch.device,
+) -> torch.Tensor:
+    """Run GNN → FusionMLP forward pass for one batch.
+
+    Caller is responsible for wrapping this in autocast when use_amp=True.
+    """
+    text  = batch["text_emb"].to(device)
+    image = batch["image_emb"].to(device)
+    meta  = batch["meta_feat"].to(device)
+    r_txt = batch["ret_text"].to(device)
+    r_img = batch["ret_image"].to(device)
+    mask  = batch["ret_mask"].to(device)
+
+    enh_text  = text_gnn(text, r_txt, mask)
+    enh_image = img_gnn(image, r_img, mask)
+    return model(enh_text, enh_image, meta)
 
 
 def train_one_target(config: dict, target_col: str) -> dict:
@@ -86,6 +115,7 @@ def train_one_target(config: dict, target_col: str) -> dict:
 
     # ── datasets & loaders ────────────────────────────────────────────────────
     image_emb_dir = cfg_data.get("image_emb_dir", "src/fussion_branch/embedding/image")
+    top_k_ids     = cfg_data.get("top_k_ids", 5)
 
     def make_dataset(split, apply_winsor: bool = False):
         return FusionDataset(
@@ -100,6 +130,7 @@ def train_one_target(config: dict, target_col: str) -> dict:
             target_mean=scaler["mean"],
             target_std=scaler["std"],
             winsor_cap=scaler.get("winsor_cap") if apply_winsor else None,
+            top_k_ids=top_k_ids,
         )
 
     train_ds = make_dataset("train", apply_winsor=True)
@@ -111,25 +142,52 @@ def train_one_target(config: dict, target_col: str) -> dict:
     val_loader   = DataLoader(val_ds,   batch_size=cfg_train["batch_size"], shuffle=False,
                               num_workers=num_workers, pin_memory=True, persistent_workers=True)
 
-    # ── model ─────────────────────────────────────────────────────────────────
-    model = FusionMLP(
+    # ── models ────────────────────────────────────────────────────────────────
+    gnn_num_layers = cfg_model.get("gnn_num_layers", 1)
+    gnn_dropout    = cfg_model.get("gnn_dropout", 0.1)
+
+    # FusionMLP only receives the keys it understands
+    mlp_keys = {"text_proj", "image_proj", "meta_proj", "hidden_dims", "dropout"}
+    mlp_cfg  = {k: v for k, v in cfg_model.items() if k in mlp_keys}
+
+    text_gnn = TextGNN(num_layers=gnn_num_layers, dropout=gnn_dropout).to(device)
+    img_gnn  = ImageGNN(num_layers=gnn_num_layers, dropout=gnn_dropout).to(device)
+    model    = FusionMLP(
         text_dim=train_ds.text_dim,
         image_dim=train_ds.image_dim,
         meta_dim=train_ds.meta_dim,
-        **cfg_model,
+        **mlp_cfg,
     ).to(device)
-    model.save_config(str(out_dir / "model_config.json"))
 
-    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    use_img  = train_ds.use_image
+    # Save combined model config (FusionMLP + GNN params)
+    full_cfg = {
+        **model.get_config(),
+        "gnn_num_layers": gnn_num_layers,
+        "gnn_dropout":    gnn_dropout,
+        "top_k_ids":      top_k_ids,
+    }
+    with open(out_dir / "model_config.json", "w") as f:
+        json.dump(full_cfg, f, indent=2)
+
+    n_params = (
+        sum(p.numel() for p in model.parameters()    if p.requires_grad) +
+        sum(p.numel() for p in text_gnn.parameters() if p.requires_grad) +
+        sum(p.numel() for p in img_gnn.parameters()  if p.requires_grad)
+    )
     print(f"  Dims: text={train_ds.text_dim}  image={train_ds.image_dim} "
-          f"({'real' if use_img else 'zeros'})  meta={train_ds.meta_dim}")
+          f"({'real' if train_ds.use_image else 'zeros'})  meta={train_ds.meta_dim}")
+    print(f"  GNN: num_layers={gnn_num_layers}  top_k={top_k_ids}")
     print(f"  Trainable params: {n_params:,}")
 
     criterion = nn.HuberLoss(delta=1.0)
+    base_lr     = cfg_train["learning_rate"]
+    gnn_lr      = base_lr * cfg_train.get("gnn_lr_factor", 1.0)
     optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=cfg_train["learning_rate"],
+        [
+            {"params": list(model.parameters()),    "lr": base_lr},
+            {"params": list(text_gnn.parameters()), "lr": gnn_lr},
+            {"params": list(img_gnn.parameters()),  "lr": gnn_lr},
+        ],
         weight_decay=cfg_train["weight_decay"],
     )
     plateau_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -138,69 +196,77 @@ def train_one_target(config: dict, target_col: str) -> dict:
     scaler_amp = GradScaler("cuda") if use_amp else None
 
     # ── training loop ─────────────────────────────────────────────────────────
-    warmup_epochs   = cfg_train.get("warmup_epochs", 5)
-    base_lr         = cfg_train["learning_rate"]
-    best_val_mae    = float("inf")
-    patience_cnt    = 0
-    best_epoch      = 0
-    log_path        = out_dir / "training_log.jsonl"
-    ckpt_path       = out_dir / "best_model.pt"
+    warmup_epochs = cfg_train.get("warmup_epochs", 5)
+    # target LRs per group (set by optimizer above)
+    target_lrs    = [pg["lr"] for pg in optimizer.param_groups]
+    best_val_mae  = float("inf")
+    patience_cnt  = 0
+    best_epoch    = 0
+    log_path      = out_dir / "training_log.jsonl"
+    ckpt_path     = out_dir / "best_model.pt"
 
-    # save initial state as fallback so ckpt_path always exists after training
-    torch.save(model.state_dict(), ckpt_path)
+    # save initial state as fallback
+    _save_ckpt(ckpt_path, model, text_gnn, img_gnn)
 
     for epoch in range(1, cfg_train["epochs"] + 1):
 
-        # linear LR warmup
+        # linear LR warmup — respect per-group target LR
         if epoch <= warmup_epochs:
-            warmup_lr = base_lr * epoch / warmup_epochs
-            for pg in optimizer.param_groups:
-                pg["lr"] = warmup_lr
+            for pg, target_lr in zip(optimizer.param_groups, target_lrs):
+                pg["lr"] = target_lr * epoch / warmup_epochs
 
         # ── train ─────────────────────────────────────────────────────────────
-        model.train()
+        model.train(); text_gnn.train(); img_gnn.train()
         train_loss = 0.0
         for batch in train_loader:
-            x = batch["features"].to(device)
             y = batch["target"].to(device)
             optimizer.zero_grad()
 
             if use_amp:
                 with autocast("cuda"):
-                    pred = model(x)
+                    pred = _forward(batch, model, text_gnn, img_gnn, device)
                     loss = criterion(pred, y)
                 scaler_amp.scale(loss).backward()
                 scaler_amp.unscale_(optimizer)
-                nn.utils.clip_grad_norm_(model.parameters(), cfg_train["grad_clip"])
+                nn.utils.clip_grad_norm_(
+                    list(model.parameters()) + list(text_gnn.parameters()) + list(img_gnn.parameters()),
+                    cfg_train["grad_clip"],
+                )
                 scaler_amp.step(optimizer)
                 scaler_amp.update()
             else:
-                pred = model(x)
+                pred = _forward(batch, model, text_gnn, img_gnn, device)
                 loss = criterion(pred, y)
                 loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), cfg_train["grad_clip"])
+                nn.utils.clip_grad_norm_(
+                    list(model.parameters()) + list(text_gnn.parameters()) + list(img_gnn.parameters()),
+                    cfg_train["grad_clip"],
+                )
                 optimizer.step()
 
             train_loss += loss.item() * len(y)
         train_loss /= len(train_ds)
 
         # ── validate ──────────────────────────────────────────────────────────
-        val_mae, val_loss = _eval_loss_mae(model, val_loader, criterion, device, use_amp)
-        current_lr = optimizer.param_groups[0]["lr"]
+        val_mae, val_loss = _eval_loss_mae(
+            model, text_gnn, img_gnn, val_loader, criterion, device, use_amp
+        )
+        current_lr     = optimizer.param_groups[0]["lr"]
+        current_gnn_lr = optimizer.param_groups[1]["lr"]
 
         if epoch > warmup_epochs:
             plateau_scheduler.step(val_mae)
 
-        writer.add_scalar("loss/train", train_loss, epoch)
-        writer.add_scalar("loss/val",   val_loss,   epoch)
-        writer.add_scalar("MAE/val",    val_mae,    epoch)
-        writer.add_scalar("lr",         current_lr, epoch)
+        writer.add_scalar("loss/train", train_loss,     epoch)
+        writer.add_scalar("loss/val",   val_loss,       epoch)
+        writer.add_scalar("MAE/val",    val_mae,        epoch)
+        writer.add_scalar("lr/mlp",     current_lr,     epoch)
+        writer.add_scalar("lr/gnn",     current_gnn_lr, epoch)
 
-        # per-epoch log
         log_entry = {
             "epoch": epoch, "train_loss": round(train_loss, 6),
             "val_loss": round(val_loss, 6), "val_mae": round(val_mae, 4),
-            "lr": current_lr,
+            "lr": current_lr, "gnn_lr": current_gnn_lr,
         }
         with open(log_path, "a") as f:
             f.write(json.dumps(log_entry) + "\n")
@@ -214,7 +280,7 @@ def train_one_target(config: dict, target_col: str) -> dict:
             best_val_mae = val_mae
             best_epoch   = epoch
             patience_cnt = 0
-            torch.save(model.state_dict(), ckpt_path)
+            _save_ckpt(ckpt_path, model, text_gnn, img_gnn)
         else:
             patience_cnt += 1
             if patience_cnt >= cfg_train["early_stopping_patience"]:
@@ -225,12 +291,11 @@ def train_one_target(config: dict, target_col: str) -> dict:
     writer.close()
     print(f"  Best epoch: {best_epoch}  best val_MAE: {best_val_mae:.4f}")
 
-    # ── final evaluation (val only — test evaluated separately via run_evaluate.py) ──
-    best_state = torch.load(ckpt_path, map_location=device, weights_only=True)
-    model.load_state_dict(best_state)
-
-    metrics_val = _full_eval(model, val_loader, scaler, target_col, meta_train, device, use_amp, "val")
-
+    # ── final val evaluation ──────────────────────────────────────────────────
+    _load_ckpt(ckpt_path, model, text_gnn, img_gnn, device)
+    metrics_val = _full_eval(
+        model, text_gnn, img_gnn, val_loader, scaler, target_col, device, use_amp, "val"
+    )
     with open(out_dir / "metrics_val.json", "w") as f:
         json.dump(metrics_val, f, indent=2)
 
@@ -240,19 +305,32 @@ def train_one_target(config: dict, target_col: str) -> dict:
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _eval_loss_mae(model, loader, criterion, device, use_amp):
-    """MAE and loss in normalized space — no denormalization needed for early stopping."""
-    model.eval()
+def _save_ckpt(path, model, text_gnn, img_gnn):
+    torch.save({
+        "fusion_mlp": model.state_dict(),
+        "text_gnn":   text_gnn.state_dict(),
+        "image_gnn":  img_gnn.state_dict(),
+    }, path)
+
+
+def _load_ckpt(path, model, text_gnn, img_gnn, device):
+    ckpt = torch.load(path, map_location=device, weights_only=True)
+    model.load_state_dict(ckpt["fusion_mlp"])
+    text_gnn.load_state_dict(ckpt["text_gnn"])
+    img_gnn.load_state_dict(ckpt["image_gnn"])
+
+
+def _eval_loss_mae(model, text_gnn, img_gnn, loader, criterion, device, use_amp):
+    model.eval(); text_gnn.eval(); img_gnn.eval()
     y_true_list, y_pred_list = [], []
     with torch.no_grad():
         for batch in loader:
-            x = batch["features"].to(device)
             y = batch["target"].to(device)
             if use_amp:
                 with autocast("cuda"):
-                    pred = model(x)
+                    pred = _forward(batch, model, text_gnn, img_gnn, device)
             else:
-                pred = model(x)
+                pred = _forward(batch, model, text_gnn, img_gnn, device)
             y_true_list.append(y.cpu().numpy())
             y_pred_list.append(pred.cpu().numpy())
     y_true = np.concatenate(y_true_list)
@@ -262,17 +340,16 @@ def _eval_loss_mae(model, loader, criterion, device, use_amp):
     return mae, val_loss
 
 
-def _full_eval(model, loader, scaler, target_col, train_meta_df, device, use_amp, split_name):
-    model.eval()
+def _full_eval(model, text_gnn, img_gnn, loader, scaler, target_col, device, use_amp, split_name):
+    model.eval(); text_gnn.eval(); img_gnn.eval()
     y_true_list, y_pred_list = [], []
     with torch.no_grad():
         for batch in loader:
-            x = batch["features"].to(device)
             if use_amp:
                 with autocast("cuda"):
-                    pred = model(x)
+                    pred = _forward(batch, model, text_gnn, img_gnn, device)
             else:
-                pred = model(x)
+                pred = _forward(batch, model, text_gnn, img_gnn, device)
             y_true_list.append(batch["target"].numpy())
             y_pred_list.append(pred.cpu().numpy())
     y_true_norm = np.concatenate(y_true_list)
