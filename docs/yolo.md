@@ -1,7 +1,7 @@
 ## yolo處理方法
 
 ### 目標
-透過yolo (https://github.com/deepghs/imgutils/tree/main) 抓取照片中的動漫物件，並交付給swin transformer 作處理。這個部分需要實作這些finction 來串接原本的內容
+透過yolo (https://github.com/deepghs/imgutils/tree/main) (https://huggingface.co/skytnt/anime-seg) 抓取照片中的動漫物件，並交付給swin transformer 作處理。這個部分需要實作這些finction 來串接原本的內容
 
 ### 保留
 
