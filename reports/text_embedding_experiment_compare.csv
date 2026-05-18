@@ -1,0 +1,2 @@
+timestamp_utc,active_model_key,model_name,device,batch_size,sample_size,splits,total_duration_sec,total_input_rows,total_encoded_rows,weighted_retention_rate,avg_split_duration_sec,rows_per_second,summary_report
+2026-05-18T06:13:58.809648+00:00,minilm_l6,sentence-transformers/all-MiniLM-L6-v2,cuda,32,0,train|val|test,15.0649,19381,18185,0.9382900779113564,5.021466666666666,1207.1105682745986,reports/text_embedding_pipeline_summary.json

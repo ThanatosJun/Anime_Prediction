@@ -252,6 +252,7 @@ def main() -> None:
     preprocessor = TextPreprocessor(
         lowercase=preprocess_cfg.get("lowercase", True),
         remove_urls=preprocess_cfg.get("remove_urls", True),
+        remove_marketing=preprocess_cfg.get("remove_marketing", True),
         remove_extra_whitespace=preprocess_cfg.get("remove_extra_whitespace", True),
         min_length=int(preprocess_cfg.get("min_length", 10)),
         max_length=int(preprocess_cfg.get("max_length", 512)),

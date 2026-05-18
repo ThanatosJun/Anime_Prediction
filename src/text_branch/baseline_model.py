@@ -22,8 +22,11 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
+from sklearn.decomposition import TruncatedSVD
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.preprocessing import normalize
 
 
 def _parse_args() -> argparse.Namespace:
@@ -70,6 +73,12 @@ def _parse_args() -> argparse.Namespace:
         default="",
         help="Optional embedding model name for tracking.",
     )
+    parser.add_argument(
+        "--tfidf-components",
+        type=int,
+        default=0,
+        help="Number of LSA (TF-IDF + TruncatedSVD) dimensions to append to dense features. 0 = disabled.",
+    )
     return parser.parse_args()
 
 
@@ -81,6 +90,7 @@ def _build_compare_row(args: argparse.Namespace, summary: Dict) -> Dict:
         "embedding_model_name": args.embedding_model_name,
         "regressor_name": summary["model"]["name"],
         "alpha": summary["model"]["alpha"],
+        "tfidf_components": summary["model"]["tfidf_components"],
         "feature_count": summary["inputs"]["feature_count"],
         "train_path": summary["inputs"]["train_path"],
         "val_path": summary["inputs"]["val_path"],
@@ -108,6 +118,38 @@ def _load_split(path: Path, split: str) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Missing embedding artifact for {split}: {path}")
     return pd.read_parquet(path)
+
+
+def _build_lsa_features(
+    train_texts: List[str],
+    val_texts: List[str],
+    test_texts: List[str],
+    n_components: int,
+    max_tfidf_features: int = 30000,
+    random_seed: int = 42,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Fit TF-IDF + TruncatedSVD (LSA) on training text, transform all splits,
+    and L2-normalise the output so the scale matches the dense embeddings.
+
+    Returns (train_lsa, val_lsa, test_lsa), each shape (N, n_components), float32.
+    """
+    tfidf = TfidfVectorizer(
+        max_features=max_tfidf_features,
+        sublinear_tf=True,
+        strip_accents="unicode",
+        analyzer="word",
+        ngram_range=(1, 2),
+        min_df=2,
+    )
+    svd = TruncatedSVD(n_components=n_components, random_state=random_seed)
+
+    train_mat = tfidf.fit_transform(train_texts)
+    train_lsa = normalize(svd.fit_transform(train_mat)).astype(np.float32)
+    val_lsa   = normalize(svd.transform(tfidf.transform(val_texts))).astype(np.float32)
+    test_lsa  = normalize(svd.transform(tfidf.transform(test_texts))).astype(np.float32)
+
+    return train_lsa, val_lsa, test_lsa
 
 
 def _feature_columns(df: pd.DataFrame) -> List[str]:
@@ -213,6 +255,36 @@ def main() -> None:
 
     feature_cols = _feature_columns(df_train)
 
+    # ── Optional: TF-IDF + LSA sparse features ──────────────────────────────
+    if args.tfidf_components > 0:
+        text_col = "text_clean"
+        for split_name, df in (("train", df_train), ("val", df_val), ("test", df_test)):
+            if text_col not in df.columns:
+                raise ValueError(
+                    f"Column '{text_col}' not found in {split_name} parquet. "
+                    "Re-run the embedding pipeline to regenerate artifacts."
+                )
+        train_lsa, val_lsa, test_lsa = _build_lsa_features(
+            train_texts=df_train[text_col].fillna("").tolist(),
+            val_texts=df_val[text_col].fillna("").tolist(),
+            test_texts=df_test[text_col].fillna("").tolist(),
+            n_components=args.tfidf_components,
+            random_seed=args.random_seed,
+        )
+        lsa_cols = [f"lsa_{i:03d}" for i in range(args.tfidf_components)]
+        df_train = pd.concat(
+            [df_train.reset_index(drop=True), pd.DataFrame(train_lsa, columns=lsa_cols)], axis=1
+        )
+        df_val = pd.concat(
+            [df_val.reset_index(drop=True), pd.DataFrame(val_lsa, columns=lsa_cols)], axis=1
+        )
+        df_test = pd.concat(
+            [df_test.reset_index(drop=True), pd.DataFrame(test_lsa, columns=lsa_cols)], axis=1
+        )
+        feature_cols = feature_cols + lsa_cols
+        print(f"[TF-IDF+LSA] Appended {args.tfidf_components} LSA dims → total features: {len(feature_cols)}")
+    # ────────────────────────────────────────────────────────────────────────
+
     overlap = _split_overlap(df_train, df_val, df_test, args.id_column)
 
     target_reports = {}
@@ -233,6 +305,7 @@ def main() -> None:
             "name": "Ridge",
             "alpha": args.alpha,
             "random_seed": args.random_seed,
+            "tfidf_components": args.tfidf_components,
         },
         "package_versions": {
             "python": sys.version.split()[0],

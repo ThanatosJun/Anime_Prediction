@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-04-25T00:10:28.748221+00:00",
+  "timestamp_utc": "2026-05-18T06:13:58.809648+00:00",
   "config_path": "src/text_branch/configs/embedding_config.yaml",
   "data_dir": "data/processed",
   "splits": [
@@ -14,36 +14,53 @@
     "meanScore"
   ],
   "sample_size": 0,
+  "embedding_runtime": {
+    "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    "device": "auto",
+    "batch_size": 32,
+    "active_model_key": "minilm_l6"
+  },
   "model_info": {
     "model_name": "sentence-transformers/all-MiniLM-L6-v2",
     "embedding_dim": 384,
-    "device": "cpu",
-    "batch_size": 16,
+    "device": "cuda",
+    "batch_size": 32,
     "random_seed": 42
   },
   "preprocessing": {
     "lowercase": true,
     "remove_urls": true,
+    "remove_marketing": true,
     "remove_extra_whitespace": true,
     "min_length": 10,
     "max_length": 512
+  },
+  "aggregate_metrics": {
+    "total_duration_sec": 15.0649,
+    "total_input_rows": 19381,
+    "total_encoded_rows": 18185,
+    "weighted_retention_rate": 0.9382900779113564,
+    "avg_split_duration_sec": 5.021466666666666,
+    "rows_per_second": 1207.1105682745986
   },
   "split_stats": [
     {
       "split": "train",
       "input_rows": 13376,
-      "encoded_rows": 12783,
-      "dropped_rows": 593,
-      "retention_rate": 0.9556668660287081,
-      "output_path": "artifacts/text_embeddings_train.parquet"
+      "encoded_rows": 12741,
+      "dropped_rows": 635,
+      "retention_rate": 0.9525269138755981,
+      "output_path": "artifacts/text_embeddings_train.parquet",
+      "duration_sec": 10.7506
     },
     {
       "split": "val",
       "input_rows": 2918,
-      "encoded_rows": 2637,
-      "dropped_rows": 281,
-      "retention_rate": 0.9037011651816312,
-      "output_path": "artifacts/text_embeddings_val.parquet"
+      "encoded_rows": 2636,
+      "dropped_rows": 282,
+      "retention_rate": 0.9033584647018505,
+      "output_path": "artifacts/text_embeddings_val.parquet",
+      "duration_sec": 2.126
     },
     {
       "split": "test",
@@ -51,7 +68,8 @@
       "encoded_rows": 2808,
       "dropped_rows": 279,
       "retention_rate": 0.9096209912536443,
-      "output_path": "artifacts/text_embeddings_test.parquet"
+      "output_path": "artifacts/text_embeddings_test.parquet",
+      "duration_sec": 2.1878
     }
   ]
 }
