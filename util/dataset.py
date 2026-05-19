@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 
 from util.image_process import load_image, ResizeWithPad
-from src.YOLO import detect_person
+from src.YOLO import detect_person, detect_faces
 class AnimeImageDataset(Dataset):
     def __init__(
         self,
@@ -49,7 +49,9 @@ class AnimeImageDataset(Dataset):
 
         if self.use_yolo:
             cfg = self._yolo_cfg
-            max_persons = cfg['detection']['max_persons']
+            detect_mode = cfg.get('detect_mode', 'person')
+            det_cfg = cfg['face_detection'] if detect_mode == 'face' else cfg['detection']
+            max_det = det_cfg['max_detections']
 
             # upscale 小圖以提升偵測率
             w, h = img.size
@@ -59,22 +61,29 @@ class AnimeImageDataset(Dataset):
             else:
                 img_det = img
 
-            results = detect_person(
-                img_det,
-                level=cfg['model']['level'],
-                version=cfg['model']['version'],
-                conf_threshold=cfg['detection']['conf_threshold'],
-                iou_threshold=cfg['detection']['iou_threshold'],
-            )
-            # 依信心分數排序，最多取 max_persons 個
-            results = sorted(results, key=lambda x: x[2], reverse=True)[:max_persons]
+            results = []
+            if detect_mode in ('person', 'both'):
+                m, d = cfg['model'], cfg['detection']
+                results += detect_person(
+                    img_det,
+                    level=m['level'], version=m['version'],
+                    conf_threshold=d['conf_threshold'], iou_threshold=d['iou_threshold'],
+                )
+            if detect_mode in ('face', 'both'):
+                m, d = cfg['face_model'], cfg['face_detection']
+                results += detect_faces(
+                    img_det,
+                    level=m['level'], version=m['version'],
+                    conf_threshold=d['conf_threshold'], iou_threshold=d['iou_threshold'],
+                )
+            results = sorted(results, key=lambda x: x[2], reverse=True)[:max_det]
             frame_ = []  # 儲存所有 crop
             if results:
                 for j, (bbox, label, conf) in enumerate(results):
                     x0, y0, x1, y1 = bbox
                     crop = img_det.crop((x0, y0, x1, y1))
                     frame_.append(crop)
-                    if cfg['detection']['save_crops']:
+                    if det_cfg['save_crops']:
                         save_dir = cfg['data']['output_dir']
                         os.makedirs(save_dir, exist_ok=True)
                         save_path = os.path.join(save_dir, f"{idx}_{self.image_col}_crop_{j}.jpg")

@@ -9,12 +9,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PIL import Image
-
 import numpy as np
-
-from src.YOLO import detect_person
-from util.getImage import getImage_YOLO
 
 
 def predict_one_col(model, loader, device) -> dict:

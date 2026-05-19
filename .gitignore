@@ -24,6 +24,9 @@ __pycache__/
 data/image/
 data/fetch_log.csv
 
+# YOLO cropped output
+gen/cropped/
+
 # Generated dataset artifacts (reproducible)
 data/interim/*
 !data/interim/.gitkeep

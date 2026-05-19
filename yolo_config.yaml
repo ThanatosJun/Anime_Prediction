@@ -1,3 +1,6 @@
+# ── Detection Mode ────────────────────────────────────────────────────────────
+detect_mode: face                # person | face | both
+
 # ── Data ──────────────────────────────────────────────────────────────────────
 data:
   csv_path: data/fetch_log.csv
@@ -5,7 +8,7 @@ data:
     - coverImage_medium
     #- bannerImage
   image_dir: data/image           # 原始圖片所在目錄
-  output_dir: gen/cropped/01_th  # 裁切後人物圖片的儲存目錄
+  output_dir: gen/cropped_face/03_th  # 裁切後人物圖片的儲存目錄
   log_path: data/yolo_log.csv     # 偵測結果 log（每張圖的偵測數量、狀態）
 
 # ── Debug ─────────────────────────────────────────────────────────────────────
@@ -13,21 +16,37 @@ debug:
   enabled: false
   sample_size: 20                 # enabled=true 時只處理前 n 筆
 
-# ── Model ─────────────────────────────────────────────────────────────────────
+# ── Model (person) ────────────────────────────────────────────────────────────
 model:
   repo_id: deepghs/anime_person_detection
   level: m                        # n（最快）/ s / m / x（最準）
   version: v1.1                   # v0 / v1 / v1.1
   # model_name:                   # 手動指定模型名稱時取消註解，會覆蓋 level + version
 
-# ── Detection ─────────────────────────────────────────────────────────────────
+# ── Detection (person) ────────────────────────────────────────────────────────
 detection:
   conf_threshold: 0.2             # 信心分數門檻，低於此值的偵測結果會被濾除
   iou_threshold: 0.8              # NMS 的 IoU 門檻，控制重疊框的合併程度
-  max_persons: 5                  # 每張圖最多保留幾個人物框（依信心分數排序）
-  min_bbox_ratio: 0.05            # 人物框面積 / 圖片面積的最小比例（過濾太小的框）
-  save_crops: true                # 是否將裁切後的人物圖另存
-  fallback_full_image: true       # 偵測不到人物時，是否改用整張圖作為輸出
+  max_detections: 5               # 每張圖最多保留幾個偵測框（依信心分數排序）
+  min_bbox_ratio: 0.05            # 框面積 / 圖片面積的最小比例（過濾太小的框）
+  save_crops: true                # 是否將裁切後的圖另存
+  fallback_full_image: true       # 偵測不到目標時，是否改用整張圖作為輸出
+
+# ── Model (face) ──────────────────────────────────────────────────────────────
+face_model:
+  repo_id: deepghs/anime_face_detection
+  level: s                        # s（標準）/ n（最快）
+  version: v1.4                   # v0 / v1 / v1.3 / v1.4
+  # model_name:                   # 手動指定模型名稱時取消註解
+
+# ── Detection (face) ──────────────────────────────────────────────────────────
+face_detection:
+  conf_threshold: 0.15            # 臉部較小，門檻設低一點
+  iou_threshold: 0.9            # 同一張臉避免重複框，門檻設高一點
+  max_detections: 5               # 每張圖最多保留幾個臉部框
+  min_bbox_ratio: 0.02            # 臉部通常較小，比例門檻低於 person
+  save_crops: true
+  fallback_full_image: true
 
 # ── Output ────────────────────────────────────────────────────────────────────
 output:

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 
-from src.YOLO import detect_person
+from src.YOLO import detect_person, detect_faces
 from util.getImage import getImage_YOLO
 
 
@@ -43,27 +43,43 @@ def show_crops(idx, orig_img, frame_, output_dir, max_cols=5):
     return canvas_path
 
 
+def _run_detect(img, mode, cfg):
+    """依 detect_mode 呼叫對應偵測函式，回傳依信心分數排序後的結果清單。"""
+    if mode not in ('person', 'face', 'both'):
+        raise ValueError(f"Unknown detect_mode: {mode!r}. Must be 'person', 'face', or 'both'.")
+    results = []
+    if mode in ('person', 'both'):
+        m, d = cfg['model'], cfg['detection']
+        results += detect_person(
+            img,
+            level=m['level'], version=m['version'],
+            conf_threshold=d['conf_threshold'], iou_threshold=d['iou_threshold'],
+        )
+    if mode in ('face', 'both'):
+        m, d = cfg['face_model'], cfg['face_detection']
+        results += detect_faces(
+            img,
+            level=m['level'], version=m['version'],
+            conf_threshold=d['conf_threshold'], iou_threshold=d['iou_threshold'],
+        )
+    max_det = cfg['detection']['max_detections']
+    return sorted(results, key=lambda x: x[2], reverse=True)[:max_det]
+
+
 _ROOT = Path(__file__).resolve().parent.parent
 
 with open(_ROOT / 'yolo_config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
-image_dir    = Path(config['data']['image_dir'])
-output_dir   = Path(config['data']['output_dir'])
+detect_mode = config.get('detect_mode', 'person')
+image_dir   = Path(config['data']['image_dir'])
+output_dir  = Path(config['data']['output_dir'])
 output_dir.mkdir(parents=True, exist_ok=True)
 
-# model settings
-model_cfg = config['model']
-level     = model_cfg['level']
-version   = model_cfg['version']
-
-# detection settings
-det_cfg      = config['detection']
-conf_threshold = det_cfg['conf_threshold']
-iou_threshold  = det_cfg['iou_threshold']
-max_persons    = det_cfg['max_persons']
-save_crops     = det_cfg['save_crops']
-fallback       = det_cfg['fallback_full_image']
+# 根據 detect_mode 選擇對應的 detection 設定（both 以 person 設定為主）
+det_cfg    = config['face_detection'] if detect_mode == 'face' else config['detection']
+save_crops = det_cfg['save_crops']
+fallback   = det_cfg['fallback_full_image']
 
 # debug settings
 debug_cfg   = config['debug']
@@ -92,15 +108,7 @@ for i in range(start, end):
     if scale > 1:
         img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
-    results = detect_person(
-        img,
-        level=level,
-        version=version,
-        conf_threshold=conf_threshold,
-        iou_threshold=iou_threshold,
-    )
-    # 依信心分數排序，最多取 max_persons 個
-    results = sorted(results, key=lambda x: x[2], reverse=True)[:max_persons]
+    results = _run_detect(img, detect_mode, config)
 
     frame_ = []
 
@@ -112,14 +120,14 @@ for i in range(start, end):
             if save_crops:
                 save_path = output_dir / f"{idx}_{col}_crop_{j}.jpg"
                 crop.save(save_path)
-        print(f"[{idx}] detected {len(results)} person(s)")
+        print(f"[{idx}] detected {len(results)} {detect_mode}(s)")
     elif fallback:
         crop = img
         frame_.append(crop)
         if save_crops:
             save_path = output_dir / f"{idx}_{col}_crop_0.jpg"
             crop.save(save_path)
-        print(f"[{idx}] no person detected, fallback to full image")
+        print(f"[{idx}] no {detect_mode} detected, fallback to full image")
 
     if frame_:
         canvas_path = show_crops(idx, img, frame_, output_dir)
