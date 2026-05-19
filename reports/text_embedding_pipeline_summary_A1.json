@@ -1,0 +1,75 @@
+{
+  "timestamp_utc": "2026-05-19T00:52:54.121148+00:00",
+  "config_path": "src/text_branch/configs/embedding_config.yaml",
+  "data_dir": "data/processed",
+  "splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "text_column": "description",
+  "id_column": "id",
+  "target_columns": [
+    "popularity",
+    "meanScore"
+  ],
+  "sample_size": 0,
+  "embedding_runtime": {
+    "model_name": "artifacts\\finetuned_encoder_A1",
+    "device": "auto",
+    "batch_size": 32,
+    "active_model_key": "finetuned_finetuned_encoder_A1"
+  },
+  "model_info": {
+    "model_name": "artifacts\\finetuned_encoder_A1",
+    "embedding_dim": 768,
+    "device": "cuda",
+    "batch_size": 32,
+    "random_seed": 42
+  },
+  "preprocessing": {
+    "lowercase": true,
+    "remove_urls": true,
+    "remove_marketing": true,
+    "remove_extra_whitespace": true,
+    "min_length": 10,
+    "max_length": 512
+  },
+  "aggregate_metrics": {
+    "total_duration_sec": 60.4752,
+    "total_input_rows": 19381,
+    "total_encoded_rows": 18185,
+    "weighted_retention_rate": 0.9382900779113564,
+    "avg_split_duration_sec": 20.1582,
+    "rows_per_second": 300.7017752731698
+  },
+  "split_stats": [
+    {
+      "split": "train",
+      "input_rows": 13376,
+      "encoded_rows": 12741,
+      "dropped_rows": 635,
+      "retention_rate": 0.9525269138755981,
+      "output_path": "artifacts/text_embeddings_A1_train.parquet",
+      "duration_sec": 42.3799
+    },
+    {
+      "split": "val",
+      "input_rows": 2918,
+      "encoded_rows": 2636,
+      "dropped_rows": 282,
+      "retention_rate": 0.9033584647018505,
+      "output_path": "artifacts/text_embeddings_A1_val.parquet",
+      "duration_sec": 8.8278
+    },
+    {
+      "split": "test",
+      "input_rows": 3087,
+      "encoded_rows": 2808,
+      "dropped_rows": 279,
+      "retention_rate": 0.9096209912536443,
+      "output_path": "artifacts/text_embeddings_A1_test.parquet",
+      "duration_sec": 9.2669
+    }
+  ]
+}

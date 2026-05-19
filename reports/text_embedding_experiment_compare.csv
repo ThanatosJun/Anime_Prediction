@@ -1,2 +1,5 @@
 timestamp_utc,active_model_key,model_name,device,batch_size,sample_size,splits,total_duration_sec,total_input_rows,total_encoded_rows,weighted_retention_rate,avg_split_duration_sec,rows_per_second,summary_report
 2026-05-18T06:13:58.809648+00:00,minilm_l6,sentence-transformers/all-MiniLM-L6-v2,cuda,32,0,train|val|test,15.0649,19381,18185,0.9382900779113564,5.021466666666666,1207.1105682745986,reports/text_embedding_pipeline_summary.json
+2026-05-19T00:52:54.121148+00:00,finetuned_finetuned_encoder_A1,artifacts\finetuned_encoder_A1,cuda,32,0,train|val|test,60.4752,19381,18185,0.9382900779113564,20.1582,300.7017752731698,reports/text_embedding_pipeline_summary_A1.json
+2026-05-19T01:11:54.541280+00:00,finetuned_finetuned_encoder_A1,artifacts\finetuned_encoder_A1,cuda,32,0,train|val|test,62.2186,19381,18228,0.9405087456787575,20.739433333333334,292.96705486783696,reports/text_embedding_pipeline_summary_A1_rmfalse.json
+2026-05-19T01:13:12.130109+00:00,finetuned_finetuned_encoder_A1,artifacts\finetuned_encoder_A1,cuda,32,0,train|val|test,61.3442,19381,18228,0.9405087456787575,20.447999999999997,297.14300618477375,reports/text_embedding_pipeline_summary_A1_rmfalse.json

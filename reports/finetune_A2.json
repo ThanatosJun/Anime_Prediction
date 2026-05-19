@@ -1,0 +1,49 @@
+{
+  "run_id": "A2",
+  "timestamp_utc": "2026-05-19T02:31:48.348326+00:00",
+  "model_name": "intfloat/e5-base-v2",
+  "unfreeze_layers": 3,
+  "first_unfrozen_layer": 9,
+  "total_encoder_layers": 12,
+  "trainable_encoder_params": 21263616,
+  "total_encoder_params": 109482240,
+  "lr_head": 0.0001,
+  "lr_top": 1e-05,
+  "batch_size": 8,
+  "epochs_run": 5,
+  "best_epoch": 2,
+  "best_val_spearman_popularity": 0.681159,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.77665,
+      "val_spearman_popularity": 0.637048,
+      "val_spearman_meanScore": 0.33715
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.683101,
+      "val_spearman_popularity": 0.681159,
+      "val_spearman_meanScore": 0.39788
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.626321,
+      "val_spearman_popularity": 0.66225,
+      "val_spearman_meanScore": 0.411988
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.576191,
+      "val_spearman_popularity": 0.647324,
+      "val_spearman_meanScore": 0.409092
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.519431,
+      "val_spearman_popularity": 0.65477,
+      "val_spearman_meanScore": 0.435591
+    }
+  ],
+  "encoder_path": "artifacts/finetuned_encoder_A2"
+}

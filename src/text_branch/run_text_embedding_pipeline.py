@@ -138,6 +138,26 @@ def _parse_args() -> argparse.Namespace:
         default=0,
         help="Optional row cap per split for quick debug runs. 0 means full split.",
     )
+    parser.add_argument(
+        "--finetuned-model-path",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a fine-tuned SentenceTransformer directory produced by "
+            "finetune_encoder.py. When provided, overrides the model selected "
+            "in the config (e.g. artifacts/finetuned_encoder_A1)."
+        ),
+    )
+    parser.add_argument(
+        "--remove-marketing",
+        type=str,
+        choices=["true", "false"],
+        default=None,
+        help=(
+            "Optional override for preprocessing.remove_marketing from config. "
+            "Use 'false' to keep marketing/licensing lines for parity with fine-tuning runs."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -244,15 +264,30 @@ def main() -> None:
     output_cfg = config.get("output", {})
     runtime_embedding_cfg = _resolve_embedding_runtime_cfg(embedding_cfg)
 
+    # --finetuned-model-path overrides whatever model the config selected
+    if getattr(args, "finetuned_model_path", None):
+        finetuned_path = Path(args.finetuned_model_path)
+        if not finetuned_path.exists():
+            raise FileNotFoundError(
+                f"--finetuned-model-path does not exist: {finetuned_path}"
+            )
+        runtime_embedding_cfg["model_name"] = str(finetuned_path)
+        runtime_embedding_cfg["active_model_key"] = f"finetuned_{finetuned_path.name}"
+        print(f"[finetune override] Using fine-tuned encoder: {finetuned_path}")
+
     artifact_dir = Path(output_cfg.get("artifact_dir", "artifacts"))
     report_dir = Path(output_cfg.get("report_dir", "reports"))
     artifact_dir.mkdir(parents=True, exist_ok=True)
     report_dir.mkdir(parents=True, exist_ok=True)
 
+    remove_marketing = preprocess_cfg.get("remove_marketing", True)
+    if args.remove_marketing is not None:
+        remove_marketing = args.remove_marketing.lower() == "true"
+
     preprocessor = TextPreprocessor(
         lowercase=preprocess_cfg.get("lowercase", True),
         remove_urls=preprocess_cfg.get("remove_urls", True),
-        remove_marketing=preprocess_cfg.get("remove_marketing", True),
+        remove_marketing=remove_marketing,
         remove_extra_whitespace=preprocess_cfg.get("remove_extra_whitespace", True),
         min_length=int(preprocess_cfg.get("min_length", 10)),
         max_length=int(preprocess_cfg.get("max_length", 512)),
@@ -308,6 +343,9 @@ def main() -> None:
         float(total_encoded_rows / total_duration_sec) if total_duration_sec > 0 else 0.0
     )
 
+    effective_preprocessing_cfg = dict(preprocess_cfg)
+    effective_preprocessing_cfg["remove_marketing"] = remove_marketing
+
     summary = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "config_path": str(args.config.as_posix()),
@@ -319,7 +357,7 @@ def main() -> None:
         "sample_size": args.sample_size,
         "embedding_runtime": runtime_embedding_cfg,
         "model_info": generator.get_model_info(),
-        "preprocessing": preprocess_cfg,
+        "preprocessing": effective_preprocessing_cfg,
         "aggregate_metrics": {
             "total_duration_sec": total_duration_sec,
             "total_input_rows": total_input_rows,

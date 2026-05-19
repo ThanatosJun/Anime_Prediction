@@ -136,6 +136,77 @@ Regressor: Ridge α=1.0
 
 ---
 
+## Experiment 04 — Layer-wise Fine-tuning (Optimization #3, A1 top-2 layers)
+
+**Date:** 2026-05-19  
+**Change:** Added supervised fine-tuning step for `intfloat/e5-base-v2`:
+- Freeze all encoder layers, unfreeze top 2 layers only (`layers 10-11` of 12)
+- Discriminative LRs: head = `1e-4`, top layers = `1e-5`
+- Early stopping on val Spearman (popularity)
+- Saved best encoder as SentenceTransformer artifact and re-ran standard embedding pipeline + Ridge eval
+
+### Fine-tune stage (direct validation)
+
+From `reports/finetune_A1.json`:
+- best epoch: 2
+- best val Spearman (popularity): **0.6637**
+- trainable encoder params: 14,175,744 / 109,482,240 (12.9%)
+
+### A1 downstream run (first attempt, preprocessing mismatch)
+
+Issue found:
+- fine-tune used `remove_marketing=False`
+- embedding export used config default `remove_marketing=True`
+- this caused train/infer preprocessing mismatch and weakened transfer
+
+Results from `reports/text_branch_metrics_A1.json`:
+
+| Target | Split | MAE | RMSE | Spearman |
+|---|---|---:|---:|---:|
+| popularity | val | 19657.66 | 37445.95 | 0.5515 |
+| popularity | test | 18212.81 | 31737.45 | 0.5779 |
+| meanScore | val | 8.8342 | 10.9576 | 0.4008 |
+| meanScore | test | 10.2091 | 12.5089 | 0.2683 |
+
+### A1 downstream run (corrected parity: `remove_marketing=False`)
+
+Re-exported embeddings with CLI override to match fine-tune preprocessing (`reports/text_embedding_pipeline_summary_A1_rmfalse.json`).
+
+Results from `reports/text_branch_metrics_A1_rmfalse.json`:
+
+| Target | Split | MAE | RMSE | Spearman |
+|---|---|---:|---:|---:|
+| popularity | val | 19592.98 | 37125.43 | 0.5670 |
+| popularity | test | 18366.28 | 31864.62 | 0.5928 |
+| meanScore | val | 8.8262 | 10.9547 | 0.4048 |
+| meanScore | test | 10.1864 | 12.4757 | 0.2702 |
+
+### Delta vs e5_base baseline (corrected parity run)
+
+| Target | Split | ΔMAE | ΔRMSE | ΔSpearman |
+|---|---|---:|---:|---:|
+| popularity | val | **−543.49** | **−3349.12** | −0.0410 |
+| popularity | test | +954.28 | **−195.51** | −0.0244 |
+| meanScore | val | **−0.7240** | **−0.7315** | +0.0554 |
+| meanScore | test | **−0.6265** | **−0.6552** | +0.0177 |
+
+### Promotion gate decision (A1)
+
+Required:
+1. Validation Spearman improves vs e5_base baseline (0.6080)
+2. Test popularity MAE and RMSE do not regress
+
+Observed (A1 corrected parity):
+- val popularity Spearman = 0.5670 (**fails gate 1**)
+- test popularity RMSE = 31864.62 (improves)
+- test popularity MAE = 18366.28 (regresses; **fails gate 2**)
+
+### Verdict: ❌ Do not promote A1
+
+Although A1 improves RMSE and most meanScore metrics, it does not satisfy the popularity gate criteria.
+
+---
+
 ## Cross-experiment Summary
 
 | Experiment | Model | Features | popularity test Spearman | meanScore test Spearman | popularity test RMSE | meanScore test RMSE |
@@ -145,6 +216,8 @@ Regressor: Ridge α=1.0
 | **Baseline (e5_base)** | **e5_base** | **768** | **0.6172** | **0.2525** | **32060.13** | **13.1309** |
 | Exp 02 (e5_base + LSA-128) | e5_base | 512 | 0.5717 | 0.2446 | 33544.16 | 12.3372 |
 | Exp 03 (e5_base + LSA-64) | e5_base | 448 | 0.5648 | 0.2456 | 33650.23 | 12.6358 |
+| Exp 04 (A1 top-2, mismatch) | e5_base finetuned | 768 | 0.5779 | 0.2683 | **31737.45** | 12.5089 |
+| Exp 04 (A1 top-2, corrected parity) | e5_base finetuned | 768 | 0.5928 | **0.2702** | 31864.62 | **12.4757** |
 
 ## Analysis — Why LSA Hurt Popularity
 
