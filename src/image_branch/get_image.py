@@ -36,6 +36,23 @@ def filter_by_ratio(df: pd.DataFrame, ratio: float, seed: int = 42) -> pd.DataFr
     return df.sample(frac=ratio, random_state=seed).reset_index(drop=True)
 
 
+def _resolve_url(row: pd.Series, col: str) -> str:
+    def _valid(v) -> bool:
+        return isinstance(v, str) and v.strip().startswith("http")
+
+    direct = row.get(col, "")
+    if _valid(direct):
+        return direct.strip()
+
+    if col == "coverImage_extraLarge":
+        for candidate in ("coverImage_extraLarge", "coverImage_large", "coverImage_medium"):
+            value = row.get(candidate, "")
+            if _valid(value):
+                return value.strip()
+
+    return ""
+
+
 def getImage(config: dict) -> None:
     data_cfg   = config['data']
     csv_path   = data_cfg['csv_path']
@@ -52,8 +69,8 @@ def getImage(config: dict) -> None:
     for _, row in tqdm(df.iterrows(), total=len(df), desc='Fetching images'):
         idx = row['id']
         for col in image_cols:
-            url = str(row.get(col, '')).strip()
-            if not url or not url.startswith('http'):
+            url = _resolve_url(row, col)
+            if not url:
                 log_result(log_path, idx, col, url, 'skip')
                 continue
             save_path = os.path.join(image_dir, f"{idx}_{col}.jpg")

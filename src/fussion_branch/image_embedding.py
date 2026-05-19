@@ -6,14 +6,14 @@ Usage:
     embedder = ImageEmbedder(checkpoint_dir="src/fussion_branch/model/best")  # fine-tuned
     embedder = ImageEmbedder(use_yolo=True)                                 # with YOLO preprocessing
 
-    emb = embedder.encode_path("data/image/12345_coverImage_medium.jpg")  # (1024,)
+    emb = embedder.encode_path("data/image/12345_coverImage_extraLarge.jpg")  # (1024,)
     embs = embedder.encode_paths([...])                                    # (N, 1024)
 
 When use_yolo=True:
     - Detects anime characters via YOLO and crops each detected region
     - Encodes all crops and mean-pools into a single (1024,) embedding
     - Falls back to the full image when no characters are detected
-    - Recommended only for coverImage_medium; set use_yolo=False for bannerImage
+    - Recommended only for coverImage_extraLarge; set use_yolo=False for bannerImage
 """
 from pathlib import Path
 from typing import List, Optional

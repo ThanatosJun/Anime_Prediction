@@ -28,7 +28,7 @@ def _infer_col(model, df: pd.DataFrame, image_dir: str,
 
 def predict(model, config: dict, device) -> None:
     """
-    Run coverImage_medium inference on ALL anime (train + val + test),
+    Run coverImage_extraLarge inference on ALL anime (train + val + test),
     output data/processed/image_embeddings.parquet with columns:
         id, img_0, img_1, ..., img_1023
     """
@@ -40,9 +40,9 @@ def predict(model, config: dict, device) -> None:
 
     # load full dataset (all splits)
     full_df = pd.read_csv(config['data']['csv_path'])
-    print(f"Running inference on {len(full_df)} anime (coverImage_medium)…")
+    print(f"Running inference on {len(full_df)} anime (coverImage_extraLarge)…")
 
-    embs = _infer_col(model, full_df, image_dir, 'coverImage_medium',
+    embs = _infer_col(model, full_df, image_dir, 'coverImage_extraLarge',
                       transform, batch_size, device)
 
     # build flat parquet: id + img_0..img_767

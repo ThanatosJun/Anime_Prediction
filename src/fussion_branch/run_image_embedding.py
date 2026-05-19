@@ -3,7 +3,7 @@ Generate image embeddings for all splits using fine-tuned Swin-base.
 
 Input:
   data/fussion/fusion_meta_clean_{split}.csv  — valid IDs per split
-  data/image/{split_dir}/{id}_coverImage_medium.jpg
+  data/image/{split_dir}/{id}_coverImage_extraLarge.jpg
 
 Output:
   src/fussion_branch/embedding/image/image_embeddings_{split}.parquet
@@ -69,7 +69,7 @@ def run(
         img_dir = IMAGE_BASE_DIR / SPLIT_IMAGE_DIR[split]
 
         paths = [
-            str(img_dir / f"{anime_id}_coverImage_medium.jpg")
+            str(img_dir / f"{anime_id}_coverImage_extraLarge.jpg")
             for anime_id in ids
         ]
 
@@ -103,7 +103,7 @@ def main() -> None:
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument(
         "--use_yolo", action="store_true",
-        help="Apply YOLO character detection before encoding coverImage_medium",
+        help="Apply YOLO character detection before encoding coverImage_extraLarge",
     )
     parser.add_argument(
         "--yolo_config",

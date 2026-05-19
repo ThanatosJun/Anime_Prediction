@@ -2,7 +2,7 @@
 data:
   csv_path: data/processed/anilist_anime_multimodal_input_v1.csv
   image_columns:
-    - coverImage_medium
+    - coverImage_extraLarge
     - bannerImage
   fetch_ratio: 1            # 抓取比例，1.0 = 全量；debug 時可調低
   split:
@@ -69,11 +69,11 @@ training:
   checkpoint_interval: 5      # 每幾個 epoch 存一次 checkpoint
 
 # ── YOLO ──────────────────────────────────────────────────────────────────────
-# Applied only to coverImage_medium before Swin encoding.
+# Applied only to coverImage_extraLarge before Swin encoding.
 # When a character is detected: crop → encode → mean-pool all crops.
 # When no character is detected: fallback to full image (fallback_full_image=true).
 yolo:
-  use: false                    # true = enable YOLO preprocessing for coverImage_medium
+  use: false                    # true = enable YOLO preprocessing for coverImage_extraLarge
   level: m                      # n (fastest) / s / m / x (most accurate)
   version: v1.1
   conf_threshold: 0.2           # detection confidence threshold
