@@ -61,18 +61,22 @@ def _forward(
 ) -> torch.Tensor:
     """Run GNN → FusionMLP forward pass for one batch.
 
+    ImageGNN operates on char_emb (1024-dim); FusionMLP receives
+    concat([GNN-enhanced char, cover]) as the image modality (2048-dim).
     Caller is responsible for wrapping this in autocast when use_amp=True.
     """
     text  = batch["text_emb"].to(device)
-    image = batch["image_emb"].to(device)
+    cover = batch["cover_emb"].to(device)
+    char  = batch["char_emb"].to(device)
     meta  = batch["meta_feat"].to(device)
     r_txt = batch["ret_text"].to(device)
-    r_img = batch["ret_image"].to(device)
+    r_chr = batch["ret_char"].to(device)
     mask  = batch["ret_mask"].to(device)
 
-    enh_text  = text_gnn(text, r_txt, mask)
-    enh_image = img_gnn(image, r_img, mask)
-    return model(enh_text, enh_image, meta)
+    enh_text = text_gnn(text,  r_txt, mask)   # (B, 384)
+    enh_char = img_gnn(char,   r_chr, mask)   # (B, 1024)
+    image    = torch.cat([enh_char, cover], dim=-1)  # (B, 2048)
+    return model(enh_text, image, meta)
 
 
 def train_one_target(config: dict, target_col: str) -> dict:
@@ -115,6 +119,7 @@ def train_one_target(config: dict, target_col: str) -> dict:
 
     # ── datasets & loaders ────────────────────────────────────────────────────
     image_emb_dir = cfg_data.get("image_emb_dir", "src/fussion_branch/embedding/image")
+    char_emb_dir  = cfg_data.get("char_emb_dir", None)
     top_k_ids     = cfg_data.get("top_k_ids", 5)
 
     def make_dataset(split, apply_winsor: bool = False):
@@ -125,6 +130,7 @@ def train_one_target(config: dict, target_col: str) -> dict:
             text_emb_dir=cfg_data["text_emb_dir"],
             rag_dir=cfg_data["rag_features_dir"],
             image_emb_dir=image_emb_dir,
+            char_emb_dir=char_emb_dir,
             target_col=target_col,
             log_transform_target=log_transform,
             target_mean=scaler["mean"],
@@ -175,7 +181,8 @@ def train_one_target(config: dict, target_col: str) -> dict:
         sum(p.numel() for p in img_gnn.parameters()  if p.requires_grad)
     )
     print(f"  Dims: text={train_ds.text_dim}  image={train_ds.image_dim} "
-          f"({'real' if train_ds.use_image else 'zeros'})  meta={train_ds.meta_dim}")
+          f"(cover={'real' if train_ds.use_cover else 'zeros'}, "
+          f"char={'real' if train_ds.use_char else 'zeros'})  meta={train_ds.meta_dim}")
     print(f"  GNN: num_layers={gnn_num_layers}  top_k={top_k_ids}")
     print(f"  Trainable params: {n_params:,}")
 

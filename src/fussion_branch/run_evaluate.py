@@ -31,12 +31,16 @@ from src.fussion_branch.utilities.summarize_experiments import collect
 
 def _forward(batch, model, text_gnn, img_gnn, device):
     text  = batch["text_emb"].to(device)
-    image = batch["image_emb"].to(device)
+    cover = batch["cover_emb"].to(device)
+    char  = batch["char_emb"].to(device)
     meta  = batch["meta_feat"].to(device)
     r_txt = batch["ret_text"].to(device)
-    r_img = batch["ret_image"].to(device)
+    r_chr = batch["ret_char"].to(device)
     mask  = batch["ret_mask"].to(device)
-    return model(text_gnn(text, r_txt, mask), img_gnn(image, r_img, mask), meta)
+    enh_text = text_gnn(text, r_txt, mask)
+    enh_char = img_gnn(char,  r_chr, mask)
+    image    = torch.cat([enh_char, cover], dim=-1)
+    return model(enh_text, image, meta)
 
 
 def evaluate_target(config: dict, target_col: str):
@@ -89,6 +93,7 @@ def evaluate_target(config: dict, target_col: str):
 
     # ── test dataset ──────────────────────────────────────────────────────────
     image_emb_dir = cfg_data.get("image_emb_dir", "src/fussion_branch/embedding/image")
+    char_emb_dir  = cfg_data.get("char_emb_dir", None)
     log_transform = config["targets"][target_col]["log_transform"]
 
     test_ds = FusionDataset(
@@ -98,6 +103,7 @@ def evaluate_target(config: dict, target_col: str):
         text_emb_dir=cfg_data["text_emb_dir"],
         rag_dir=cfg_data["rag_features_dir"],
         image_emb_dir=image_emb_dir,
+        char_emb_dir=char_emb_dir,
         target_col=target_col,
         log_transform_target=log_transform,
         target_mean=scaler["mean"],

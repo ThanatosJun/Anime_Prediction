@@ -4,23 +4,24 @@ data:
   fusion_meta_dir:   data/fussion
   text_emb_dir:      src/fussion_branch/embedding/text
   rag_features_dir:  src/fussion_branch/RAG/return
-  image_emb_dir:     src/fussion_branch/embedding/image   # zeros if missing
+  image_emb_dir:     src/fussion_branch/embedding/image   # cover embedding (1024)
+  char_emb_dir:      src/fussion_branch/embedding/image   # char embedding via YOLO (1024); null = disabled
   meta_encoder_path: .exp/fussion/meta_encoder.json
   # meta_encoder_path: .exp/fussion/meta_encoder_post2000.json
 
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 model:
-  # per-modality projection dims → fused 256 (after modality gate)
+  # per-modality projection dims (after modality gate → fused_dim = 128+128+64 = 320)
   text_proj:   128   # 384  → 128
-  image_proj:   64   # 1024 → 64
+  image_proj:  128   # 2048 → 128  (concat([enh_char(1024), cover(1024)]))
   meta_proj:    64   # 66   → 64
-  # backbone hidden dims after fusion (fused_dim = 128+64+64 = 256)
-  hidden_dims: [256, 128, 64]
+  # backbone hidden dims after fusion (fused_dim = 320)
+  hidden_dims: [320, 128, 64]
   dropout:     0.4
-  # GNN (applied before FusionMLP; text 384-dim & image 1024-dim)
-  gnn_num_layers: 2      # Run12=1 → 2，更強的鄰居聚合
-  gnn_dropout:    0.2    # Run12=0.1 → 0.2，防早期過擬
+  # GNN (applied before FusionMLP; text 384-dim & char_image 1024-dim)
+  gnn_num_layers: 2
+  gnn_dropout:    0.2
 
 # ── Training ──────────────────────────────────────────────────────────────────
 training:
@@ -50,5 +51,5 @@ targets:
 # ── Output ────────────────────────────────────────────────────────────────────
 output:
   results_dir: .exp/fussion/results
-  run_id:      "13"
-  notes:       "GNN 超參調整：gnn_num_layers=2, gnn_dropout=0.2, gnn_lr_factor=0.3（GNN LR=9e-5），warmup=10, patience=25"
+  run_id:      "14"
+  notes:       "Run14: YOLO char embedding，image=concat([enh_char,cover])=2048，image_proj 64→128，hidden_dims [256,128,64]→[320,128,64]"

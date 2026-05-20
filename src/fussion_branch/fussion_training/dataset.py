@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 from src.fussion_branch.fussion_training.meta_encoder import MetaEncoder
 
 TEXT_DIM  = 384
-IMAGE_DIM = 1024  # Swin-base pooler_output
+IMAGE_DIM = 1024  # Swin-base pooler_output（cover 與 char 各自 1024）
 
 
 def _build_emb_lookup(parquet_path: str, col_prefix: str) -> dict:
@@ -24,17 +24,30 @@ def _build_emb_lookup(parquet_path: str, col_prefix: str) -> dict:
     return dict(zip(df["id"].astype(int), df[cols].values.astype(np.float32)))
 
 
+def _load_image_df(path: Optional[str], common_ids) -> Optional[pd.DataFrame]:
+    """Load image parquet and intersect with common_ids. Returns None if missing."""
+    if not path or not os.path.exists(path):
+        return None
+    raw = pd.read_parquet(path).set_index("id")
+    ids = common_ids.intersection(raw.index)
+    return raw.loc[ids] if len(ids) > 0 else None
+
+
 class FusionDataset(Dataset):
     """
     Returns per-sample dict with separate modality tensors:
         text_emb   (384,)       query anime text embedding
-        image_emb  (1024,)      query anime image embedding (zeros if missing)
+        cover_emb  (1024,)      query anime cover image embedding (zeros if missing)
+        char_emb   (1024,)      query anime character embedding via YOLO (zeros if missing)
         meta_feat  (meta_dim,)  MetaEncoder output
         ret_text   (K, 384)     retrieved anime text embeddings  (padded)
-        ret_image  (K, 1024)    retrieved anime image embeddings (padded)
+        ret_char   (K, 1024)    retrieved anime char embeddings  (padded, for ImageGNN)
         ret_mask   (K,) bool    True = valid retrieved node
         target     scalar
         id         int
+
+    FusionMLP image input = concat([GNN-enhanced char_emb, cover_emb]) → 2048-dim
+    ImageGNN operates on char_emb / ret_char (1024-dim).
     """
 
     def __init__(
@@ -45,6 +58,7 @@ class FusionDataset(Dataset):
         text_emb_dir: str = "src/fussion_branch/embedding/text",
         rag_dir: str = "src/fussion_branch/RAG/return",
         image_emb_dir: Optional[str] = "src/fussion_branch/embedding/image",
+        char_emb_dir: Optional[str] = None,
         target_col: str = "popularity",
         log_transform_target: bool = False,
         target_mean: float = 0.0,
@@ -65,31 +79,30 @@ class FusionDataset(Dataset):
 
         common_ids = meta_df.index.intersection(rag_df.index).intersection(text_df.index)
 
-        # ── image embeddings (query split) ────────────────────────────────────
-        self.use_image = False
-        image_df = None
-        image_emb_path = (
-            f"{image_emb_dir}/image_embeddings_{split}.parquet"
-            if image_emb_dir else None
-        )
-        if image_emb_path and os.path.exists(image_emb_path):
-            raw = pd.read_parquet(image_emb_path).set_index("id")
-            img_ids = common_ids.intersection(raw.index)
-            if len(img_ids) > 0:
-                common_ids = img_ids
-                self.use_image = True
-                print(f"  [{split}] image embeddings: {len(img_ids)} rows")
-            else:
-                print(f"  [{split}] image embeddings not found — zeros (dim={IMAGE_DIM})")
-        if not self.use_image:
-            print(f"  [{split}] image embeddings not found — zeros (dim={IMAGE_DIM})")
+        # ── cover image embeddings ────────────────────────────────────────────
+        cover_path = f"{image_emb_dir}/image_embeddings_{split}.parquet" if image_emb_dir else None
+        cover_raw  = _load_image_df(cover_path, common_ids)
+        self.use_cover = cover_raw is not None
+        if self.use_cover:
+            common_ids = common_ids.intersection(cover_raw.index)
+            print(f"  [{split}] cover embeddings: {len(common_ids)} rows")
+        else:
+            print(f"  [{split}] cover embeddings not found — zeros (dim={IMAGE_DIM})")
+
+        # ── character embeddings (YOLO) ───────────────────────────────────────
+        char_path = f"{char_emb_dir}/image_embeddings_char_{split}.parquet" if char_emb_dir else None
+        char_raw  = _load_image_df(char_path, common_ids)
+        self.use_char = char_raw is not None
+        if self.use_char:
+            common_ids = common_ids.intersection(char_raw.index)
+            print(f"  [{split}] char embeddings (YOLO): {len(common_ids)} rows")
+        else:
+            print(f"  [{split}] char embeddings not found — zeros (dim={IMAGE_DIM})")
 
         # ── align all frames to common_ids ────────────────────────────────────
-        meta_df  = meta_df.loc[common_ids].reset_index()
-        rag_df   = rag_df.loc[meta_df["id"]].reset_index()
-        text_df  = text_df.loc[meta_df["id"]].reset_index()
-        if self.use_image:
-            image_df = raw.loc[meta_df["id"]].reset_index()
+        meta_df = meta_df.loc[common_ids].reset_index()
+        rag_df  = rag_df.loc[meta_df["id"]].reset_index()
+        text_df = text_df.loc[meta_df["id"]].reset_index()
 
         assert (meta_df["id"].values == rag_df["id"].values).all()
         assert (meta_df["id"].values == text_df["id"].values).all()
@@ -101,24 +114,34 @@ class FusionDataset(Dataset):
         emb_cols = [c for c in text_df.columns if c.startswith("emb_")]
         self.text_emb = text_df[emb_cols].values.astype(np.float32)   # (N, 384)
 
-        if self.use_image:
-            img_cols = [c for c in image_df.columns if c != "id"]
-            self.image_emb = image_df[img_cols].values.astype(np.float32)  # (N, 1024)
+        if self.use_cover:
+            img_cols = [c for c in cover_raw.columns if c != "id"]
+            self.cover_emb = cover_raw.loc[meta_df["id"]].reset_index()[img_cols].values.astype(np.float32)
         else:
-            self.image_emb = np.zeros((N, IMAGE_DIM), dtype=np.float32)
+            self.cover_emb = np.zeros((N, IMAGE_DIM), dtype=np.float32)
+
+        if self.use_char:
+            char_cols = [c for c in char_raw.columns if c != "id"]
+            self.char_emb = char_raw.loc[meta_df["id"]].reset_index()[char_cols].values.astype(np.float32)
+        else:
+            self.char_emb = np.zeros((N, IMAGE_DIM), dtype=np.float32)
 
         # ── metadata + rag features ───────────────────────────────────────────
         self.meta_feat = encoder.transform(meta_df, rag_df)            # (N, meta_dim)
 
         # ── retrieved_ids for GNN ─────────────────────────────────────────────
         # retrieved anime are always from training set (RAG indexes train only)
-        train_text_path  = f"{text_emb_dir}/text_embeddings_train.parquet"
-        train_image_path = (
-            f"{image_emb_dir}/image_embeddings_train.parquet"
-            if image_emb_dir else ""
-        )
-        self._text_lookup  = _build_emb_lookup(train_text_path,  "emb_")
-        self._image_lookup = _build_emb_lookup(train_image_path, "img_") if train_image_path else {}
+        train_text_path = f"{text_emb_dir}/text_embeddings_train.parquet"
+        # ImageGNN uses char embeddings; fall back to cover if char not available
+        if char_emb_dir:
+            train_char_path = f"{char_emb_dir}/image_embeddings_char_train.parquet"
+        elif image_emb_dir:
+            train_char_path = f"{image_emb_dir}/image_embeddings_train.parquet"
+        else:
+            train_char_path = ""
+
+        self._text_lookup = _build_emb_lookup(train_text_path, "emb_")
+        self._char_lookup = _build_emb_lookup(train_char_path, "img_") if train_char_path else {}
 
         if "retrieved_ids" in rag_df.columns:
             self._retrieved_ids = [
@@ -127,7 +150,7 @@ class FusionDataset(Dataset):
             ]
             print(f"  [{split}] retrieved_ids loaded  "
                   f"(text_lookup={len(self._text_lookup)}, "
-                  f"image_lookup={len(self._image_lookup)})")
+                  f"char_lookup={len(self._char_lookup)})")
         else:
             self._retrieved_ids = [[] for _ in range(N)]
             print(f"  [{split}] retrieved_ids not found — GNN will use zero context")
@@ -147,7 +170,8 @@ class FusionDataset(Dataset):
 
     @property
     def image_dim(self) -> int:
-        return self.image_emb.shape[1]
+        # FusionMLP image input = concat([char_emb, cover_emb])
+        return self.char_emb.shape[1] + self.cover_emb.shape[1]
 
     @property
     def meta_dim(self) -> int:
@@ -160,25 +184,25 @@ class FusionDataset(Dataset):
         K = self.top_k_ids
         ret_ids = self._retrieved_ids[idx]
 
-        # Build retrieved embedding tensors (padded to K)
-        ret_text  = np.zeros((K, TEXT_DIM),  dtype=np.float32)
-        ret_image = np.zeros((K, IMAGE_DIM), dtype=np.float32)
-        ret_mask  = np.zeros(K,              dtype=bool)
+        ret_text = np.zeros((K, TEXT_DIM),  dtype=np.float32)
+        ret_char = np.zeros((K, IMAGE_DIM), dtype=np.float32)
+        ret_mask = np.zeros(K,              dtype=bool)
 
         for i, rid in enumerate(ret_ids[:K]):
             if rid in self._text_lookup:
                 ret_text[i] = self._text_lookup[rid]
                 ret_mask[i] = True
-            if rid in self._image_lookup:
-                ret_image[i] = self._image_lookup[rid]
+            if rid in self._char_lookup:
+                ret_char[i] = self._char_lookup[rid]
 
         return {
-            "text_emb":  torch.from_numpy(self.text_emb[idx]),     # (384,)
-            "image_emb": torch.from_numpy(self.image_emb[idx]),    # (1024,)
-            "meta_feat": torch.from_numpy(self.meta_feat[idx]),    # (meta_dim,)
-            "ret_text":  torch.from_numpy(ret_text),               # (K, 384)
-            "ret_image": torch.from_numpy(ret_image),              # (K, 1024)
-            "ret_mask":  torch.from_numpy(ret_mask),               # (K,)
+            "text_emb":  torch.from_numpy(self.text_emb[idx]),    # (384,)
+            "cover_emb": torch.from_numpy(self.cover_emb[idx]),   # (1024,)
+            "char_emb":  torch.from_numpy(self.char_emb[idx]),    # (1024,)
+            "meta_feat": torch.from_numpy(self.meta_feat[idx]),   # (meta_dim,)
+            "ret_text":  torch.from_numpy(ret_text),              # (K, 384)
+            "ret_char":  torch.from_numpy(ret_char),              # (K, 1024)
+            "ret_mask":  torch.from_numpy(ret_mask),              # (K,)
             "target":    torch.tensor(self.target[idx], dtype=torch.float32),
             "id":        int(self.ids[idx]),
         }
