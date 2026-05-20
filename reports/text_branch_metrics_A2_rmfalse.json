@@ -1,0 +1,67 @@
+{
+  "timestamp_utc": "2026-05-20T01:40:02.764639+00:00",
+  "model": {
+    "name": "Ridge",
+    "alpha": 1.0,
+    "random_seed": 42,
+    "tfidf_components": 0
+  },
+  "package_versions": {
+    "python": "3.12.13",
+    "numpy": "2.4.4",
+    "pandas": "2.3.3",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.8.0",
+    "pyarrow": "23.0.1"
+  },
+  "inputs": {
+    "train_path": "C:/Users/1003380/Anime_Prediction/artifacts/text_embeddings_A2_rmfalse_train.parquet",
+    "val_path": "C:/Users/1003380/Anime_Prediction/artifacts/text_embeddings_A2_rmfalse_val.parquet",
+    "test_path": "C:/Users/1003380/Anime_Prediction/artifacts/text_embeddings_A2_rmfalse_test.parquet",
+    "feature_count": 768,
+    "targets": [
+      "popularity",
+      "meanScore"
+    ]
+  },
+  "split_integrity": {
+    "train_val_overlap": 0,
+    "train_test_overlap": 0,
+    "val_test_overlap": 0,
+    "no_overlap": true
+  },
+  "metrics": {
+    "popularity": {
+      "target": "popularity",
+      "train_rows": 12783,
+      "val_rows": 2637,
+      "test_rows": 2808,
+      "val": {
+        "MAE": 19066.76953125,
+        "RMSE": 36433.57396687841,
+        "Spearman": 0.5618155944955286
+      },
+      "test": {
+        "MAE": 19152.919921875,
+        "RMSE": 33402.71605723103,
+        "Spearman": 0.5928890595479742
+      }
+    },
+    "meanScore": {
+      "target": "meanScore",
+      "train_rows": 12783,
+      "val_rows": 2637,
+      "test_rows": 2808,
+      "val": {
+        "MAE": 8.729482650756836,
+        "RMSE": 10.881638879197638,
+        "Spearman": 0.4087816820658127
+      },
+      "test": {
+        "MAE": 10.07962703704834,
+        "RMSE": 12.388054637636941,
+        "Spearman": 0.2774783858305841
+      }
+    }
+  }
+}

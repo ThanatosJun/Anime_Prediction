@@ -207,6 +207,59 @@ Although A1 improves RMSE and most meanScore metrics, it does not satisfy the po
 
 ---
 
+## Experiment 05 — Layer-wise Fine-tuning (Optimization #3, A2 top-3 layers)
+
+**Date:** 2026-05-20  
+**Change:** Same setup as A1, but unfreeze top 3 layers (`layers 9-11` of 12).
+- Model: `intfloat/e5-base-v2`
+- Discriminative LRs: head = `1e-4`, top layers = `1e-5`
+- Early stopping on val Spearman (popularity)
+- Export/eval run with preprocessing parity (`remove_marketing=False`)
+
+### Fine-tune stage (direct validation)
+
+From `reports/finetune_A2.json`:
+- best epoch: 2
+- best val Spearman (popularity): **0.6812**
+- trainable encoder params: 21,263,616 / 109,482,240 (19.4%)
+
+### A2 downstream run (corrected parity: `remove_marketing=False`)
+
+From `reports/text_branch_metrics_A2_rmfalse.json`:
+
+| Target | Split | MAE | RMSE | Spearman |
+|---|---|---:|---:|---:|
+| popularity | val | 19066.77 | 36433.57 | 0.5618 |
+| popularity | test | 19152.92 | 33402.72 | 0.5929 |
+| meanScore | val | 8.7295 | 10.8816 | 0.4088 |
+| meanScore | test | 10.0796 | 12.3881 | 0.2775 |
+
+### Delta vs e5_base baseline
+
+| Target | Split | ΔMAE | ΔRMSE | ΔSpearman |
+|---|---|---:|---:|---:|
+| popularity | val | **−1069.70** | **−4040.98** | −0.0462 |
+| popularity | test | +1740.93 | +1342.59 | −0.0243 |
+| meanScore | val | **−0.8208** | **−0.8046** | +0.0594 |
+| meanScore | test | **−0.7332** | **−0.7428** | +0.0250 |
+
+### Promotion gate decision (A2)
+
+Required:
+1. Validation Spearman improves vs e5_base baseline (0.6080)
+2. Test popularity MAE and RMSE do not regress
+
+Observed (A2):
+- val popularity Spearman = 0.5618 (**fails gate 1**)
+- test popularity RMSE = 33402.72 (regresses)
+- test popularity MAE = 19152.92 (regresses; **fails gate 2**)
+
+### Verdict: ❌ Do not promote A2
+
+A2 further improves meanScore metrics, but regresses popularity ranking and absolute error vs baseline.
+
+---
+
 ## Cross-experiment Summary
 
 | Experiment | Model | Features | popularity test Spearman | meanScore test Spearman | popularity test RMSE | meanScore test RMSE |
@@ -218,6 +271,7 @@ Although A1 improves RMSE and most meanScore metrics, it does not satisfy the po
 | Exp 03 (e5_base + LSA-64) | e5_base | 448 | 0.5648 | 0.2456 | 33650.23 | 12.6358 |
 | Exp 04 (A1 top-2, mismatch) | e5_base finetuned | 768 | 0.5779 | 0.2683 | **31737.45** | 12.5089 |
 | Exp 04 (A1 top-2, corrected parity) | e5_base finetuned | 768 | 0.5928 | **0.2702** | 31864.62 | **12.4757** |
+| Exp 05 (A2 top-3, corrected parity) | e5_base finetuned | 768 | 0.5929 | **0.2775** | 33402.72 | 12.3881 |
 
 ## Analysis — Why LSA Hurt Popularity
 
