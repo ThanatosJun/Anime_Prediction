@@ -1,25 +1,41 @@
 # Optimization Log
 
-Tracks each optimization experiment against the baseline (minilm_l6, no marketing cleanup).
+Tracks each optimization experiment for the text branch of the Anime Prediction project.  
+Primary metric: **popularity test Spearman** (higher = better).  
+Reference model for all experiments from Exp 02 onwards: **e5_base** (0.6172).
 
 ---
 
-## Baseline — MiniLM-L6 (no preprocessing changes)
+## Reference Baselines
 
-Model: `sentence-transformers/all-MiniLM-L6-v2`  
-Preprocessing: lowercase, URL removal, whitespace normalization  
-Regressor: Ridge α=1.0
+| Model | Dim | popularity val Spearman | popularity test Spearman | meanScore val Spearman | meanScore test Spearman | popularity test RMSE |
+|---|---:|---:|---:|---:|---:|---:|
+| MiniLM-L6 (`all-MiniLM-L6-v2`) | 384 | 0.5509 | 0.5408 | 0.2886 | 0.2152 | 34055.32 |
+| **e5_base** (`intfloat/e5-base-v2`) | **768** | **0.6080** | **0.6172** | **0.3494** | **0.2525** | **32060.13** |
 
-| Target | Split | MAE | RMSE | Spearman |
-|---|---|---:|---:|---:|
-| popularity | val | 20462.82 | 42125.67 | 0.5509 |
-| popularity | test | 17946.53 | 34055.32 | 0.5408 |
-| meanScore | val | 9.8100 | 11.9300 | 0.2886 |
-| meanScore | test | 10.9400 | 13.1200 | 0.2152 |
+> MiniLM was the initial model. e5_base replaced it after showing clear improvement and is the **active reference** for all experiments from Exp 02 onwards.  
+> Both use Ridge α=1.0, preprocessing: lowercase + URL removal + whitespace normalization.
 
 ---
 
-## Experiment 01 — Marketing Fluff Removal
+## Cross-experiment Summary
+
+| # | Experiment | Model | Dim | pop. test ρ | score test ρ | pop. test RMSE | Verdict |
+|---|---|---|---:|---:|---:|---:|---:|
+| — | Baseline (MiniLM) | minilm_l6 | 384 | 0.5408 | 0.2152 | 34055.32 | reference |
+| — | **Baseline (e5_base)** | **e5_base** | **768** | **0.6172** | **0.2525** | **32060.13** | **reference** |
+| 01 | Marketing cleanup | minilm_l6 | 384 | 0.5310 | 0.2002 | 34160.66 | ❌ |
+| 02 | e5_base + LSA-128 | e5_base | 512 | 0.5717 | 0.2446 | 33544.16 | ❌ |
+| 03 | e5_base + LSA-64 | e5_base | 448 | 0.5648 | 0.2456 | 33650.23 | ❌ |
+| 04 | Fine-tune top-2 layers (A1) | e5_base ft | 768 | 0.5928 | 0.2702 | 31864.62 | ❌ |
+| 05 | Fine-tune top-3 layers (A2) | e5_base ft | 768 | 0.5929 | 0.2775 | 33402.72 | ❌ |
+| 06 | Frozen encoder + proj-384 (B1) | e5_base + Dense | 384 | 0.5774 | 0.2495 | 32510.21 | ❌ |
+
+---
+
+## Experiments
+
+### Exp 01 — Marketing Fluff Removal (MiniLM)
 
 **Date:** 2026-05-18  
 **Branch:** Text  
@@ -65,24 +81,7 @@ Model and regressor unchanged.
 
 ---
 
-## Baseline — e5_base (no LSA, no marketing cleanup)
-
-Model: `intfloat/e5-base-v2`  
-Preprocessing: lowercase, URL removal, whitespace normalization  
-Regressor: Ridge α=1.0
-
-| Target | Split | MAE | RMSE | Spearman |
-|---|---|---:|---:|---:|
-| popularity | val | 20136.47 | 40474.55 | 0.6080 |
-| popularity | test | 17411.99 | 32060.13 | 0.6172 |
-| meanScore | val | 9.5503 | 11.6862 | 0.3494 |
-| meanScore | test | 10.8129 | 13.1309 | 0.2525 |
-
-> This is the reference point for Experiments 02 and 03.
-
----
-
-## Experiment 02 — TF-IDF + LSA (128 dims) appended to e5_base
+### Exp 02 — TF-IDF + LSA (128 dims) appended to e5_base
 
 **Date:** 2026-05-18  
 **Change:** `--tfidf-components 128`. Fit TfidfVectorizer (unigrams+bigrams, sublinear_tf, min_df=2) on train text, reduced with TruncatedSVD to 128 dims, L2-normalised, concatenated to 384 e5_base dims → 512 total features.
@@ -109,7 +108,7 @@ Regressor: Ridge α=1.0
 
 ---
 
-## Experiment 03 — TF-IDF + LSA (64 dims) appended to e5_base
+### Exp 03 — TF-IDF + LSA (64 dims) appended to e5_base
 
 **Date:** 2026-05-18  
 **Change:** Same as Exp 02 but `--tfidf-components 64` → 448 total features.
@@ -136,7 +135,7 @@ Regressor: Ridge α=1.0
 
 ---
 
-## Experiment 04 — Layer-wise Fine-tuning (Optimization #3, A1 top-2 layers)
+### Exp 04 — Layer-wise Fine-tuning (A1, top-2 layers unfrozen)
 
 **Date:** 2026-05-19  
 **Change:** Added supervised fine-tuning step for `intfloat/e5-base-v2`:
@@ -207,7 +206,7 @@ Although A1 improves RMSE and most meanScore metrics, it does not satisfy the po
 
 ---
 
-## Experiment 05 — Layer-wise Fine-tuning (Optimization #3, A2 top-3 layers)
+### Exp 05 — Layer-wise Fine-tuning (A2, top-3 layers unfrozen)
 
 **Date:** 2026-05-20  
 **Change:** Same setup as A1, but unfreeze top 3 layers (`layers 9-11` of 12).
@@ -260,27 +259,77 @@ A2 further improves meanScore metrics, but regresses popularity ranking and abso
 
 ---
 
-## Cross-experiment Summary
+### Exp 06 — Linear Bottleneck Projection (B1, frozen encoder + proj-384)
 
-| Experiment | Model | Features | popularity test Spearman | meanScore test Spearman | popularity test RMSE | meanScore test RMSE |
-|---|---|---:|---:|---:|---:|---:|
-| Baseline (MiniLM) | minilm_l6 | 384 | 0.5408 | 0.2152 | 34055.32 | 13.1200 |
-| Exp 01 (MiniLM + cleanup) | minilm_l6 | 384 | 0.5310 | 0.2002 | 34160.66 | 13.3720 |
-| **Baseline (e5_base)** | **e5_base** | **768** | **0.6172** | **0.2525** | **32060.13** | **13.1309** |
-| Exp 02 (e5_base + LSA-128) | e5_base | 512 | 0.5717 | 0.2446 | 33544.16 | 12.3372 |
-| Exp 03 (e5_base + LSA-64) | e5_base | 448 | 0.5648 | 0.2456 | 33650.23 | 12.6358 |
-| Exp 04 (A1 top-2, mismatch) | e5_base finetuned | 768 | 0.5779 | 0.2683 | **31737.45** | 12.5089 |
-| Exp 04 (A1 top-2, corrected parity) | e5_base finetuned | 768 | 0.5928 | **0.2702** | 31864.62 | **12.4757** |
-| Exp 05 (A2 top-3, corrected parity) | e5_base finetuned | 768 | 0.5929 | **0.2775** | 33402.72 | 12.3881 |
+**Date:** 2026-05-21  
+**Change:** Added a trainable `nn.Linear(768, 384)` projection between the encoder pool output and the regression head. Encoder fully frozen (`--unfreeze-layers 0`). Only the projection (768→384) and regression head were trained via backprop on the popularity/meanScore MSE loss.
 
-## Analysis — Why LSA Hurt Popularity
+- Model: `intfloat/e5-base-v2` (fully frozen)
+- Projection: `Linear(768, 384)`, no activation, LR = `1e-4` (same as head)
+- Saved best encoder as SentenceTransformer with `Dense` module appended (output dim = 384)
+- Early stopping on val Spearman (popularity), patience = 3
 
-1. **Redundancy with e5_base** — e5_base (768 dims) already captures most semantic structure that TF-IDF would extract. Adding LSA dims brings diminishing information but more parameters for Ridge to overfit.
-2. **Single alpha can't balance two spaces** — Ridge uses one α for all 512/448 features. The 128 LSA dims have a different scale and density from the 768 dense dims; the regularizer can't treat them separately.
-3. **meanScore MAE/RMSE improved slightly** — score prediction is more keyword-sensitive (genre tags like "mecha", "sports" carry direct score priors) so sparse features add small signal there, just not enough to lift Spearman.
+### Fine-tune stage (direct validation)
 
-**Recommended next steps for Suggestion 2:**
-- Try a much smaller LSA component (32 dims) to reduce redundancy
-- Apply separate Ridge alphas per feature group (stack two Ridge models and blend)
-- Test BM25 instead of TF-IDF — better term weighting for short texts
+From `reports/finetune_B1.json`:
+- best epoch: 3
+- best val Spearman (popularity): **0.6474**
+- trainable encoder params: 0 / 109,482,240 (0%) — only projection + head
+
+### B1 downstream run
+
+From `reports/text_branch_metrics_B1.json`:
+
+| Target | Split | MAE | RMSE | Spearman |
+|---|---|---:|---:|---:|
+| popularity | val | 20954.96 | 40344.00 | 0.5851 |
+| popularity | test | 18329.48 | 32510.21 | 0.5774 |
+| meanScore | val | 9.3387 | 11.5081 | 0.3503 |
+| meanScore | test | 10.6279 | 12.9161 | 0.2495 |
+
+### Delta vs e5_base baseline
+
+| Target | Split | ΔMAE | ΔRMSE | ΔSpearman |
+|---|---|---:|---:|---:|
+| popularity | val | +818.49 | −130.55 | −0.0229 |
+| popularity | test | +917.49 | +450.08 | −0.0398 |
+| meanScore | val | **−0.2117** | **−0.1781** | +0.0009 |
+| meanScore | test | **−0.1849** | **−0.2148** | −0.0030 |
+
+### Promotion gate decision (B1)
+
+Required:
+1. Validation Spearman improves vs e5_base baseline (0.6080)
+2. Test popularity MAE and RMSE do not regress
+
+Observed (B1):
+- val popularity Spearman = 0.5851 (**fails gate 1**)
+- test popularity MAE = 18329.48 > 17411.99 (regresses; **fails gate 2**)
+- test popularity RMSE = 32510.21 > 32060.13 (regresses; **fails gate 2**)
+
+### Verdict: ❌ Do not promote B1
+
+The frozen encoder means the 768-dim representations are not adapted for task-specific compression. The projection must blindly compress a general-purpose embedding space into 384 dims using only the regression loss, without the encoder being able to reorganise its output to make that compression lossless. This causes information loss rather than information distillation.
+
+**Note:** B1 still beats the MiniLM-L6 baseline (popularity test Spearman 0.5774 > 0.5408) and slightly improves meanScore MAE/RMSE vs e5_base — the projection does learn something, but not enough to offset the forced dimensionality reduction on a frozen encoder.
+
+**Recommended next step (B2):** Combine unfreezing (top-2 layers) with the projection — `--unfreeze-layers 2 --projection-dim 384`. This allows the encoder's top layers to reorganise their output to be more compression-friendly, addressing the root cause of B1's failure.
+
+---
+
+## Analysis
+
+### Why LSA Hurt Popularity (Exp 02–03)
+
+1. **Redundancy with e5_base** — e5_base already captures most semantic structure that TF-IDF extracts. Adding LSA dims brings diminishing information but more parameters for Ridge to overfit.
+2. **Single alpha can't balance two spaces** — Ridge uses one α for all features. The LSA dims have a different scale/density from the dense dims; the regularizer can't treat them separately.
+3. **meanScore improved slightly** — score prediction is more keyword-sensitive (genre tags like "mecha", "sports" carry direct priors), so sparse features add small signal there.
+
+### Why Fine-tuning Didn't Beat Baseline (Exp 04–05)
+
+Fine-tuning improved val MSE loss and meanScore metrics, but the popularity val Spearman dropped vs the frozen e5_base baseline. The encoder may be over-adapting to the regression signal in a way that reorganises the embedding space at a cost to ranking ability.
+
+### Why Frozen Projection Failed (Exp 06)
+
+The projection must compress a general-purpose embedding space without the encoder being able to reorganise its output. This causes information loss rather than distillation.
 

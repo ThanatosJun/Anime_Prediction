@@ -38,7 +38,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -97,12 +97,19 @@ class _TextRegressionDataset(Dataset):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class _EncoderWithHead(nn.Module):
-    """Encoder (frozen/partially unfrozen) + mean-pool + linear regression head."""
+    """Encoder (frozen/partially unfrozen) + mean-pool + optional projection + linear regression head."""
 
-    def __init__(self, encoder: nn.Module, hidden_size: int, n_targets: int) -> None:
+    def __init__(self, encoder: nn.Module, hidden_size: int, n_targets: int, projection_dim: int = 0) -> None:
         super().__init__()
         self.encoder = encoder
-        self.head = nn.Linear(hidden_size, n_targets)
+        if projection_dim > 0:
+            self.projection: Optional[nn.Linear] = nn.Linear(hidden_size, projection_dim)
+            nn.init.normal_(self.projection.weight, std=0.02)
+            nn.init.zeros_(self.projection.bias)
+            self.head = nn.Linear(projection_dim, n_targets)
+        else:
+            self.projection = None
+            self.head = nn.Linear(hidden_size, n_targets)
         nn.init.normal_(self.head.weight, std=0.02)
         nn.init.zeros_(self.head.bias)
 
@@ -114,6 +121,8 @@ class _EncoderWithHead(nn.Module):
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs) -> torch.Tensor:
         out = self.encoder(input_ids=input_ids, attention_mask=attention_mask, **kwargs)
         pooled = self._mean_pool(out.last_hidden_state, attention_mask)
+        if self.projection is not None:
+            pooled = self.projection(pooled)
         return self.head(pooled)
 
 
@@ -165,11 +174,13 @@ def _count_trainable(model: nn.Module) -> Tuple[int, int]:
 def _build_param_groups(model: _EncoderWithHead, lr_head: float, lr_top: float) -> List[Dict]:
     """
     Two parameter groups with different learning rates:
-      - regression head  : lr_head
-      - unfrozen encoder : lr_top
+      - regression head + projection layer : lr_head
+      - unfrozen encoder layers            : lr_top
     Frozen params (requires_grad=False) are excluded automatically by AdamW.
     """
     head_ids = {id(p) for p in model.head.parameters()}
+    if model.projection is not None:
+        head_ids |= {id(p) for p in model.projection.parameters()}
     return [
         {"params": [p for p in model.parameters() if id(p) in head_ids and p.requires_grad],
          "lr": lr_head},
@@ -245,17 +256,23 @@ def _save_as_sentence_transformer(
     tokenizer_source: str,
     hidden_size: int,
     save_path: Path,
+    projection: Optional[nn.Linear] = None,
 ) -> None:
     """
     Persist the fine-tuned encoder as a SentenceTransformer so that the
     existing EmbeddingGenerator can load it with no code changes.
 
-    Layout on disk:
+    Layout on disk (without projection):
       save_path/
         modules.json          ← ST metadata
         sentence_bert_config.json
         0_Transformer/        ← the fine-tuned HF model + tokenizer
         1_Pooling/            ← mean-pooling config
+
+    Layout on disk (with projection):
+      save_path/
+        ...same as above...
+        2_Dense/              ← linear bottleneck projection weights
     """
     if not _ST_AVAILABLE:
         raise RuntimeError(
@@ -273,7 +290,22 @@ def _save_as_sentence_transformer(
     # --- Wrap as SentenceTransformer and save ---
     word_model = st_models.Transformer(str(hf_path), max_seq_length=512)
     pooling = st_models.Pooling(hidden_size, pooling_mode_mean_tokens=True)
-    st_model = SentenceTransformer(modules=[word_model, pooling])
+    modules = [word_model, pooling]
+
+    if projection is not None:
+        out_dim = projection.out_features
+        dense = st_models.Dense(
+            in_features=hidden_size,
+            out_features=out_dim,
+            activation_function=None,  # pure linear, no non-linearity
+        )
+        # Copy trained weights into the ST Dense module
+        dense.linear.weight.data.copy_(projection.weight.data)
+        dense.linear.bias.data.copy_(projection.bias.data)
+        modules.append(dense)
+        print(f"  Linear projection ({hidden_size} → {out_dim}) included in SentenceTransformer.")
+
+    st_model = SentenceTransformer(modules=modules)
     st_model.save(str(save_path))
     print(f"SentenceTransformer saved → {save_path}")
 
@@ -325,6 +357,7 @@ def finetune(
     max_length: int,
     device: str,
     random_seed: int,
+    projection_dim: int = 0,
 ) -> Dict:
     torch.manual_seed(random_seed)
     np.random.seed(random_seed)
@@ -362,19 +395,25 @@ def finetune(
     encoder = AutoModel.from_pretrained(model_name)
     hidden_size: int = encoder.config.hidden_size
 
-    # ── Freeze all; then unfreeze top N layers ────────────────────────────────
+    # ── Freeze all; then optionally unfreeze top N layers ───────────────────
     _freeze_all(encoder)
-    first_unfrozen = _unfreeze_top_n_layers(encoder, unfreeze_layers)
     total_layers = len(encoder.encoder.layer)
+    if unfreeze_layers > 0:
+        first_unfrozen = _unfreeze_top_n_layers(encoder, unfreeze_layers)
+        print(
+            f"Unfroze layers {first_unfrozen}–{total_layers - 1} "
+            f"(top {unfreeze_layers} of {total_layers})"
+        )
+    else:
+        first_unfrozen = total_layers  # fully frozen
+        print("Encoder fully frozen (unfreeze_layers=0).")
     trainable, total_params = _count_trainable(encoder)
-    print(
-        f"Unfroze layers {first_unfrozen}–{total_layers - 1} "
-        f"(top {unfreeze_layers} of {total_layers})"
-    )
     print(f"Trainable encoder params: {trainable:,} / {total_params:,} ({100 * trainable / total_params:.1f}%)")
+    if projection_dim > 0:
+        print(f"Linear bottleneck projection: {hidden_size} → {projection_dim}")
 
     # ── Build model + optimizer ───────────────────────────────────────────────
-    model = _EncoderWithHead(encoder, hidden_size, n_targets=len(target_cols)).to(device)
+    model = _EncoderWithHead(encoder, hidden_size, n_targets=len(target_cols), projection_dim=projection_dim).to(device)
     param_groups = _build_param_groups(model, lr_head=lr_head, lr_top=lr_top)
     optimizer = torch.optim.AdamW(param_groups, weight_decay=0.01)
 
@@ -420,12 +459,13 @@ def finetune(
             best_val_spearman = sp0
             best_epoch = epoch
             patience_counter = 0
-            # Save encoder only (head is discarded)
+            # Save encoder (+ projection if present); head is discarded
             _save_as_sentence_transformer(
                 encoder=model.encoder,
                 tokenizer_source=model_name,
                 hidden_size=hidden_size,
                 save_path=save_path,
+                projection=model.projection,
             )
         else:
             patience_counter += 1
@@ -455,6 +495,7 @@ def finetune(
         "best_epoch": best_epoch,
         f"best_val_spearman_{target_cols[0]}": round(best_val_spearman, 6),
         "history": history,
+        "projection_dim": projection_dim,
         "encoder_path": str(save_path.as_posix()),
     }
 
@@ -471,8 +512,10 @@ def _parse_args() -> argparse.Namespace:
                    help="HuggingFace model id or local path.")
     p.add_argument("--data-dir", type=Path, default=Path("data/processed"),
                    help="Directory containing split CSV files.")
-    p.add_argument("--unfreeze-layers", type=int, default=2, choices=[1, 2, 3, 4],
-                   help="Number of top transformer layers to unfreeze.")
+    p.add_argument("--unfreeze-layers", type=int, default=2, choices=[0, 1, 2, 3, 4],
+                   help="Number of top transformer layers to unfreeze. 0 = fully frozen.")
+    p.add_argument("--projection-dim", type=int, default=0,
+                   help="If > 0, add a Linear(hidden_size → projection_dim) bottleneck after pooling. 0 = disabled.")
     p.add_argument("--run-id", type=str, default="A1",
                    help="Run identifier used in artifact names (e.g. A1, A2).")
     p.add_argument("--artifact-dir", type=Path, default=Path("artifacts"),
@@ -526,6 +569,7 @@ def main() -> None:
         max_length=args.max_length,
         device=device,
         random_seed=args.random_seed,
+        projection_dim=args.projection_dim,
     )
 
     report_path = args.report_dir / f"finetune_{args.run_id}.json"
