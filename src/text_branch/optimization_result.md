@@ -30,6 +30,7 @@ Reference model for all experiments from Exp 02 onwards: **e5_base** (0.6172).
 | 04 | Fine-tune top-2 layers (A1) | e5_base ft | 768 | 0.5928 | 0.2702 | 31864.62 | ❌ |
 | 05 | Fine-tune top-3 layers (A2) | e5_base ft | 768 | 0.5929 | 0.2775 | 33402.72 | ❌ |
 | 06 | Frozen encoder + proj-384 (B1) | e5_base + Dense | 384 | 0.5774 | 0.2495 | 32510.21 | ❌ |
+| 07 | Unfreeze top-2 + proj-384 (B2) | e5_base ft + Dense | 384 | 0.5912 | 0.3016 | 31557.36 | ❌ |
 
 ---
 
@@ -313,7 +314,60 @@ The frozen encoder means the 768-dim representations are not adapted for task-sp
 
 **Note:** B1 still beats the MiniLM-L6 baseline (popularity test Spearman 0.5774 > 0.5408) and slightly improves meanScore MAE/RMSE vs e5_base — the projection does learn something, but not enough to offset the forced dimensionality reduction on a frozen encoder.
 
-**Recommended next step (B2):** Combine unfreezing (top-2 layers) with the projection — `--unfreeze-layers 2 --projection-dim 384`. This allows the encoder's top layers to reorganise their output to be more compression-friendly, addressing the root cause of B1's failure.
+---
+
+### Exp 07 — Unfreeze Top-2 Layers + proj-384 (B2)
+
+**Date:** 2026-05-25  
+**Change:** Same Linear(768→384) projection as B1, but encoder top-2 transformer layers unfrozen (`--unfreeze-layers 2 --projection-dim 384`). This allows the encoder to reorganise its output space to be more compressible, addressing B1's root cause.
+
+- Model: `intfloat/e5-base-v2` (top-2 layers unfrozen, LR = `1e-5`)
+- Projection: `Linear(768, 384)`, no activation, LR = `1e-4`
+- Epochs: 10 max, early stopping patience = 3
+
+### B2 downstream run
+
+From `reports/text_branch_metrics_B2.json`:
+
+| Target | Split | MAE | RMSE | Spearman |
+|---|---|---:|---:|---:|
+| popularity | val | 18817.94 | 36005.44 | 0.5780 |
+| popularity | test | 17833.82 | 31557.36 | 0.5912 |
+| meanScore | val | 8.6897 | 10.8513 | 0.4104 |
+| meanScore | test | 9.8315 | 12.0528 | 0.3016 |
+
+### Delta vs e5_base baseline
+
+| Target | Split | ΔMAE | ΔRMSE | ΔSpearman |
+|---|---|---:|---:|---:|
+| popularity | val | −1318.53 | −4469.11 | −0.0300 |
+| popularity | test | +421.83 | **−502.77** | −0.0260 |
+| meanScore | val | **−0.8606** | **−0.8350** | **+0.0610** |
+| meanScore | test | **−0.9814** | **−1.0781** | **+0.0491** |
+
+### Delta vs B1 (frozen encoder + proj-384)
+
+| Target | Split | ΔSpearman | ΔRMSE |
+|---|---|---:|---:|
+| popularity | test | +0.0138 | −952.85 |
+| meanScore | test | **+0.0521** | **−0.8633** |
+
+### Promotion gate decision (B2)
+
+Required:
+1. Validation Spearman improves vs e5_base baseline (0.6080)
+2. Test popularity MAE and RMSE do not regress
+
+Observed (B2):
+- val popularity Spearman = 0.5780 (**fails gate 1**)
+- test popularity MAE = 17833.82 > 17411.99 (regresses; **fails gate 2**)
+- test popularity RMSE = 31557.36 < 32060.13 (**passes** — RMSE improved)
+
+### Verdict: ❌ Do not promote B2
+
+Unfreezing did help vs B1 (popularity RMSE below baseline; meanScore significantly improved), confirming the hypothesis. However, popularity Spearman still regresses vs the frozen e5_base baseline. The MSE training objective doesn't directly optimise rank order, and compressing to 384 dims appears to flatten the ranking signal regardless of whether the encoder is frozen or not.
+
+**Notable:** B2 is the first experiment to beat the e5_base baseline on popularity **RMSE** (31557 < 32060) while also achieving the best meanScore Spearman of all experiments (0.3016 vs 0.2525 baseline). If the downstream fusion model is sensitive to absolute error rather than ranking, B2 embeddings may still be valuable.
 
 ---
 
@@ -332,4 +386,8 @@ Fine-tuning improved val MSE loss and meanScore metrics, but the popularity val 
 ### Why Frozen Projection Failed (Exp 06)
 
 The projection must compress a general-purpose embedding space without the encoder being able to reorganise its output. This causes information loss rather than distillation.
+
+### Why Unfrozen Projection Improved RMSE but Not Spearman (Exp 07)
+
+Unfreezing allowed the encoder to restructure its output space to be more compressible, which cut absolute error (RMSE) below the baseline. But the MSE loss only optimises for value closeness, not rank order. Popularity is a highly skewed distribution — a few titles have massive popularity. Ranking Spearman is sensitive to relative ordering across that skew, which the MSE objective doesn't directly preserve when compressing to 384 dims.
 
