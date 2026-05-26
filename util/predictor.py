@@ -42,7 +42,7 @@ def predict(model, config: dict, device) -> None:
     batch_size = config['training']['batch_size']
 
     cover_loader = get_dataloader(
-        AnimeImageDataset(test_df, image_dir, 'coverImage_medium', transform, transform),
+        AnimeImageDataset(test_df, image_dir, 'coverImage_extraLarge', transform, transform),
         batch_size, shuffle=False,
     )
     banner_loader = get_dataloader(
