@@ -55,6 +55,7 @@ qdrant_db/
 results/
 .exp/
 .cache/
+baseline_refer/
 src/fussion_branch/RAG/return/
 src/fussion_branch/embedding/
 data/fussion/fusion_meta_test.csv
