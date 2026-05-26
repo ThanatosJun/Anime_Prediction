@@ -30,16 +30,20 @@ from src.fussion_branch.utilities.summarize_experiments import collect
 
 
 def _forward(batch, model, text_gnn, img_gnn, device):
-    text  = batch["text_emb"].to(device)
-    cover = batch["cover_emb"].to(device)
-    char  = batch["char_emb"].to(device)
-    meta  = batch["meta_feat"].to(device)
-    r_txt = batch["ret_text"].to(device)
-    r_chr = batch["ret_char"].to(device)
-    mask  = batch["ret_mask"].to(device)
-    enh_text = text_gnn(text, r_txt, mask)
-    enh_char = img_gnn(char,  r_chr, mask)
-    image    = torch.cat([enh_char, cover], dim=-1)
+    text       = batch["text_emb"].to(device)
+    cover      = batch["cover_emb"].to(device)
+    char       = batch["char_emb"].to(device)
+    meta       = batch["meta_feat"].to(device)
+    r_txt      = batch["ret_text"].to(device)
+    r_chr      = batch["ret_char"].to(device)
+    mask       = batch["ret_mask"].to(device)
+    year_gaps  = batch["ret_year_gaps"].to(device)
+    enh_text = text_gnn(text, r_txt, mask, year_gaps=year_gaps) if text_gnn is not None else text
+    enh_char = img_gnn(char, r_chr, mask, year_gaps=year_gaps) if img_gnn is not None else char
+    if model._cfg["image_dim"] == cover.shape[-1]:
+        image = cover
+    else:
+        image = torch.cat([enh_char, cover], dim=-1)
     return model(enh_text, image, meta)
 
 
@@ -68,27 +72,36 @@ def evaluate_target(config: dict, target_col: str):
         scaler = json.load(f)
 
     # ── reconstruct models from saved config ──────────────────────────────────
-    gnn_num_layers = model_cfg.get("gnn_num_layers", 1)
-    gnn_dropout    = model_cfg.get("gnn_dropout", 0.1)
-    top_k_ids      = model_cfg.get("top_k_ids", 5)
+    gnn_num_layers    = model_cfg.get("gnn_num_layers", 1)
+    gnn_dropout       = model_cfg.get("gnn_dropout", 0.1)
+    gnn_time_temp     = model_cfg.get("gnn_time_temp", 10.0)
+    gnn_text_enabled  = model_cfg.get("gnn_text_enabled",  True)
+    gnn_image_enabled = model_cfg.get("gnn_image_enabled", True)
+    top_k_ids         = model_cfg.get("top_k_ids", 5)
 
     mlp_keys = {"text_dim", "image_dim", "meta_dim", "text_proj", "image_proj",
                 "meta_proj", "hidden_dims", "dropout"}
     mlp_cfg  = {k: v for k, v in model_cfg.items() if k in mlp_keys}
 
     model    = FusionMLP(**mlp_cfg).to(device)
-    text_gnn = TextGNN(num_layers=gnn_num_layers, dropout=gnn_dropout).to(device)
-    img_gnn  = ImageGNN(num_layers=gnn_num_layers, dropout=gnn_dropout).to(device)
+    text_gnn = TextGNN(num_layers=gnn_num_layers, dropout=gnn_dropout, time_temp=gnn_time_temp).to(device) \
+               if gnn_text_enabled else None
+    img_gnn  = ImageGNN(num_layers=gnn_num_layers, dropout=gnn_dropout, time_temp=gnn_time_temp).to(device) \
+               if gnn_image_enabled else None
 
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=True)
     if isinstance(ckpt, dict) and "fusion_mlp" in ckpt:
         model.load_state_dict(ckpt["fusion_mlp"])
-        text_gnn.load_state_dict(ckpt["text_gnn"])
-        img_gnn.load_state_dict(ckpt["image_gnn"])
+        if text_gnn is not None and "text_gnn" in ckpt:
+            text_gnn.load_state_dict(ckpt["text_gnn"])
+        if img_gnn is not None and "image_gnn" in ckpt:
+            img_gnn.load_state_dict(ckpt["image_gnn"])
     else:
         model.load_state_dict(ckpt)
 
-    model.eval(); text_gnn.eval(); img_gnn.eval()
+    model.eval()
+    if text_gnn is not None: text_gnn.eval()
+    if img_gnn is not None:  img_gnn.eval()
     encoder = MetaEncoder.load(encoder_path)
 
     # ── test dataset ──────────────────────────────────────────────────────────
@@ -100,14 +113,15 @@ def evaluate_target(config: dict, target_col: str):
         split="test",
         encoder=encoder,
         meta_dir=cfg_data["fusion_meta_dir"],
+        meta_suffix=cfg_data.get("meta_suffix", ""),
         text_emb_dir=cfg_data["text_emb_dir"],
         rag_dir=cfg_data["rag_features_dir"],
         image_emb_dir=image_emb_dir,
         char_emb_dir=char_emb_dir,
         target_col=target_col,
         log_transform_target=log_transform,
-        target_mean=scaler["mean"],
-        target_std=scaler["std"],
+        target_mean=scaler.get("center", scaler.get("mean", 0.0)),
+        target_std=scaler.get("scale",  scaler.get("std",  1.0)),
         top_k_ids=top_k_ids,
     )
 
@@ -179,7 +193,6 @@ def main():
     print("="*60)
     print(json.dumps(all_metrics, indent=2))
 
-    from pathlib import Path
     out_csv = Path(".exp/fussion/experiments_summary.csv")
     collect().to_csv(out_csv, index=False)
     print(f"\n[summary] updated → {out_csv}")

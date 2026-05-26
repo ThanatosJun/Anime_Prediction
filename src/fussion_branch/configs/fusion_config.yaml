@@ -1,27 +1,29 @@
 # ── Data ──────────────────────────────────────────────────────────────────────
 data:
-  # fusion_meta_dir:   data/fussion
   fusion_meta_dir:   data/fussion
+  meta_suffix:       "_v2"        # CSV suffix: "" = original, "_v2" = no-default-image
   text_emb_dir:      src/fussion_branch/embedding/text
   rag_features_dir:  src/fussion_branch/RAG/return
   image_emb_dir:     src/fussion_branch/embedding/image   # cover embedding (1024)
-  char_emb_dir:      src/fussion_branch/embedding/image   # char embedding via YOLO (1024); null = disabled
-  meta_encoder_path: .exp/fussion/meta_encoder.json
-  # meta_encoder_path: .exp/fussion/meta_encoder_post2000.json
+  char_emb_dir:      null                                 # YOLO char embedding; null = disabled
+  meta_encoder_path: .exp/fussion/meta_encoder_v18.json
 
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 model:
-  # per-modality projection dims (after modality gate → fused_dim = 128+128+64 = 320)
+  # per-modality projection dims (after modality gate → fused_dim = 128+64+64 = 256)
   text_proj:   128   # 384  → 128
-  image_proj:  128   # 2048 → 128  (concat([enh_char(1024), cover(1024)]))
+  image_proj:   64   # 1024 → 64   (cover only; match Run11 capacity)
   meta_proj:    64   # 66   → 64
-  # backbone hidden dims after fusion (fused_dim = 320)
-  hidden_dims: [320, 128, 64]
+  # backbone hidden dims after fusion (fused_dim = 256)
+  hidden_dims: [256, 128, 64]
   dropout:     0.4
   # GNN (applied before FusionMLP; text 384-dim & char_image 1024-dim)
-  gnn_num_layers: 2
-  gnn_dropout:    0.2
+  gnn_num_layers:    2
+  gnn_dropout:       0.2
+  gnn_time_temp:     10.0   # τ (years) for temporal decay: tanh(gap/τ), ~0.76 penalty at gap=τ
+  gnn_text_enabled:  false  # Run19: disable TextGNN to get pure FusionMLP baseline
+  gnn_image_enabled: false  # ImageGNN disabled: cover neighbor sim too low (~0.28) to be useful
 
 # ── Training ──────────────────────────────────────────────────────────────────
 training:
@@ -43,13 +45,22 @@ active_targets: ["popularity", "meanScore"]   # change to ["popularity"] or ["me
 targets:
   popularity:
     log_transform:  true
-    winsor_pct:     99      # cap training target at this percentile (log1p space), null = disabled
+    winsor_pct:     99      # mean/std + Winsorize: 穩定訓練，Run11 已驗證有效
   meanScore:
     log_transform:  false
     winsor_pct:     null
 
+# ── YOLO ──────────────────────────────────────────────────────────────────────
+yolo:
+  level:               m
+  version:             v1.1
+  conf_threshold:      0.2
+  iou_threshold:       0.8
+  max_persons:         5
+  fallback_full_image: true
+
 # ── Output ────────────────────────────────────────────────────────────────────
 output:
   results_dir: .exp/fussion/results
-  run_id:      "14"
-  notes:       "Run14: YOLO char embedding，image=concat([enh_char,cover])=2048，image_proj 64→128，hidden_dims [256,128,64]→[320,128,64]"
+  run_id:      "21"
+  notes:       "Run21: no GNN; target=mean/std+Winsorize99; meta=median/IQR; image_proj=64 hidden=[256,128,64]; _v2 CSV"

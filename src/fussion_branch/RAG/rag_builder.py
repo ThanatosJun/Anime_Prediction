@@ -32,7 +32,9 @@ def build_collection():
     cfg = _load_rag_config()
     collection_name = cfg["qdrant"]["collection_name"]
     encoder_path    = cfg["paths"]["encoder_path"]
-    train_csv       = cfg["paths"]["train_csv"]
+    meta_dir        = cfg["paths"]["meta_dir"]
+    meta_suffix     = cfg["paths"].get("meta_suffix", "")
+    train_csv       = f"{meta_dir}/fusion_meta_clean_train{meta_suffix}.csv"
     text_emb_dir    = cfg["paths"]["text_emb_dir"]
     image_emb_dir   = cfg["paths"].get("image_emb_dir", "")
     text_emb_dim    = cfg["embedding"]["text_emb_dim"]

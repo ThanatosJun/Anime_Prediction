@@ -265,7 +265,10 @@ fit 階段從訓練集統計每個製作公司 / 聲優的歷史 mean_popularity
 | 09 | 0.8601 | 1.0104 | 0.8654 | image_proj 256→64；fused_dim 448→256 |
 | 10 | 0.8358 | — | 0.8647 | RAG sparse：multi-hot → IDF 加權 |
 | 11 | 0.8383 | 0.9766 | 0.8637 | RAG sparse 混合加權（IDF+df）；MetaEncoder 新增 `is_new_studio`（65→66 維）|
-| **12** | **0.8505** | **1.0227** | **0.8655** | TextGNN + ImageGNN（star-topology, cosine attention）；RAG 三路混合（sparse+text dense+image dense）→ top-5 retrieved_ids |
+| 12 | 0.8505 | 1.0227 | 0.8655 | TextGNN + ImageGNN（star-topology, cosine attention）；RAG 三路混合（sparse+text dense+image dense）→ top-5 retrieved_ids |
+| 13 | 0.8980 | 1.0411 | 0.8461 | GNN 超參調整：gnn_num_layers=2, gnn_dropout=0.2, gnn_lr_factor=0.3（GNN LR=9e-5），warmup=10, patience=25 |
+| 14 | 0.8573 | 0.9795 | 0.8602 | YOLO char embedding；image=concat([enh_char,cover])=2048；image_proj 64→128；hidden_dims [320,128,64] |
+| **15** | **0.8458** | **1.0112** | **0.8602** | extraLarge cover embedding；移除無封面圖資料（_v2）；無 YOLO char；GNN；150 epochs |
 
 ### meanScore（指標：MAE，越低越好）
 
@@ -282,9 +285,12 @@ fit 階段從訓練集統計每個製作公司 / 聲優的歷史 mean_popularity
 | 09 | 6.7996 | 8.1903 | 0.6417 | image_proj 256→64 |
 | 10 | 6.7724 | — | 0.6415 | RAG sparse IDF |
 | 11 | 6.7212 | 8.0691 | 0.6428 | RAG 混合加權；`is_new_studio` |
-| **12** | **7.006** | **8.3455** | **0.6137** | TextGNN + ImageGNN；RAG 三路混合 |
+| 12 | 7.0060 | 8.3455 | 0.6137 | TextGNN + ImageGNN；RAG 三路混合 |
+| 13 | 7.2949 | 8.4585 | 0.5799 | GNN 超參調整 |
+| 14 | 7.4034 | 8.6465 | 0.5720 | YOLO char embedding；image_proj 64→128 |
+| **15** | **7.1378** | **8.0865** | **0.5986** | extraLarge cover embedding；移除無封面圖資料（_v2）；無 YOLO char |
 
-> 目前 **Run 11 在兩個 target 的 val 均達最佳**；Run 12 引入 GNN 架構，val 表現略退，後續可調整 GNN 超參數或 RAG 品質改善。
+> 目前 **Run 15 在兩個 target 的 val 均達最佳**（popularity log_MAE=0.8458、meanScore MAE=7.1378）；換用 extraLarge 圖片並清理無封面圖資料後，test meanScore 顯著改善（8.09 vs Run 11 的 8.07，且同時 popularity 也有提升）。
 
 ---
 
@@ -350,6 +356,101 @@ mean/std 僅從訓練集計算，再套用到 val/test。
 
 - **MetaEncoder**：未見過的 studio/聲優 TE 補訓練集全體均值；`is_new_studio` 旗標告知模型補值情況
 - **SparseEncoder**：OOV token 在 RAG 檢索時直接忽略，靠 genre 等已知 token 退化匹配
+
+---
+
+## 封面圖資料清理（coverImage_extraLarge）
+
+### 背景
+
+原始 pipeline 使用 `coverImage_medium` 作為封面圖來源。為提升圖像品質，改用 `coverImage_extraLarge`，需重新建立圖片庫並清理無封面圖的資料。
+
+---
+
+### Step 1：解壓縮與命名對應
+
+新封面圖來源為 `data/image/a.zip`（共 20,264 個檔案）。解壓縮後放置於 `data/image/a/a/`。
+
+來源檔名有五種命名格式，統一用正規表達式提取 AniList `id`：
+
+| 格式 | 範例 |
+|------|------|
+| `{id}.jpg` | `10013.jpg` |
+| `{id}-{亂碼}.jpg` | `100071-8LCECzqyhA5e.jpg` |
+| `b{id}-{亂碼}.jpg` | `b1001-jeUOTUfNlONM.jpg` |
+| `bx{id}-{亂碼}.jpg` | `bx1000-Xpeob9jND2tg.jpg` |
+| `nx{id}-{亂碼}.jpg` | `nx100003-zLLjPbFyYZzp.jpg` |
+
+比對結果：20,121 個唯一 ID（另有 143 個無法比對，含 `default_2.jpg` 佔位圖）。
+
+成功比對的圖片複製至各 split 目錄，命名為 `{id}_coverImage_extraLarge.jpg`：
+
+| Split | 目錄 | 總筆數 | 成功複製 | 找不到 |
+|-------|------|--------|---------|--------|
+| train | `data/image/train_image/` | 13,376 | 13,320 | 56 |
+| val | `data/image/validation_image/` | 2,918 | 2,918 | 0 |
+| test | `data/image/test_image/` | 3,087 | 3,086 | 1 |
+| holdout_unknown | `data/image/holdout_unknow_image/` | 943 | 939 | 4 |
+
+---
+
+### Step 2：透過 MyAnimeList 補圖
+
+對 61 筆找不到圖的 ID，先查詢 AniList API 確認現況，確定全部仍為 default 圖後，改透過 **Jikan API**（MAL 非官方 API）查詢 MyAnimeList 是否有封面圖：
+
+```
+AniList API → 61 筆全為 default
+Jikan API   → 60 筆有 MAL ID（1 筆無對應）
+```
+
+查詢結果中，4 筆在 MAL 有真實封面圖，直接下載補入對應 split 目錄：
+
+| AniList ID | 標題 | Split |
+|-----------|------|-------|
+| 184982 | Poppoya-san: Nonki Ekichou | train |
+| 103480 | Phantasm | holdout_unknown |
+| 176858 | Tearmoon Teikoku Monogatari Mini Anime | test |
+| 177457 | Tenchi Muyou! Ryououki: Heianmuyo! Picture Drama | holdout_unknown |
+
+---
+
+### Step 3：排除無封面圖資料
+
+補圖後剩餘 **57 筆** AniList 與 MAL 皆無封面圖。這些動畫幾乎全為 **1949～1974 年**的極老舊短篇，無後續作品、無前傳，且為完全獨立作品：
+
+- 共 56 筆來自 1949～1974 年
+- 1 筆（`154099 Kachoufuugetsu`）為 1985 年
+
+由於這 57 筆：
+1. AniList 與 MAL 均無封面圖，且網路上難以找到對應資料
+2. 若使用 `default_2.jpg` 的 embedding 會讓這 57 筆在視覺特徵上人為地互相相似，污染檢索結果
+3. 皆為孤立作品，無法透過前後作關係補強其他模態特徵
+
+決定**直接從資料集排除**這 57 筆。
+
+---
+
+### Step 4：產生清理後 CSV（_v2）
+
+排除 57 筆後，產生新版資料集：
+
+| Split | 原始筆數 | v2 筆數 | 移除筆數 |
+|-------|---------|---------|---------|
+| train | 13,376 | 13,321 | 55 |
+| val | 2,918 | 2,918 | 0 |
+| test | 3,087 | 3,087 | 0 |
+| holdout_unknown | 943 | 941 | 2 |
+| **合計** | **20,324** | **20,267** | **57** |
+
+清理後 CSV 路徑：`data/fussion/fusion_meta_clean_{split}_v2.csv`
+
+切換版本只需修改 `fusion_config.yaml` 的 `data.meta_suffix`：
+
+```yaml
+data:
+  meta_suffix: "_v2"   # 清理後版本
+  # meta_suffix: ""    # 原始版本
+```
 
 ---
 

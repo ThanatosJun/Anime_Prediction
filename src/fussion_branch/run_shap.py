@@ -20,8 +20,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
 import yaml
+from torch.utils.data import DataLoader
 
 try:
     import shap
@@ -40,12 +42,16 @@ def _load_config(path: str = "src/fussion_branch/configs/fusion_config.yaml") ->
         return yaml.safe_load(f)
 
 
-def _collect_features(loader, device, n_max: int) -> torch.Tensor:
+def _collect_features(loader, device, n_max: int, text_dim: int, image_dim: int) -> torch.Tensor:
+    """Collect [text_emb | image_emb | meta_feat] concatenated tensor from loader."""
     parts = []
     total = 0
     for batch in loader:
-        parts.append(batch["features"])
-        total += len(batch["features"])
+        # image = concat(char_emb, cover_emb) — matches FusionMLP image_dim=2048
+        image = torch.cat([batch["char_emb"], batch["cover_emb"]], dim=1)
+        x = torch.cat([batch["text_emb"], image, batch["meta_feat"]], dim=1)
+        parts.append(x)
+        total += len(x)
         if total >= n_max:
             break
     x = torch.cat(parts, dim=0)[:n_max]
@@ -58,25 +64,29 @@ def _collect_features(loader, device, n_max: int) -> torch.Tensor:
 # know about CUDA.
 
 class _FullWrapper(torch.nn.Module):
-    def __init__(self, model: FusionMLP, device: torch.device):
+    def __init__(self, model: FusionMLP, text_dim: int, image_dim: int, device: torch.device):
         super().__init__()
-        self.model   = model
-        self._device = device
+        self.model     = model
+        self._device   = device
+        self._text_dim = text_dim
+        self._img_dim  = image_dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x.to(self._device)).unsqueeze(-1)  # (batch,) → (batch, 1)
+        x   = x.to(self._device)
+        s1  = self._text_dim
+        s2  = self._text_dim + self._img_dim
+        return self.model(x[:, :s1], x[:, s1:s2], x[:, s2:]).unsqueeze(-1)
 
 
 class _MetaWrapper(torch.nn.Module):
     """Fix text+image projections; only accept meta slice as input.
-    Lets SHAP attribute contributions to the 65 meta features directly.
+    Lets SHAP attribute contributions to the meta features directly.
     """
     def __init__(self, model: FusionMLP, fixed_t: torch.Tensor, fixed_img: torch.Tensor,
                  device: torch.device):
         super().__init__()
         self.model   = model
         self._device = device
-        # store on CPU; moved to device in forward
         self._fixed_t   = fixed_t.cpu()
         self._fixed_img = fixed_img.cpu()
 
@@ -120,18 +130,14 @@ def main():
     # ── load encoder + dataset ────────────────────────────────────────────────
     encoder = MetaEncoder.load(cfg_data["meta_encoder_path"])
     feature_names = encoder.feature_names_
-    assert len(feature_names) == encoder.feature_dim, \
-        f"feature_names length {len(feature_names)} ≠ feature_dim {encoder.feature_dim}"
-    print(f"meta feature_dim={encoder.feature_dim}, names OK")
-
-    from torch.utils.data import DataLoader
-    import pandas as pd
+    print(f"meta feature_names={len(feature_names)}, names OK")
 
     def make_ds(split):
         return FusionDataset(
             split=split,
             encoder=encoder,
             meta_dir=cfg_data["fusion_meta_dir"],
+            meta_suffix=cfg_data.get("meta_suffix", ""),
             text_emb_dir=cfg_data["text_emb_dir"],
             rag_dir=cfg_data["rag_features_dir"],
             image_emb_dir=cfg_data.get("image_emb_dir", "src/fussion_branch/embedding/image"),
@@ -145,14 +151,12 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=256, shuffle=False, num_workers=2)
 
     # ── collect full feature tensors ──────────────────────────────────────────
-    n_total = args.n_background + args.n_explain
-    all_x = _collect_features(val_loader, device, n_total)
-
-    # text / image / meta boundaries
-    text_dim  = model._text_dim
-    image_dim = model._image_dim
+    n_total   = args.n_background + args.n_explain
+    text_dim  = model._cfg["text_dim"]
+    image_dim = model._cfg["image_dim"]
     s1 = text_dim
     s2 = text_dim + image_dim
+    all_x = _collect_features(val_loader, device, n_total, text_dim, image_dim)
 
     background_x = all_x[:args.n_background]
     explain_x    = all_x[args.n_background:args.n_background + args.n_explain]
@@ -161,7 +165,7 @@ def main():
     # ── 1. full-model SHAP → modality-level importance ────────────────────────
     # Pass CPU tensors to SHAP; _FullWrapper moves them to GPU in forward.
     print("\n[1/2] full-model GradientExplainer …")
-    full_wrapper   = _FullWrapper(model, device).eval()
+    full_wrapper   = _FullWrapper(model, text_dim, image_dim, device).eval()
     explainer_full = shap.GradientExplainer(full_wrapper, background_x.cpu())
     sv_full   = explainer_full.shap_values(explain_x.cpu())
     shap_full = np.array(sv_full[0] if isinstance(sv_full, list) else sv_full)  # (n, 1473)

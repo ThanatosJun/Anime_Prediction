@@ -101,8 +101,8 @@ def train_one_target_e2e(config: dict, target_col: str) -> dict:
             image_emb_dir=image_emb_dir,
             target_col=target_col,
             log_transform_target=log_transform,
-            target_mean=scaler["mean"],
-            target_std=scaler["std"],
+            target_mean=scaler.get("center", scaler.get("mean", 0.0)),
+            target_std=scaler.get("scale", scaler.get("std", 1.0)),
             winsor_cap=scaler.get("winsor_cap") if apply_winsor else None,
         )
 
