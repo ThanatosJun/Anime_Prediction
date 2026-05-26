@@ -50,7 +50,9 @@ def denormalize(y_norm: np.ndarray, scaler: dict) -> np.ndarray:
         # Clip in normalized space before expm1: predictions beyond ±5σ are
         # physically implausible; float16 overflows expm1 for input > ~10.8.
         y_norm = np.clip(y_norm, -5.0, 5.0)
-    y = y_norm * float(scaler["std"]) + float(scaler["mean"])
+    center = scaler.get("center", scaler.get("mean", 0.0))
+    scale  = scaler.get("scale",  scaler.get("std",  1.0))
+    y = y_norm * float(scale) + float(center)
     if scaler.get("log_transform", False):
         y = np.expm1(y)
     return y

@@ -224,7 +224,7 @@ def run_stacking(target_col: str, config_path: str, n_folds: int = 5):
             image_emb_dir=None,          # text-only
             target_col=target_col,
             log_transform_target=log_transform,
-            target_mean=scaler["mean"], target_std=scaler["std"],
+            target_mean=scaler.get("center", scaler.get("mean", 0.0)), target_std=scaler.get("scale", scaler.get("std", 1.0)),
             winsor_cap=scaler["winsor_cap"] if winsor else None,
         )
 

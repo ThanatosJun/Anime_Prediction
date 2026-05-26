@@ -164,7 +164,9 @@ def query_all_splits(splits=("train", "val", "test")):
     cfg = _load_rag_config()
     collection_name = cfg["qdrant"]["collection_name"]
     encoder_path    = cfg["paths"]["encoder_path"]
-    train_csv       = cfg["paths"]["train_csv"]
+    meta_dir        = cfg["paths"]["meta_dir"]
+    meta_suffix     = cfg["paths"].get("meta_suffix", "")
+    train_csv       = f"{meta_dir}/fusion_meta_clean_train{meta_suffix}.csv"
     text_emb_dir    = cfg["paths"]["text_emb_dir"]
     image_emb_dir   = cfg["paths"].get("image_emb_dir", "")
     out_dir         = Path(cfg["paths"]["out_dir"])
@@ -181,9 +183,10 @@ def query_all_splits(splits=("train", "val", "test")):
     fallback_score      = float(train_df["meanScore"].mean())
     fallback_episodes   = float(train_df["episodes"].mean())
 
-    meta_dir = Path(cfg["paths"].get("meta_dir", "data/fussion"))
+    meta_dir    = Path(cfg["paths"].get("meta_dir", "data/fussion"))
+    meta_suffix = cfg["paths"].get("meta_suffix", "")
     for split in splits:
-        df = pd.read_csv(meta_dir / f"fusion_meta_clean_{split}.csv")
+        df = pd.read_csv(meta_dir / f"fusion_meta_clean_{split}{meta_suffix}.csv")
 
         text_emb_map = _load_emb_map(
             str(Path(text_emb_dir) / f"text_embeddings_{split}.parquet"), "emb_"

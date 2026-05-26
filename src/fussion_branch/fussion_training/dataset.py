@@ -55,6 +55,7 @@ class FusionDataset(Dataset):
         split: str,
         encoder: MetaEncoder,
         meta_dir: str = "data/fussion",
+        meta_suffix: str = "",
         text_emb_dir: str = "src/fussion_branch/embedding/text",
         rag_dir: str = "src/fussion_branch/RAG/return",
         image_emb_dir: Optional[str] = "src/fussion_branch/embedding/image",
@@ -69,7 +70,7 @@ class FusionDataset(Dataset):
         self.top_k_ids = top_k_ids
 
         # ── load primary dataframes ───────────────────────────────────────────
-        meta_df = pd.read_csv(f"{meta_dir}/fusion_meta_clean_{split}.csv")
+        meta_df = pd.read_csv(f"{meta_dir}/fusion_meta_clean_{split}{meta_suffix}.csv")
         rag_df  = pd.read_parquet(f"{rag_dir}/rag_features_{split}.parquet")
         text_df = pd.read_parquet(f"{text_emb_dir}/text_embeddings_{split}.parquet")
 
@@ -155,6 +156,18 @@ class FusionDataset(Dataset):
             self._retrieved_ids = [[] for _ in range(N)]
             print(f"  [{split}] retrieved_ids not found — GNN will use zero context")
 
+        # ── year lookup for GNN temporal decay ───────────────────────────────
+        # Retrieved anime are always from the training set; load train years once.
+        train_meta_path = Path(meta_dir) / f"fusion_meta_clean_train{meta_suffix}.csv"
+        if train_meta_path.exists():
+            _tm = pd.read_csv(train_meta_path, usecols=["id", "release_year"])
+            self._year_lookup: dict = dict(zip(
+                _tm["id"].astype(int), _tm["release_year"].fillna(0).astype(float)
+            ))
+        else:
+            self._year_lookup = {}
+        self._query_years = meta_df["release_year"].fillna(0).values.astype(np.float32)
+
         # ── target ───────────────────────────────────────────────────────────
         raw_target = meta_df[target_col].values.astype(np.float32)
         if log_transform_target:
@@ -170,8 +183,11 @@ class FusionDataset(Dataset):
 
     @property
     def image_dim(self) -> int:
-        # FusionMLP image input = concat([char_emb, cover_emb])
-        return self.char_emb.shape[1] + self.cover_emb.shape[1]
+        # When char is available: concat([char, cover]) = 2048
+        # When char is disabled (zeros): cover only = 1024
+        if self.use_char:
+            return self.char_emb.shape[1] + self.cover_emb.shape[1]
+        return self.cover_emb.shape[1]
 
     @property
     def meta_dim(self) -> int:
@@ -184,25 +200,30 @@ class FusionDataset(Dataset):
         K = self.top_k_ids
         ret_ids = self._retrieved_ids[idx]
 
-        ret_text = np.zeros((K, TEXT_DIM),  dtype=np.float32)
-        ret_char = np.zeros((K, IMAGE_DIM), dtype=np.float32)
-        ret_mask = np.zeros(K,              dtype=bool)
+        ret_text      = np.zeros((K, TEXT_DIM),  dtype=np.float32)
+        ret_char      = np.zeros((K, IMAGE_DIM), dtype=np.float32)
+        ret_mask      = np.zeros(K,              dtype=bool)
+        ret_year_gaps = np.zeros(K,              dtype=np.float32)
 
+        query_year = float(self._query_years[idx])
         for i, rid in enumerate(ret_ids[:K]):
             if rid in self._text_lookup:
                 ret_text[i] = self._text_lookup[rid]
                 ret_mask[i] = True
             if rid in self._char_lookup:
                 ret_char[i] = self._char_lookup[rid]
+            neighbor_year = self._year_lookup.get(int(rid), query_year)
+            ret_year_gaps[i] = max(0.0, query_year - neighbor_year)
 
         return {
-            "text_emb":  torch.from_numpy(self.text_emb[idx]),    # (384,)
-            "cover_emb": torch.from_numpy(self.cover_emb[idx]),   # (1024,)
-            "char_emb":  torch.from_numpy(self.char_emb[idx]),    # (1024,)
-            "meta_feat": torch.from_numpy(self.meta_feat[idx]),   # (meta_dim,)
-            "ret_text":  torch.from_numpy(ret_text),              # (K, 384)
-            "ret_char":  torch.from_numpy(ret_char),              # (K, 1024)
-            "ret_mask":  torch.from_numpy(ret_mask),              # (K,)
-            "target":    torch.tensor(self.target[idx], dtype=torch.float32),
-            "id":        int(self.ids[idx]),
+            "text_emb":      torch.from_numpy(self.text_emb[idx]),    # (384,)
+            "cover_emb":     torch.from_numpy(self.cover_emb[idx]),   # (1024,)
+            "char_emb":      torch.from_numpy(self.char_emb[idx]),    # (1024,)
+            "meta_feat":     torch.from_numpy(self.meta_feat[idx]),   # (meta_dim,)
+            "ret_text":      torch.from_numpy(ret_text),              # (K, 384)
+            "ret_char":      torch.from_numpy(ret_char),              # (K, 1024)
+            "ret_mask":      torch.from_numpy(ret_mask),              # (K,)
+            "ret_year_gaps": torch.from_numpy(ret_year_gaps),         # (K,)
+            "target":        torch.tensor(self.target[idx], dtype=torch.float32),
+            "id":            int(self.ids[idx]),
         }

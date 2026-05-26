@@ -102,52 +102,54 @@ def _te_lookup(
 
 
 def _standardize(raw_pop: float, raw_score: float, te_stats: Dict[str, float]) -> Tuple[float, float]:
-    pop_z   = (raw_pop   - te_stats["pop_mean"])   / te_stats["pop_std"]
-    score_z = (raw_score - te_stats["score_mean"]) / te_stats["score_std"]
+    pop_z   = (raw_pop   - te_stats["pop_center"])   / te_stats["pop_scale"]
+    score_z = (raw_score - te_stats["score_center"]) / te_stats["score_scale"]
     return float(pop_z), float(score_z)
 
 
 class MetaEncoder:
     def __init__(self):
-        self.std_medians: Dict[str, float] = {}
-        self.std_means:   Dict[str, float] = {}
-        self.std_stds:    Dict[str, float] = {}
-        self.cyc_medians: Dict[str, float] = {}
-        self.cat_vocabs:  Dict[str, List[str]] = {}
-        self.genre_vocab: List[str] = []
+        self.std_medians:  Dict[str, float] = {}   # fillna values (imputation)
+        self.std_centers:  Dict[str, float] = {}   # median (robust center)
+        self.std_scales:   Dict[str, float] = {}   # IQR   (robust scale)
+        self.cyc_medians:  Dict[str, float] = {}
+        self.cat_vocabs:   Dict[str, List[str]] = {}
+        self.genre_vocab:  List[str] = []
 
         # target encoding tables (name → {pop, score} raw train means)
         self.studio_te:   Dict[str, Dict[str, float]] = {}
         self.va_te:       Dict[str, Dict[str, float]] = {}
-        self.te_fallback: Dict[str, float] = {}   # {pop, score} — train overall mean
-        self.te_stats:    Dict[str, float] = {}   # standardization params
+        self.te_fallback: Dict[str, float] = {}   # {pop, score} — train overall median
+        self.te_stats:    Dict[str, float] = {}   # robust standardization params
 
         # rag numerical
-        self.rag_medians: Dict[str, float] = {}
-        self.rag_means:   Dict[str, float] = {}
-        self.rag_stds:    Dict[str, float] = {}
+        self.rag_medians: Dict[str, float] = {}   # fillna values
+        self.rag_centers: Dict[str, float] = {}   # median
+        self.rag_scales:  Dict[str, float] = {}   # IQR
 
         self.feature_dim: int = 0
 
     # ── fit ───────────────────────────────────────────────────────────────────
 
     def fit(self, meta_df: pd.DataFrame, rag_df: pd.DataFrame) -> "MetaEncoder":
-        # numerical standardization
+        # robust standardization: (x − median) / IQR
         for col in STANDARDIZE_COLS:
             s = pd.to_numeric(meta_df[col], errors="coerce")
             self.std_medians[col] = float(s.median())
             s = s.fillna(self.std_medians[col])
-            self.std_means[col] = float(s.mean())
-            std = float(s.std())
-            self.std_stds[col] = std if std > 0 else 1.0
+            self.std_centers[col] = float(s.median())
+            q75, q25 = float(np.percentile(s, 75)), float(np.percentile(s, 25))
+            iqr = q75 - q25
+            self.std_scales[col] = iqr if iqr > 0 else 1.0
 
         for col in LOG1P_STANDARDIZE_COLS:
             s = pd.to_numeric(meta_df[col], errors="coerce")
             self.std_medians[col] = float(s.median())
             s = np.log1p(s.fillna(self.std_medians[col]).values)
-            self.std_means[col] = float(s.mean())
-            std = float(s.std())
-            self.std_stds[col] = std if std > 0 else 1.0
+            self.std_centers[col] = float(np.median(s))
+            q75, q25 = float(np.percentile(s, 75)), float(np.percentile(s, 25))
+            iqr = q75 - q25
+            self.std_scales[col] = iqr if iqr > 0 else 1.0
 
         for col in CYCLICAL_COLS:
             s = pd.to_numeric(meta_df[col], errors="coerce")
@@ -163,11 +165,11 @@ class MetaEncoder:
             genres.update(_parse_genres(v))
         self.genre_vocab = sorted(genres)
 
-        # target values for TE — raw popularity (z-scored internally; log1p would compress signal)
+        # target values for TE — raw popularity (robust-scaled internally)
         pop_col   = pd.to_numeric(meta_df["popularity"], errors="coerce")
         score_col = pd.to_numeric(meta_df["meanScore"],  errors="coerce")
-        fallback_pop   = float(pop_col.mean())
-        fallback_score = float(score_col.mean())
+        fallback_pop   = float(pop_col.median())
+        fallback_score = float(score_col.median())
         self.te_fallback = {"pop": fallback_pop, "score": fallback_score}
 
         # studio target encoding
@@ -199,7 +201,7 @@ class MetaEncoder:
             for va in va_pop_acc
         }
 
-        # TE standardization stats — computed from per-anime studio TE values on train
+        # TE robust standardization stats — median/IQR of per-anime studio TE on train
         te_pop_vals, te_score_vals = [], []
         for studios_val in meta_df["studios"]:
             studios = _parse_studios_meta(studios_val)
@@ -208,25 +210,28 @@ class MetaEncoder:
             te_score_vals.append(s)
         te_pop_arr   = np.array(te_pop_vals,   dtype=np.float64)
         te_score_arr = np.array(te_score_vals, dtype=np.float64)
-        pop_std   = float(te_pop_arr.std())
-        score_std = float(te_score_arr.std())
+        pop_q75,   pop_q25   = float(np.percentile(te_pop_arr,   75)), float(np.percentile(te_pop_arr,   25))
+        score_q75, score_q25 = float(np.percentile(te_score_arr, 75)), float(np.percentile(te_score_arr, 25))
+        pop_iqr   = pop_q75   - pop_q25
+        score_iqr = score_q75 - score_q25
         self.te_stats = {
-            "pop_mean":   float(te_pop_arr.mean()),
-            "pop_std":    pop_std   if pop_std   > 0 else 1.0,
-            "score_mean": float(te_score_arr.mean()),
-            "score_std":  score_std if score_std > 0 else 1.0,
+            "pop_center":   float(np.median(te_pop_arr)),
+            "pop_scale":    pop_iqr   if pop_iqr   > 0 else 1.0,
+            "score_center": float(np.median(te_score_arr)),
+            "score_scale":  score_iqr if score_iqr > 0 else 1.0,
         }
 
-        # rag numerical standardization (rag_popularity uses log1p)
+        # rag numerical robust standardization (rag_popularity uses log1p)
         for col in RAG_NUMERICAL_COLS:
             s = pd.to_numeric(rag_df[col], errors="coerce")
             self.rag_medians[col] = float(s.median())
             s = s.fillna(self.rag_medians[col])
             if col == "rag_popularity":
                 s = np.log1p(s)
-            self.rag_means[col] = float(s.mean())
-            std = float(s.std())
-            self.rag_stds[col] = std if std > 0 else 1.0
+            self.rag_centers[col] = float(np.median(s))
+            q75, q25 = float(np.percentile(s, 75)), float(np.percentile(s, 25))
+            iqr = q75 - q25
+            self.rag_scales[col] = iqr if iqr > 0 else 1.0
 
         self._update_dim()
         return self
@@ -285,19 +290,19 @@ class MetaEncoder:
         fallback_pop   = self.te_fallback["pop"]
         fallback_score = self.te_fallback["score"]
 
-        # standardize
+        # robust standardize: (x − median) / IQR
         std_mat = np.zeros((N, len(STANDARDIZE_COLS)), dtype=np.float32)
         for j, col in enumerate(STANDARDIZE_COLS):
             s = pd.to_numeric(meta_df[col], errors="coerce").fillna(self.std_medians[col])
-            std_mat[:, j] = (s.values - self.std_means[col]) / self.std_stds[col]
+            std_mat[:, j] = (s.values - self.std_centers[col]) / self.std_scales[col]
         parts.append(std_mat)
 
-        # log1p + standardize
+        # log1p + robust standardize
         log_mat = np.zeros((N, len(LOG1P_STANDARDIZE_COLS)), dtype=np.float32)
         for j, col in enumerate(LOG1P_STANDARDIZE_COLS):
             s = pd.to_numeric(meta_df[col], errors="coerce").fillna(self.std_medians[col])
             s = np.log1p(s.values)
-            log_mat[:, j] = (s - self.std_means[col]) / self.std_stds[col]
+            log_mat[:, j] = (s - self.std_centers[col]) / self.std_scales[col]
         parts.append(log_mat)
 
         # cyclical sin + cos
@@ -358,13 +363,13 @@ class MetaEncoder:
             va_te_mat[i, 1] = std_score
         parts.append(va_te_mat)
 
-        # rag numerical (rag_popularity uses log1p, consistent with fit)
+        # rag numerical: log1p for popularity, then robust standardize
         rag_num_mat = np.zeros((N, len(RAG_NUMERICAL_COLS)), dtype=np.float32)
         for j, col in enumerate(RAG_NUMERICAL_COLS):
             s = pd.to_numeric(rag_df[col], errors="coerce").fillna(self.rag_medians[col])
             if col == "rag_popularity":
                 s = np.log1p(s)
-            rag_num_mat[:, j] = (s.values - self.rag_means[col]) / self.rag_stds[col]
+            rag_num_mat[:, j] = (s.values - self.rag_centers[col]) / self.rag_scales[col]
         parts.append(rag_num_mat)
 
         # rag_found
@@ -413,20 +418,20 @@ class MetaEncoder:
     def save(self, path: str):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         state = {
-            "std_medians": self.std_medians,
-            "std_means":   self.std_means,
-            "std_stds":    self.std_stds,
-            "cyc_medians": self.cyc_medians,
-            "cat_vocabs":  self.cat_vocabs,
-            "genre_vocab": self.genre_vocab,
-            "studio_te":   self.studio_te,
-            "va_te":       self.va_te,
-            "te_fallback": self.te_fallback,
-            "te_stats":    self.te_stats,
-            "rag_medians": self.rag_medians,
-            "rag_means":   self.rag_means,
-            "rag_stds":    self.rag_stds,
-            "feature_dim": self.feature_dim,
+            "std_medians":  self.std_medians,
+            "std_centers":  self.std_centers,
+            "std_scales":   self.std_scales,
+            "cyc_medians":  self.cyc_medians,
+            "cat_vocabs":   self.cat_vocabs,
+            "genre_vocab":  self.genre_vocab,
+            "studio_te":    self.studio_te,
+            "va_te":        self.va_te,
+            "te_fallback":  self.te_fallback,
+            "te_stats":     self.te_stats,
+            "rag_medians":  self.rag_medians,
+            "rag_centers":  self.rag_centers,
+            "rag_scales":   self.rag_scales,
+            "feature_dim":  self.feature_dim,
         }
         with open(path, "w") as f:
             json.dump(state, f, indent=2)

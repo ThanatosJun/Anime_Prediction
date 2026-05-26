@@ -133,7 +133,9 @@ class FusionMLP(nn.Module):
     def from_config(cls, config_path: str) -> "FusionMLP":
         with open(config_path) as f:
             cfg = json.load(f)
-        return cls(**cfg)
+        valid = {"text_dim", "image_dim", "meta_dim", "text_proj", "image_proj",
+                 "meta_proj", "hidden_dims", "dropout"}
+        return cls(**{k: v for k, v in cfg.items() if k in valid})
 
     @classmethod
     def load(cls, config_path: str, checkpoint_path: str, map_location=None) -> "FusionMLP":

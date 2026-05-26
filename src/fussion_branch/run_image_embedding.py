@@ -23,12 +23,14 @@ import argparse
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 from src.fussion_branch.image_embedding import CoverEmbedder
 
-FUSION_META_DIR = Path("data/fussion")
-IMAGE_BASE_DIR  = Path("data/image")
-OUT_DIR         = Path("src/fussion_branch/embedding/image")
+_DEFAULT_CONFIG = "src/fussion_branch/configs/fusion_config.yaml"
+
+IMAGE_BASE_DIR = Path("data/image")
+OUT_DIR        = Path("src/fussion_branch/embedding/image")
 
 SPLIT_IMAGE_DIR = {
     "train":           "train_image",
@@ -42,13 +44,19 @@ def run(
     splits: tuple = ("train", "val", "test", "holdout_unknown"),
     checkpoint_dir: str = "src/fussion_branch/model/best",
     batch_size: int = 64,
+    config_path: str = _DEFAULT_CONFIG,
 ) -> None:
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+    meta_dir    = Path(cfg["data"]["fusion_meta_dir"])
+    meta_suffix = cfg["data"].get("meta_suffix", "")
+
     embedder = CoverEmbedder(checkpoint_dir=checkpoint_dir)
     print(f"dim: {embedder.dim}  device: {embedder.device}")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     for split in splits:
-        meta_path = FUSION_META_DIR / f"fusion_meta_clean_{split}.csv"
+        meta_path = meta_dir / f"fusion_meta_clean_{split}{meta_suffix}.csv"
         if not meta_path.exists():
             print(f"[{split}] fusion_meta_clean not found — skipping")
             continue
@@ -81,8 +89,10 @@ def main() -> None:
     parser.add_argument("--splits", nargs="+", default=["train", "val", "test", "holdout_unknown"])
     parser.add_argument("--checkpoint", default="src/fussion_branch/model/best")
     parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--config", default=_DEFAULT_CONFIG)
     args = parser.parse_args()
-    run(splits=tuple(args.splits), checkpoint_dir=args.checkpoint, batch_size=args.batch_size)
+    run(splits=tuple(args.splits), checkpoint_dir=args.checkpoint,
+        batch_size=args.batch_size, config_path=args.config)
 
 
 if __name__ == "__main__":

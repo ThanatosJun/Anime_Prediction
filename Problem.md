@@ -17,3 +17,7 @@
     - 是否需要補足 description 的資料，因為有缺失就沒有該筆 text embedding
 3. optimizer 的選擇
     - AdamW 是目前的選擇，但是否需要嘗試其他 optimizer，例如：RAdam, Ranger 等等
+
+===
+1. 資料遷移問題：popularity 跟 meanscore 的分布 shift 很大，可能需要一些 domain adaptation 的方法。
+    - 或許嘗試使用一個模型預測眾數 popularity 跟 meanscore。讓我們可以根據年份預測模型。
