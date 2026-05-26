@@ -48,6 +48,13 @@ reports/reference_baseline_results.csv
 | `.exp/baseline/results/25` | `C3-RAG-Selective-XGB` | local raw output | Source for selective sparse retrieval under the SKAPP-inspired C3 route. |
 | `.exp/baseline/results/26` | `C1-Armenta-ProjectInputProxy` | local raw output | Source for project-input Armenta-shaped C1 proxy results. |
 | `.exp/baseline/results/30` | `C1-Armenta-ProjectInputProxy-ResNet50` | local raw output | Source for project-input Armenta-shaped C1 proxy with ImageNet ResNet-50 cover/banner features. |
+| `.exp/baseline/results/33` | `C3-ProjectInputSKAPPProxy-XGB` | local raw output | Source for learned contribution filtering and attention-weighted C3 SKAPP-style proxy results. |
+| `.exp/baseline/results/34` | `C3-ProjectInputSKAPPGraphProxy` | local raw output | Source for retrieved-set tensor, RRCP-mask, graph/attention SKAPP-style proxy results. |
+| `.exp/baseline/results/35` | `C3-ProjectInputSKAPPFull` | local raw output | Source for structure-complete project-input SKAPP run with all-items model, single/dissembled model, RRCP_silver, and final RRCP/CXMI-style prediction. |
+| `.exp/baseline/results/36` | `C1-Armenta-ProjectInputReconstruction` | local raw output | Source for GPT-2 synopsis + ResNet-50 cover/banner project-input Armenta reconstruction results. |
+| `.exp/baseline/results/37` | `C2-ProjectInputCTNNReconstruction` | local raw output | Source for GPT-2/ResNet-50 project-input CTNN reconstruction results. |
+| `.exp/baseline/results/38` | `C1-Armenta-Figure2Reconstruction` | local raw output | Source for character-description + portrait Figure 2 side reconstruction results. |
+| `.exp/baseline/results/39` | `C2-ProjectInputCTNNDualVisualReconstruction` | local raw output | Source for GPT-2 + ResNet-50 + project-image dual-visual CTNN diagnostic results. |
 
 ## Completed Routes
 
@@ -58,9 +65,9 @@ reports/reference_baseline_results.csv
 | `1.2 Feature-concat Classical ML` | `F2-XGB-Concat` | done as adaptation |
 | `1.3 Text-only Baseline` | `T2-XGB-TextEmb` | done as adaptation |
 | `1.4 Image-only Baseline` | `I1-XGB-ImageEmb` | done as adaptation |
-| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP`, `C1-Armenta-ProjectInputProxy`, `C1-Armenta-ProjectInputProxy-ResNet50` | first-pass, branch-wise proxy, project-input Armenta-shaped proxy, and ResNet-50 visual-encoder proxy done as adaptations |
-| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite`, `C2-ProjectInputCrossAttention`, `C2-ProjectInputRecurrentFusion` | first-pass, project-input cross-attention, and recurrent-fusion proxies done as adaptations |
-| `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB`, `C3-RAG-Selective-XGB` | first-pass SKAPP-inspired retrieval baselines done, including simple contribution filtering |
+| `2.1 Anime Domain Deep Fusion` | `C1-Armenta-MLP`, `C1-Armenta-ProxyBranchMLP`, `C1-Armenta-ProjectInputProxy`, `C1-Armenta-ProjectInputProxy-ResNet50`, `C1-Armenta-ProjectInputReconstruction`, `C1-Armenta-Figure2Reconstruction` | first-pass/proxy rows, structure-complete project-input reconstruction, and Figure 2 side reconstruction done |
+| `2.2 Cross-modal Transformer Fusion` | `C2-CTNN-Lite`, `C2-ProjectInputCrossAttention`, `C2-ProjectInputRecurrentFusion`, `C2-ProjectInputCTNNReconstruction`, `C2-ProjectInputCTNNDualVisualReconstruction` | first-pass/proxy rows, structure-complete project-input CTNN reconstruction, and dual-visual diagnostic done |
+| `2.3 Retrieval / RAG Competitive Baseline` | `C3-RAG-None-XGB`, `C3-RAG-Sparse-XGB`, `C3-RAG-Dense-XGB`, `C3-RAG-Hybrid-XGB`, `C3-RAG-Selective-XGB`, `C3-ProjectInputSKAPPProxy-XGB`, `C3-ProjectInputSKAPPGraphProxy`, `C3-ProjectInputSKAPPFull` | first-pass retrieval baselines, aggregate proxy, graph proxy, and first structure-complete SKAPP reconstruction run done |
 
 ## C1 vs F2 Snapshot
 
@@ -75,17 +82,25 @@ branch, ResNet-50 character-portrait branch, or exact PyTorch MLP design.
 
 ## C1 Branch Proxy Snapshot
 
-| Target | `F2-XGB-Concat` test R2 | `C1-Armenta-ProxyBranchMLP` test R2 | `C1-Armenta-ProjectInputProxy` test R2 | `C1-Armenta-ProjectInputProxy-ResNet50` test R2 | Current interpretation |
-|---|---:|---:|---:|---:|---|
-| `popularity` | 0.5194 | 0.2600 | 0.3819 | 0.3817 | ResNet-50 cover/banner features make the visual encoder closer to Armenta, but do not materially improve popularity R2 over the existing project-input proxy. |
-| `meanScore` | 0.0193 | 0.0398 | -0.0678 | -0.0633 | ResNet-50 slightly improves score R2/MAE versus ProjectInputProxy, but remains below the earlier branch proxy and F2 concat on score. |
+| Target | `F2-XGB-Concat` test R2 | `C1-Armenta-ProxyBranchMLP` test R2 | `C1-Armenta-ProjectInputProxy` test R2 | `C1-Armenta-ProjectInputProxy-ResNet50` test R2 | `C1-Armenta-ProjectInputReconstruction` test R2 | `C1-Armenta-Figure2Reconstruction` test R2 | Current interpretation |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `popularity` | 0.5194 | 0.2600 | 0.3819 | 0.3817 | 0.2898 | 0.3556 | GPT-2 + ResNet-50 project-input reconstruction improves paper alignment but not performance; the Figure 2 side reconstruction is closer to the original character-centric architecture but is not the project-input main row. |
+| `meanScore` | 0.0193 | 0.0398 | -0.0678 | -0.0633 | -0.1096 | -0.2172 | Structure completion and Figure 2 side reconstruction do not improve score generalization; these rows are valuable for alignment, not as the strongest C1 model. |
 
-Paper alignment caveat: `C1-Armenta-ProjectInputProxy-ResNet50` improves the
-visual encoder alignment by using ImageNet ResNet-50 avg-pool features from
-project cover/banner images. It still remains a project-input proxy because it
-uses project synopsis embeddings and metadata rather than GPT-2 synopsis /
-character-description branches, main-character portraits, and the original
-split/target formulation.
+Paper alignment update: `C1-Armenta-ProjectInputReconstruction` now uses
+GPT-2 pooled synopsis embeddings and ImageNet ResNet-50 cover/banner features,
+then keeps the Armenta-shaped synopsis branch, project-context MLP, and Big MLP.
+It is structure-complete under the project input contract, but still not exact
+paper reproduction because character descriptions/portraits and the original
+split/target formulation are intentionally not used.
+
+Figure 2 side update: `C1-Armenta-Figure2Reconstruction` now uses GPT-2
+synopsis embeddings, GPT-2 main-character description/name embeddings, ResNet-50
+main-character portrait features, the source-shaped character MLP, and the
+Armenta Big MLP. It is closer to the paper's Figure 2 architecture, but is not
+the main project-input comparison row because it uses character-specific inputs
+instead of the project cover/banner contract and raw character coverage is
+incomplete.
 
 ## Single-Modality Snapshot
 
@@ -96,17 +111,67 @@ split/target formulation.
 
 ## C2 Snapshot
 
-| Target | `C2-CTNN-Lite` test R2 | `C2-ProjectInputCrossAttention` test R2 | `C2-ProjectInputRecurrentFusion` test R2 | Recurrent test Spearman | Current interpretation |
-|---|---:|---:|---:|---:|---|
-| `popularity` | 0.1716 | 0.3704 | 0.3545 | 0.8498 | Recurrent fusion improves rank correlation but does not beat CrossAttention by R2; both stronger proxies still trail `F2-XGB-Concat` and C3 selective retrieval. |
-| `meanScore` | -0.2602 | 0.0597 | 0.0670 | 0.4723 | Recurrent fusion slightly improves score R2/Spearman over CrossAttention and turns C2 into a positive score-regression baseline. |
+| Target | `C2-CTNN-Lite` test R2 | `C2-ProjectInputCrossAttention` test R2 | `C2-ProjectInputRecurrentFusion` test R2 | `C2-ProjectInputCTNNReconstruction` test R2 | `C2-ProjectInputCTNNDualVisualReconstruction` test R2 | Best C2 Spearman | Current interpretation |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `popularity` | 0.1716 | 0.3704 | 0.3545 | 0.4608 | 0.4421 | 0.8491 | The single-visual structure-complete CTNN row remains best by R2, while the dual-visual diagnostic slightly improves rank correlation and log_MAE. |
+| `meanScore` | -0.2602 | 0.0597 | 0.0670 | 0.0696 | -0.0720 | 0.5310 | Dual visual improves Spearman but hurts R2/MAE, so it is useful as source-alignment evidence rather than the strongest score row. |
 
-Paper alignment caveat: neither C2 row is a CTNN reproduction.
-`C2-ProjectInputCrossAttention` and `C2-ProjectInputRecurrentFusion` are the
-stronger project-input proxies because they keep this project's metadata,
-synopsis/text, and cover/banner inputs while adding explicit bidirectional
-text-image cross-attention, metadata-conditioned fusion, and in the recurrent
-row a GRU token-fusion step.
+Paper alignment update: `C2-ProjectInputCTNNReconstruction` keeps this
+project's metadata/synopsis/cover/banner input contract, but restores the
+paper's major CTNN stages: text and visual transformer encoders, bidirectional
+cross-modal attention, GRU recurrent fusion, and metadata factor gating. It is
+still not exact CTNN reproduction because it does not use movie reviews, movie
+posters, box-office classes, or the original movie dataset.
+
+Dual-visual update: `C2-ProjectInputCTNNDualVisualReconstruction` adds the
+project's existing image embeddings as a ViT-like visual semantic stream beside
+ResNet-50 cover/banner features. This mirrors the paper's ResNet50+ViT poster
+feature idea more closely, but it did not beat the single-visual reconstruction
+on R2. It should be kept as a source-alignment diagnostic, not as the primary C2
+performance row.
+
+## C1/C2 Structure-Complete Runs
+
+2026-05-19 新增並執行：
+
+```bash
+python -m src.reference_baseline_branch.build_gpt2_text_embeddings --splits train val test --batch-size 16 --device auto --local-files-only
+python -m src.reference_baseline_branch.build_c1_character_features --splits train val test --batch-size 32 --portrait-batch-size 32 --download-workers 24 --max-characters 5 --device auto --local-files-only
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C1-Armenta-ProjectInputReconstruction --include-disabled
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C2-ProjectInputCTNNReconstruction --include-disabled
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C1-Armenta-Figure2Reconstruction --include-disabled
+python -m src.reference_baseline_branch.run_reference_baselines --baseline C2-ProjectInputCTNNDualVisualReconstruction --include-disabled
+```
+
+Artifacts:
+
+```text
+.exp/baseline/text_features/gpt2/gpt2_text_embeddings_{train,val,test}.parquet
+.exp/baseline/c1_character_features/c1_character_features_{train,val,test}.parquet
+.exp/baseline/results/36
+.exp/baseline/results/37
+.exp/baseline/results/38
+.exp/baseline/results/39
+```
+
+| Baseline | Target | test_MAE | test_R2 | test_Spearman_rho | test_log_MAE |
+|---|---:|---:|---:|---:|---:|
+| `C1-Armenta-ProjectInputReconstruction` | popularity | 10719.7513 | 0.2898 | 0.8192 | 1.0563 |
+| `C1-Armenta-ProjectInputReconstruction` | meanScore | 9.0250 | -0.1096 | 0.4666 |  |
+| `C2-ProjectInputCTNNReconstruction` | popularity | 10151.2161 | 0.4608 | 0.8471 | 0.9981 |
+| `C2-ProjectInputCTNNReconstruction` | meanScore | 8.1751 | 0.0696 | 0.5247 |  |
+| `C1-Armenta-Figure2Reconstruction` | popularity | 11878.6328 | 0.3556 | 0.7823 | 1.1688 |
+| `C1-Armenta-Figure2Reconstruction` | meanScore | 9.7747 | -0.2172 | 0.3824 |  |
+| `C2-ProjectInputCTNNDualVisualReconstruction` | popularity | 10214.6356 | 0.4421 | 0.8491 | 0.9399 |
+| `C2-ProjectInputCTNNDualVisualReconstruction` | meanScore | 8.8957 | -0.0720 | 0.5310 |  |
+
+Character artifact coverage:
+
+| split | rows | has character description | has portrait URL | encoded portrait |
+|---|---:|---:|---:|---:|
+| train | 9583 | 4755 | 5620 | 4984 |
+| val | 2918 | 1415 | 1921 | 1718 |
+| test | 3087 | 1578 | 2193 | 1931 |
 
 ## C3 Retrieval Snapshot
 
@@ -114,18 +179,19 @@ These rows use full metadata + text + image features and only vary the RAG
 feature source. Retrieval is generated offline from train-set knowledge only,
 with temporal filtering so retrieved items are earlier than the query period.
 
-| Target | `C3-RAG-None-XGB` test R2 | `C3-RAG-Sparse-XGB` test R2 | `C3-RAG-Dense-XGB` test R2 | `C3-RAG-Hybrid-XGB` test R2 | `C3-RAG-Selective-XGB` test R2 | Current interpretation |
+| Target | `C3-RAG-None-XGB` test R2 | `C3-RAG-Selective-XGB` test R2 | `C3-ProjectInputSKAPPProxy-XGB` test R2 | `C3-ProjectInputSKAPPGraphProxy` test R2 | `C3-ProjectInputSKAPPFull` test R2 | Current interpretation |
 |---|---:|---:|---:|---:|---:|---|
-| `popularity` | 0.5064 | 0.5725 | 0.5084 | 0.4828 | 0.5775 | Selective sparse retrieval is currently strongest by R2 and Spearman. It improves slightly over plain sparse retrieval, while dense and hybrid do not. |
-| `meanScore` | 0.0132 | 0.0730 | 0.0464 | 0.0307 | 0.0905 | Selective sparse retrieval is also strongest by R2. Hybrid has competitive rank correlation, but the simple contribution filter gives the best regression result. |
+| `popularity` | 0.5064 | 0.5775 | 0.5170 | 0.4404 | -0.4927 | Full reconstruction now runs through all SKAPP stages, but is not tuned and currently underperforms badly; selective sparse remains the performance row. |
+| `meanScore` | 0.0132 | 0.0905 | 0.0744 | 0.0690 | -0.2385 | The structure-complete row is architecturally more valuable than the proxies, but its current optimization/generalization is not acceptable yet. |
 
 Paper alignment caveat: these are SKAPP-inspired retrieval baselines, not SKAPP
-reproduction. `C3-RAG-Selective-XGB` is only a deterministic median-threshold
-contribution proxy; it does not implement SKAPP RRCP, VL-GNN contextual
-learning, or RRCP-Attention fusion. The next useful C3 step is
-`C3-ProjectInputSKAPPProxy`: keep project historical-anime retrieval first,
-then move the model closer to SKAPP via learned contribution scoring and
-retrieved-set graph/attention fusion.
+reproduction. `C3-ProjectInputSKAPPFull` is the first row that runs the actual
+SKAPP stage structure under the project input contract: SKAPP-style tensor
+dataset, all-items model, single/dissembled model, RRCP_silver generation,
+thresholded final RRCP prediction, GraphLearner-style fusion, and RRCP/CXMI-style
+feature weighting. Its first run is performance-poor, so it should be treated as
+the reconstruction target that needs tuning/debugging, while `C3-RAG-Selective-XGB`
+remains the strongest C3 performance row.
 
 ## Artifact Policy
 
