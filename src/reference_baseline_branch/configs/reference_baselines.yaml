@@ -7,10 +7,15 @@
 data:
   meta_dir: data/fussion/post2000
   image_dir: data/image
+  raw_anilist_path: data/raw/anilist_anime_data_complete.csv
   text_emb_dir: src/fussion_branch/embedding/text
+  gpt2_text_emb_dir: .exp/baseline/text_features/gpt2
+  c1_character_emb_dir: .exp/baseline/c1_character_features
+  c1_character_image_dir: .exp/baseline/c1_character_images
   image_emb_dir: src/fussion_branch/embedding/image
   resnet50_image_emb_dir: .exp/baseline/image_features/resnet50
   rag_features_root: .exp/baseline/rag_features
+  skapp_full_dataset_dir: .exp/baseline/skapp_full/dataset
   splits: ["train", "val", "test"]
   id_col: id
 
@@ -60,6 +65,14 @@ features:
   text_embedding:
     file_template: text_embeddings_{split}.parquet
     prefix: emb_
+  text_embedding_gpt2:
+    file_template: gpt2_text_embeddings_{split}.parquet
+    prefix: gpt2_
+    feature_name_prefix: gpt2_text
+  character_embedding_armenta:
+    file_template: c1_character_features_{split}.parquet
+    prefix: char_
+    feature_name_prefix: c1_character
   image_embedding:
     file_template: image_embeddings_{split}.parquet
   image_embedding_resnet50:
@@ -86,6 +99,60 @@ features:
       rag_studios:
         parser: json_list
         top_k: 50
+  rag_skapp_proxy:
+    numeric:
+      - rag_popularity
+      - rag_score
+      - rag_release_year
+      - rag_episodes
+      - rag_similarity_mean
+      - rag_similarity_max
+      - rag_topk_count
+      - skapp_contribution_mean
+      - skapp_contribution_max
+      - skapp_contribution_std
+      - skapp_attention_entropy
+      - skapp_selected_count
+      - skapp_weighted_popularity
+      - skapp_weighted_score
+      - skapp_weighted_release_year
+      - skapp_weighted_episodes
+    boolean:
+      - rag_found
+    categorical:
+      - rag_format
+    multihot:
+      rag_genres:
+        parser: json_list
+        top_k: null
+      rag_studios:
+        parser: json_list
+        top_k: 50
+  rag_skapp_graph_proxy:
+    numeric:
+      - rag_popularity
+      - rag_score
+      - rag_release_year
+      - rag_episodes
+      - rag_similarity_mean
+      - rag_similarity_max
+      - rag_topk_count
+      - skapp_contribution_mean
+      - skapp_contribution_max
+      - skapp_contribution_std
+      - skapp_attention_entropy
+      - skapp_selected_count
+      - skapp_weighted_popularity
+      - skapp_weighted_score
+      - skapp_weighted_release_year
+      - skapp_weighted_episodes
+    raw_numeric_prefixes:
+      - skapp_graph_mask_
+      - skapp_graph_rrcp_
+      - skapp_graph_label_pop_
+      - skapp_graph_label_score_
+      - skapp_graph_text_
+      - skapp_graph_image_
 
 feature_sets:
   none:
@@ -117,6 +184,25 @@ feature_sets:
     text_embedding: true
     image_embedding: false
     image_embedding_resnet50: true
+  metadata_gpt2_resnet50_image:
+    metadata: true
+    text_embedding: false
+    text_embedding_gpt2: true
+    image_embedding: false
+    image_embedding_resnet50: true
+  metadata_gpt2_dual_visual_image:
+    metadata: true
+    text_embedding: false
+    text_embedding_gpt2: true
+    image_embedding: true
+    image_embedding_resnet50: true
+  c1_figure2_character:
+    metadata: false
+    text_embedding: false
+    text_embedding_gpt2: true
+    character_embedding_armenta: true
+    image_embedding: false
+    image_embedding_resnet50: false
   metadata_text_image_rag_none:
     metadata: true
     text_embedding: true
@@ -147,6 +233,20 @@ feature_sets:
     image_embedding: true
     rag: true
     rag_features_dir: .exp/baseline/rag_features/selective
+  metadata_text_image_rag_skapp_proxy:
+    metadata: true
+    text_embedding: true
+    image_embedding: true
+    rag: true
+    rag_config: rag_skapp_proxy
+    rag_features_dir: .exp/baseline/rag_features/skapp_proxy
+  metadata_text_image_rag_skapp_graph_proxy:
+    metadata: true
+    text_embedding: true
+    image_embedding: true
+    rag: true
+    rag_config: rag_skapp_graph_proxy
+    rag_features_dir: .exp/baseline/rag_features/skapp_graph_proxy
 
 baselines:
   - id: F0-Mean
@@ -367,6 +467,61 @@ baselines:
     claim_allowed: "Project-input Armenta-style proxy with a ResNet-50 visual encoder, suitable for testing whether a visual branch closer to the paper improves under this project's input contract."
     claim_not_allowed: "Do not claim Figure 2 reproduction, GPT-2 reproduction, character-description reproduction, or numerical comparability; this still uses project synopsis/metadata and cover/banner images instead of main-character descriptions and portraits."
 
+  - id: C1-Armenta-ProjectInputReconstruction
+    enabled: false
+    feature_set: metadata_gpt2_resnet50_image
+    model: armenta_project_input_mlp
+    params:
+      metadata_dim: 151
+      text_dim: 768
+      image_dim: 4098
+      branch_dim: 768
+      big_mlp_hidden_dims: [768, 384, 192, 96, 48, 24, 12, 6]
+      dropout: 0.1
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 100
+      patience: 12
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Armenta-Segura & Sidorov 2025
+    reproduction_level: structure_complete_project_input
+    paper_supported_component: "Armenta-Segura & Sidorov 2025 uses GPT-2 synopsis features, ResNet-50 visual features, a context/character MLP stage, and a Big MLP with 768->384->192->96->48->24->12->6 hidden widths."
+    project_adaptation_component: "This reconstruction keeps this project's metadata/synopsis/cover/banner input contract, rebuilds synopsis embeddings with GPT-2 hidden states, uses ImageNet ResNet-50 cover/banner features, and preserves the Armenta-shaped branch plus Big MLP topology."
+    claim_allowed: "Structure-complete project-input reconstruction of the Armenta fusion route: GPT-2-style synopsis branch, ResNet-50 visual branch, project-context MLP, and Armenta Big MLP under the project's temporal split."
+    claim_not_allowed: "Do not claim exact paper reproduction or numerical comparability; this still replaces main-character descriptions/portraits with project metadata and cover/banner images, and it uses this project's popularity/meanScore targets."
+
+  - id: C1-Armenta-Figure2Reconstruction
+    enabled: false
+    feature_set: c1_figure2_character
+    model: armenta_figure2_reconstruction
+    params:
+      synopsis_dim: 768
+      character_text_dim: 768
+      portrait_dim: 49
+      branch_dim: 768
+      dropout: 0.1
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 100
+      patience: 12
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Armenta-Segura & Sidorov 2025
+    reproduction_level: figure2_side_reconstruction
+    paper_supported_component: "Armenta-Segura & Sidorov 2025 Figure 2 uses GPT-2 synopsis embeddings, GPT-2 main-character-description embeddings, ResNet-50 portrait features, a character MLP with Dropout->Linear(768+49,768)->Tanh->Dropout->Linear(768,768), and the Big MLP."
+    project_adaptation_component: "This side reconstruction keeps the project temporal split and targets, uses raw AniList main-character descriptions and portrait URLs when available, and uses zero-filled character features for rows without character artifacts."
+    claim_allowed: "Closest C1 Figure-2 side reconstruction under available AniList raw character artifacts; useful for checking the original character-centric architecture separately from the project cover/banner mainline."
+    claim_not_allowed: "Do not use this as the main project-input comparison row and do not claim exact numerical comparability; raw character coverage is incomplete and the task target/split still differ from the paper."
+
   - id: C2-CTNN-Lite
     enabled: false
     feature_set: text_image
@@ -455,6 +610,71 @@ baselines:
     project_adaptation_component: "Project metadata/text/image embeddings are fused with bidirectional text-image cross-attention, then a GRU recurrent fusion step refines the text/image/metadata token sequence before regression."
     claim_allowed: "Project-input CTNN-style recurrent fusion proxy that keeps this project's input contract while covering the paper's recurrent-fusion motivation."
     claim_not_allowed: "Do not claim exact CTNN reproduction; this row keeps anime embeddings and regression targets and does not use the paper's movie review/poster feature extraction or box-office class setup."
+
+  - id: C2-ProjectInputCTNNReconstruction
+    enabled: false
+    feature_set: metadata_gpt2_resnet50_image
+    model: project_input_ctnn_reconstruction
+    params:
+      metadata_dim: 151
+      text_dim: 768
+      image_dim: 4098
+      d_model: 128
+      nhead: 4
+      num_layers: 2
+      dim_feedforward: 256
+      dropout: 0.1
+      text_tokens: 4
+      image_feature_dim: 2048
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 100
+      patience: 12
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Madongo, Tang & Hassan 2023
+    reproduction_level: structure_complete_project_input
+    paper_supported_component: "Madongo et al. 2023 CTNN combines text/poster transformer encoders, cross-modal attention transformer fusion, recurrent fusion, and metadata-related factors for box-office prediction."
+    project_adaptation_component: "This reconstruction keeps project synopsis/cover/banner/metadata inputs, uses GPT-2 synopsis embeddings and ResNet-50 cover/banner features, restores separate modality transformer encoders, bidirectional text-image cross-attention, GRU recurrent fusion, and metadata factor gating."
+    claim_allowed: "Structure-complete project-input reconstruction of the CTNN route under anime inputs: transformer modality encoders, cross-modal attention, recurrent fusion, and metadata factor conditioning."
+    claim_not_allowed: "Do not claim exact CTNN reproduction or numerical comparability; this does not use movie reviews, movie posters, box-office classes, or the original dataset."
+
+  - id: C2-ProjectInputCTNNDualVisualReconstruction
+    enabled: false
+    feature_set: metadata_gpt2_dual_visual_image
+    model: project_input_ctnn_dual_visual_reconstruction
+    params:
+      metadata_dim: 151
+      text_dim: 768
+      swin_image_dim: 1024
+      resnet_image_dim: 4098
+      d_model: 128
+      nhead: 4
+      num_layers: 2
+      dim_feedforward: 256
+      dropout: 0.1
+      text_tokens: 4
+      image_feature_dim: 2048
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 256
+      max_epochs: 100
+      patience: 12
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Madongo, Tang & Hassan 2023
+    reproduction_level: structure_complete_project_input_dual_visual
+    paper_supported_component: "Madongo et al. 2023 uses movie-review text features together with ResNet50 and ViT poster features before cross-modal attention, recurrent fusion, and metadata-related factors."
+    project_adaptation_component: "This diagnostic reconstruction keeps project synopsis/cover/banner/metadata inputs, adds project image embeddings as a transformer-style visual semantic proxy alongside ResNet-50 cover/banner features, and keeps the CTNN transformer/cross-attention/recurrent/metadata-factor stack."
+    claim_allowed: "Dual-visual project-input CTNN reconstruction diagnostic that tests whether adding a ViT-like project image stream to ResNet-50 improves the source-aligned C2 route."
+    claim_not_allowed: "Do not claim exact CTNN reproduction; the transformer-style visual stream is the project's precomputed image embedding, not MovieNet-finetuned ViT poster features, and the task remains anime regression."
 
   - id: C3-RAG-None-XGB
     enabled: false
@@ -550,3 +770,55 @@ baselines:
     project_adaptation_component: "Offline sparse metadata retrieval with temporal filtering, followed by median-threshold filtering of low-contribution top-k candidates before feature aggregation."
     claim_allowed: "Selective sparse retrieval baseline inspired by SKAPP's RRCP-style filtering motivation."
     claim_not_allowed: "Do not claim SKAPP or RRCP reproduction; this uses a simple deterministic contribution proxy and lacks VL-GNN context learning and RRCP-Attention."
+
+  - id: C3-ProjectInputSKAPPProxy-XGB
+    enabled: false
+    feature_set: metadata_text_image_rag_skapp_proxy
+    model: xgboost
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.9
+      colsample_bytree: 0.9
+      random_state: 42
+      objective: reg:squarederror
+    reference: Xu et al. 2025 SKAPP
+    reproduction_level: inspired
+    paper_supported_component: "SKAPP motivates selective retrieval knowledge augmentation with contribution-aware retrieved-context refinement."
+    project_adaptation_component: "Project historical-anime retrieval using sparse+dense hybrid candidates, a train-only learned contribution scorer, contribution-threshold filtering, and attention-weighted retrieved-context aggregation before XGBoost fusion."
+    claim_allowed: "Project-input SKAPP-style retrieval/context-fusion proxy with learned contribution filtering and attention-weighted retrieved aggregates."
+    claim_not_allowed: "Do not claim SKAPP reproduction, RRCP reproduction, VL-GNN reproduction, or RRCP-Attention reproduction; this keeps project anime inputs and uses aggregate attention-weighted features rather than a graph neural context module."
+
+  - id: C3-ProjectInputSKAPPGraphProxy
+    enabled: false
+    feature_set: metadata_text_image_rag_skapp_graph_proxy
+    model: project_input_skapp_graph_proxy
+    params:
+      metadata_dim: 151
+      rag_dim: 14136
+      rag_aggregate_dim: 16
+      text_dim: 384
+      image_dim: 1024
+      top_k: 10
+      label_dim: 2
+      d_model: 128
+      dim_feedforward: 256
+      dropout: 0.1
+      rrcp_threshold: 0.0
+      learning_rate: 0.001
+      weight_decay: 0.0001
+      batch_size: 128
+      max_epochs: 80
+      patience: 10
+      validation_fraction: 0.15
+      random_state: 42
+      device: cpu
+      torch_num_threads: 1
+      verbose: false
+    reference: Xu et al. 2025 SKAPP
+    reproduction_level: adapted
+    paper_supported_component: "SKAPP source code uses per-query retrieved visual/textual tensors, retrieved labels, RRCP threshold masking, a variable-length graph module, and RRCP-attention prediction."
+    project_adaptation_component: "Project anime metadata/text/image inputs are combined with fixed top-k train-only retrieved context tensors; a torch proxy applies RRCP-style masks, learned graph adjacency over query and retrieved tokens, and contribution-aware attention before regression."
+    claim_allowed: "Closest current project-input SKAPP architecture proxy: retrieved tensors plus RRCP-mask and graph/attention context learning under the project's temporal retrieval contract."
+    claim_not_allowed: "Do not claim exact SKAPP reproduction or numerical comparability; this still uses anime pre-release inputs, fixed top-k padding, project embeddings, and proxy RRCP labels rather than SKAPP's social-media data and RRCP pretraining pipeline."

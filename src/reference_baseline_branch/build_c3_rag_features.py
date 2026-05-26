@@ -11,9 +11,18 @@ from typing import Dict, Iterable, List, Sequence
 import numpy as np
 import pandas as pd
 import yaml
+from sklearn.ensemble import GradientBoostingRegressor
 
 
-RAG_MODES = ("none", "sparse", "dense", "hybrid", "selective")
+RAG_MODES = (
+    "none",
+    "sparse",
+    "dense",
+    "hybrid",
+    "selective",
+    "skapp_proxy",
+    "skapp_graph_proxy",
+)
 
 
 def main() -> None:
@@ -80,7 +89,12 @@ class OfflineRagFeatureBuilder:
         self.text_emb = self._load_text_embeddings()
         self.train_text_matrix = self.text_emb.get("train_matrix")
         self.train_text_ids = self.text_emb.get("train_ids")
+        self.image_emb = self._load_image_embeddings()
+        self.train_image_matrix = self.image_emb.get("train_matrix")
+        self.text_dim = 0 if self.train_text_matrix is None else int(self.train_text_matrix.shape[1])
+        self.image_dim = 0 if self.train_image_matrix is None else int(self.train_image_matrix.shape[1])
         self.dense_score_cache: Dict[str, Dict[int, Dict[int, float]]] = {}
+        self.contribution_model: GradientBoostingRegressor | None = None
 
     def build_mode(self, mode: str, splits: Sequence[str] | None = None) -> None:
         if mode not in RAG_MODES:
@@ -99,6 +113,16 @@ class OfflineRagFeatureBuilder:
         anime_id = int(row[self.id_col])
         if mode == "none":
             return self._empty_row(anime_id)
+        if mode == "skapp_proxy":
+            candidates = self._retrieve_skapp_candidates(row, split)
+            if not candidates:
+                return self._empty_skapp_row(anime_id)
+            return self._aggregate_skapp_row(anime_id, candidates)
+        if mode == "skapp_graph_proxy":
+            candidates = self._retrieve_skapp_candidates(row, split)
+            if not candidates:
+                return self._empty_skapp_graph_row(anime_id)
+            return self._aggregate_skapp_graph_row(anime_id, candidates)
 
         candidates = self._retrieve(row, split, mode)
         if not candidates:
@@ -130,6 +154,89 @@ class OfflineRagFeatureBuilder:
 
         ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
         return ranked[: self.top_k]
+
+    def _retrieve_skapp_candidates(self, row: pd.Series, split: str) -> List[tuple[int, float]]:
+        self._ensure_contribution_model()
+        allowed = self._allowed_train_indices(row, split)
+        if not allowed or self.contribution_model is None:
+            return []
+
+        sparse_scores = self._sparse_scores(set(_sparse_tokens(row)), allowed)
+        dense_scores = self._dense_scores(row, split, allowed)
+        rrf_scores = self._rrf_scores(sparse_scores, dense_scores)
+        if not rrf_scores:
+            return []
+
+        pool_size = self.top_k
+        pool = sorted(rrf_scores.items(), key=lambda item: item[1], reverse=True)[:pool_size]
+        features = np.asarray(
+            [
+                self._pair_features(
+                    row=row,
+                    candidate_idx=idx,
+                    sparse_score=sparse_scores.get(idx, 0.0),
+                    dense_score=dense_scores.get(idx, 0.0),
+                    rrf_score=rrf_score,
+                )
+                for idx, rrf_score in pool
+            ],
+            dtype=np.float32,
+        )
+        contributions = np.asarray(self.contribution_model.predict(features), dtype=np.float64)
+        threshold = float(np.median(contributions))
+        selected = [
+            (idx, float(score))
+            for (idx, _), score in zip(pool, contributions)
+            if score >= threshold
+        ]
+        if not selected:
+            best_pos = int(np.argmax(contributions))
+            selected = [(pool[best_pos][0], float(contributions[best_pos]))]
+        selected = sorted(selected, key=lambda item: item[1], reverse=True)[: self.top_k]
+        return selected
+
+    def _ensure_contribution_model(self) -> None:
+        if self.contribution_model is not None:
+            return
+        feature_rows: List[List[float]] = []
+        labels: List[float] = []
+        for _, row in self.train_df.iterrows():
+            allowed = self._allowed_train_indices(row, "train")
+            if not allowed:
+                continue
+            sparse_scores = self._sparse_scores(set(_sparse_tokens(row)), allowed)
+            dense_scores = self._dense_scores(row, "train", allowed)
+            rrf_scores = self._rrf_scores(sparse_scores, dense_scores)
+            if not rrf_scores:
+                continue
+            pool_size = max(self.top_k * 4, self.top_k)
+            pool = sorted(rrf_scores.items(), key=lambda item: item[1], reverse=True)[:pool_size]
+            for idx, rrf_score in pool:
+                feature_rows.append(
+                    self._pair_features(
+                        row=row,
+                        candidate_idx=idx,
+                        sparse_score=sparse_scores.get(idx, 0.0),
+                        dense_score=dense_scores.get(idx, 0.0),
+                        rrf_score=rrf_score,
+                    )
+                )
+                labels.append(self._pair_contribution_label(row, idx))
+
+        if not feature_rows:
+            self.contribution_model = None
+            return
+        model = GradientBoostingRegressor(
+            n_estimators=200,
+            learning_rate=0.05,
+            max_depth=3,
+            min_samples_leaf=20,
+            subsample=0.8,
+            random_state=42,
+        )
+        model.fit(np.asarray(feature_rows, dtype=np.float32), np.asarray(labels, dtype=np.float32))
+        self.contribution_model = model
+        print(f"  [skapp_proxy] trained contribution scorer on {len(labels)} train pairs")
 
     def _allowed_train_indices(self, row: pd.Series, split: str) -> set[int]:
         target_year = _safe_int(row.get("release_year"), default=0)
@@ -271,6 +378,37 @@ class OfflineRagFeatureBuilder:
             "rag_found": True,
         }
 
+    def _aggregate_skapp_row(self, anime_id: int, candidates: Sequence[tuple[int, float]]) -> dict:
+        indices = [idx for idx, _ in candidates]
+        scores = np.array([score for _, score in candidates], dtype=np.float64)
+        weights = _softmax(scores)
+        df = self.train_df.iloc[indices]
+        base = self._aggregate_row(anime_id, candidates)
+        popularity = pd.to_numeric(df["popularity"], errors="coerce").fillna(self.fallback["rag_popularity"]).to_numpy()
+        mean_score = pd.to_numeric(df["meanScore"], errors="coerce").fillna(self.fallback["rag_score"]).to_numpy()
+        release_year = pd.to_numeric(df["release_year"], errors="coerce").fillna(0).to_numpy()
+        episodes = pd.to_numeric(df["episodes"], errors="coerce").fillna(self.fallback["rag_episodes"]).to_numpy()
+        entropy = float(-np.sum(weights * np.log(np.maximum(weights, 1e-12))))
+        base.update(
+            {
+                "skapp_contribution_mean": float(scores.mean()),
+                "skapp_contribution_max": float(scores.max()),
+                "skapp_contribution_std": float(scores.std()) if len(scores) > 1 else 0.0,
+                "skapp_attention_entropy": entropy,
+                "skapp_selected_count": float(len(indices)),
+                "skapp_weighted_popularity": float(np.sum(weights * popularity)),
+                "skapp_weighted_score": float(np.sum(weights * mean_score)),
+                "skapp_weighted_release_year": float(np.sum(weights * release_year)),
+                "skapp_weighted_episodes": float(np.sum(weights * episodes)),
+            }
+        )
+        return base
+
+    def _aggregate_skapp_graph_row(self, anime_id: int, candidates: Sequence[tuple[int, float]]) -> dict:
+        base = self._aggregate_skapp_row(anime_id, candidates)
+        base.update(self._skapp_graph_features(candidates))
+        return base
+
     def _empty_row(self, anime_id: int) -> dict:
         return {
             "id": anime_id,
@@ -281,6 +419,112 @@ class OfflineRagFeatureBuilder:
             "rag_studios": json.dumps([], ensure_ascii=False),
             "rag_found": False,
         }
+
+    def _empty_skapp_row(self, anime_id: int) -> dict:
+        row = self._empty_row(anime_id)
+        row.update(
+            {
+                "skapp_contribution_mean": 0.0,
+                "skapp_contribution_max": 0.0,
+                "skapp_contribution_std": 0.0,
+                "skapp_attention_entropy": 0.0,
+                "skapp_selected_count": 0.0,
+                "skapp_weighted_popularity": self.fallback["rag_popularity"],
+                "skapp_weighted_score": self.fallback["rag_score"],
+                "skapp_weighted_release_year": 0.0,
+                "skapp_weighted_episodes": self.fallback["rag_episodes"],
+            }
+        )
+        return row
+
+    def _empty_skapp_graph_row(self, anime_id: int) -> dict:
+        row = self._empty_skapp_row(anime_id)
+        row.update(self._skapp_graph_features([]))
+        return row
+
+    def _skapp_graph_features(self, candidates: Sequence[tuple[int, float]]) -> dict:
+        mask = np.zeros(self.top_k, dtype=np.float32)
+        contributions = np.zeros(self.top_k, dtype=np.float32)
+        labels = np.zeros((self.top_k, 2), dtype=np.float32)
+        text = np.zeros((self.top_k, self.text_dim), dtype=np.float32)
+        image = np.zeros((self.top_k, self.image_dim), dtype=np.float32)
+
+        for pos, (idx, score) in enumerate(candidates[: self.top_k]):
+            candidate = self.train_df.iloc[idx]
+            mask[pos] = 1.0
+            contributions[pos] = float(score)
+            labels[pos, 0] = math.log1p(max(_safe_float(candidate.get("popularity"), 0.0), 0.0))
+            labels[pos, 1] = _safe_float(candidate.get("meanScore"), 0.0) / 100.0
+            if self.train_text_matrix is not None:
+                text[pos] = self.train_text_matrix[idx]
+            if self.train_image_matrix is not None:
+                image[pos] = self.train_image_matrix[idx]
+
+        row: dict = {}
+        for pos in range(self.top_k):
+            row[f"skapp_graph_mask_{pos:02d}"] = float(mask[pos])
+        for pos in range(self.top_k):
+            row[f"skapp_graph_rrcp_{pos:02d}"] = float(contributions[pos])
+        for pos in range(self.top_k):
+            row[f"skapp_graph_label_pop_{pos:02d}"] = float(labels[pos, 0])
+            row[f"skapp_graph_label_score_{pos:02d}"] = float(labels[pos, 1])
+        for pos in range(self.top_k):
+            for dim in range(self.text_dim):
+                row[f"skapp_graph_text_{pos:02d}_{dim:03d}"] = float(text[pos, dim])
+        for pos in range(self.top_k):
+            for dim in range(self.image_dim):
+                row[f"skapp_graph_image_{pos:02d}_{dim:04d}"] = float(image[pos, dim])
+        return row
+
+    def _pair_features(
+        self,
+        row: pd.Series,
+        candidate_idx: int,
+        sparse_score: float,
+        dense_score: float,
+        rrf_score: float,
+    ) -> List[float]:
+        candidate = self.train_df.iloc[candidate_idx]
+        query_genres = set(_parse_literal_list(row.get("genres")))
+        candidate_genres = set(_parse_literal_list(candidate.get("genres")))
+        query_studios = set(_parse_studios(row.get("studios")))
+        candidate_studios = set(_parse_studios(candidate.get("studios")))
+        query_voice = set(_parse_pipe(row.get("voice_actor_names")))
+        candidate_voice = set(_parse_pipe(candidate.get("voice_actor_names")))
+        query_year = _safe_int(row.get("release_year"), default=0)
+        candidate_year = _safe_int(candidate.get("release_year"), default=0)
+        query_quarter = _safe_int(row.get("release_quarter"), default=0)
+        candidate_quarter = _safe_int(candidate.get("release_quarter"), default=0)
+        query_episode = _safe_float(row.get("episodes"), default=0.0)
+        candidate_episode = _safe_float(candidate.get("episodes"), default=0.0)
+        return [
+            float(sparse_score),
+            float(dense_score),
+            float(rrf_score),
+            _jaccard(query_genres, candidate_genres),
+            _jaccard(query_studios, candidate_studios),
+            _jaccard(query_voice, candidate_voice),
+            float(max(query_year - candidate_year, 0)),
+            float(abs((query_year * 4 + query_quarter) - (candidate_year * 4 + candidate_quarter))),
+            float(_same_value(row.get("format"), candidate.get("format"))),
+            float(_same_value(row.get("source"), candidate.get("source"))),
+            float(_same_value(row.get("countryOfOrigin"), candidate.get("countryOfOrigin"))),
+            math.log1p(max(query_episode, 0.0)),
+            math.log1p(max(candidate_episode, 0.0)),
+            math.log1p(abs(query_episode - candidate_episode)),
+            math.log1p(max(_safe_float(candidate.get("popularity"), 0.0), 0.0)),
+            _safe_float(candidate.get("meanScore"), 0.0) / 100.0,
+        ]
+
+    def _pair_contribution_label(self, row: pd.Series, candidate_idx: int) -> float:
+        candidate = self.train_df.iloc[candidate_idx]
+        query_pop = math.log1p(max(_safe_float(row.get("popularity"), 0.0), 0.0))
+        candidate_pop = math.log1p(max(_safe_float(candidate.get("popularity"), 0.0), 0.0))
+        pop_closeness = math.exp(-abs(query_pop - candidate_pop))
+        query_score = _safe_float(row.get("meanScore"), 0.0)
+        candidate_score = _safe_float(candidate.get("meanScore"), 0.0)
+        score_closeness = math.exp(-abs(query_score - candidate_score) / 10.0)
+        return float(0.5 * pop_closeness + 0.5 * score_closeness)
 
     def _load_meta(self) -> Dict[str, pd.DataFrame]:
         meta_dir = Path(self.data_cfg["meta_dir"])
@@ -327,6 +571,39 @@ class OfflineRagFeatureBuilder:
                 train_ids = np.array(order, dtype=np.int64)
         cache["train_matrix"] = train_matrix
         cache["train_ids"] = train_ids
+        return cache
+
+    def _load_image_embeddings(self) -> dict:
+        emb_dir = Path(self.data_cfg["image_emb_dir"])
+        emb_cfg = self.config["features"]["image_embedding"]
+        cache: dict = {"train_matrix": None}
+        for split in self.data_cfg.get("splits", ["train", "val", "test"]):
+            path = emb_dir / emb_cfg["file_template"].format(split=split)
+            if not path.exists():
+                continue
+            df = pd.read_parquet(path).set_index(self.id_col)
+            prefix = emb_cfg.get("prefix")
+            if prefix:
+                cols = [col for col in df.columns if str(col).startswith(prefix)]
+            else:
+                cols = [col for col in df.columns if col != self.id_col]
+            values = df[cols].astype(np.float32)
+            norms = np.linalg.norm(values.values, axis=1, keepdims=True)
+            norms[norms == 0] = 1.0
+            normalized = values.values / norms
+            id_to_row = {
+                int(idx): normalized[row_idx]
+                for row_idx, idx in enumerate(values.index.astype(int).tolist())
+            }
+            cache[split] = id_to_row
+            if split == "train":
+                order = [int(item) for item in self.train_ids.tolist()]
+                train_matrix = np.zeros((len(order), len(cols)), dtype=np.float32)
+                for row_idx, anime_id in enumerate(order):
+                    vec = id_to_row.get(anime_id)
+                    if vec is not None:
+                        train_matrix[row_idx] = vec
+                cache["train_matrix"] = train_matrix
         return cache
 
 
@@ -388,6 +665,41 @@ def _safe_int(value, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _safe_float(value, default: float) -> float:
+    try:
+        if pd.isna(value):
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _jaccard(left: set[str], right: set[str]) -> float:
+    if not left and not right:
+        return 0.0
+    union = left | right
+    if not union:
+        return 0.0
+    return float(len(left & right) / len(union))
+
+
+def _same_value(left, right) -> bool:
+    if pd.isna(left) or pd.isna(right):
+        return False
+    return str(left).strip() == str(right).strip()
+
+
+def _softmax(values: np.ndarray) -> np.ndarray:
+    if len(values) == 0:
+        return values.astype(np.float64)
+    centered = values - float(np.max(values))
+    exp = np.exp(centered)
+    denom = float(exp.sum())
+    if denom <= 0:
+        return np.full(len(values), 1.0 / len(values), dtype=np.float64)
+    return exp / denom
 
 
 if __name__ == "__main__":
