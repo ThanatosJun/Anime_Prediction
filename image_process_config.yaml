@@ -26,7 +26,7 @@ debug:
 model:
   name: microsoft/swin-base-patch4-window7-224
   pretrained: true
-  stage: false          # true → 各 stage 特徵串接 (B,1920)；false → pooler_output (B,1024)
+  stage: false          # true → 各 stage vector；false → pooler_output (B,1024)
 
 # ── Augmentation ──────────────────────────────────────────────────────────────
 augmentation:
