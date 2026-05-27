@@ -54,4 +54,4 @@ output:
   # 欄位：idx、image_col、bbox (x0,y0,x1,y1)、confidence、crop_path
 
 yolo:
-  use: true
+  use: false

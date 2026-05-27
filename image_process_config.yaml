@@ -2,9 +2,9 @@
 data:
   csv_path: data/processed/anilist_anime_multimodal_input_v1.csv
   image_columns:
-    - coverImage_medium
-    - bannerImage
-  fetch_ratio: 0.5            # 抓取比例，1.0 = 全量；debug 時可調低
+    - coverImage_extraLarge
+    
+  fetch_ratio: 0.6            # 抓取比例，1.0 = 全量；debug 時可調低
   split:
     train: 0.8
     val:   0.1
@@ -73,7 +73,7 @@ training:
 # ── Output (predict.py)────────────────────────────────────────────────────────────────────
 output:
   results_dir: results          # 根目錄，子路徑由程式碼以 run_id 組合
-  run_id: "01"                  # 每次微調遞增，對應 results/{run_id}/
+  run_id: "02"                  # 每次微調遞增，對應 results/{run_id}/
   embedding_path: data/processed/image_embeddings.parquet
   # run_predict.py 修改 test set
 
