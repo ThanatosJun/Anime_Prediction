@@ -27,7 +27,8 @@ model:
   name: microsoft/swin-base-patch4-window7-224
   pretrained: true
   stage: false          # true → 各 stage vector；false → pooler_output (B,1024)
-
+  projection: false
+  project_dim: 256
 # ── Augmentation ──────────────────────────────────────────────────────────────
 augmentation:
   random_resized_crop:

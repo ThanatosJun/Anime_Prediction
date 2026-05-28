@@ -160,21 +160,26 @@ load_config() → load_model(config)
 ```
 load model from results/{run_id}/best/
     ↓
-建立 test DataLoader（coverImage_medium）
-    use_yolo 由 yolo_config.yaml['yolo']['use'] 控制
+use_stage = config['model']['stage']   ← True → 各 stage；False → pooler_output
+use_yolo  由 yolo_config.yaml['yolo']['use'] 控制
     ↓
-predict_one_col(model, loader):
-    Tensor 路徑: 直接 forward → {idx: emb}
-    YOLO  路徑: 逐樣本 mean pool 後 → {idx: emb}
+建立 test DataLoader（coverImage_medium）
+    ↓
+predict_one_col(model, loader, use_stage):
+    use_stage=False:
+        Tensor 路徑: 直接 forward → {idx: Tensor(1024,)}
+        YOLO  路徑: 逐樣本 mean pool → {idx: Tensor(1024,)}
+    use_stage=True:
+        → {idx: [Tensor(128,), Tensor(256,), Tensor(512,), Tensor(1024,)]}
     → cover_embs
     ↓
 建立 test DataLoader（bannerImage）
     ↓
 predict_one_col → banner_embs
     ↓
-merge_embeddings(cover_embs, banner_embs)
-    → outer join，缺失填 None
-    → DataFrame: [idx, coverImage_emb, bannerImage_emb]
+merge_embeddings(cover_embs, banner_embs, use_stage):
+    use_stage=False → [idx, coverImage_emb, bannerImage_emb]
+    use_stage=True  → [idx, coverImage_emb_s0~s3, bannerImage_emb_s0~s3]
     ↓
 save_embeddings() → data/processed/image_embeddings.parquet
 ```
@@ -210,10 +215,16 @@ embed_url(url)
 
 ### step4：輸出 embedding
 - 儲存為**單一 parquet 檔**：`data/processed/image_embeddings.parquet`
-- 欄位：`idx`、`coverImage_emb`（1024 維）、`bannerImage_emb`（1024 維）
-    - `idx` 為 **AniList 動畫 ID**（來自 CSV 的 `id` 欄位），**不是** DataFrame 的 row index
-- 讀取：`np.array(df["coverImage_emb"].tolist())` → shape `(N, 1024)`
+- `idx` 為 **AniList 動畫 ID**（來自 CSV 的 `id` 欄位），**不是** DataFrame 的 row index
 - 可直接用 `idx` 和原本 CSV 以 `id` 欄位 merge
+
+**`stage: false`（預設）**
+- 欄位：`idx`、`coverImage_emb`（1024 維）、`bannerImage_emb`（1024 維）
+- 讀取：`np.array(df["coverImage_emb"].tolist())` → shape `(N, 1024)`
+
+**`stage: true`**
+- 欄位：`idx`、`coverImage_emb_s0`（128）、`coverImage_emb_s1`（256）、`coverImage_emb_s2`（512）、`coverImage_emb_s3`（1024）（bannerImage 同）
+- 讀取：`np.array(df["coverImage_emb_s3"].tolist())` → shape `(N, 1024)`
 
 ## 各 Function 設計簡介和說明
 
@@ -225,7 +236,7 @@ project_root/
 │   ├── config.py        # 讀取 yaml 設定（load_config, load_yolo_config）
 │   ├── model.py         # 載入 Swin Transformer、取得 embedding
 │   ├── loss.py          # InfoNCE loss
-│   └── YOLO.PY          # detect_person wrapper（imgutils 公開 API）
+│   └── YOLO.PY          # detect_person / detect_faces wrapper（imgutils 公開 API）
 ├── util/
 │   ├── getImage.py      # 爬蟲、圖片下載、getImage_YOLO
 │   ├── image_process.py # transform pipeline、ResizeWithPad
@@ -248,6 +259,15 @@ project_root/
 ### src/model.py
 - `load_model(config)` → 從 HuggingFace 載入 SwinModel（pretrained），回傳 model（無 classifier head）
 - `get_embedding(model, pixel_values)` → forward pass，取 pooler_output，回傳 shape `(B, 1024)` tensor
+- `get_stage_embeddings(model, pixel_values)` → 取 `reshaped_hidden_states` 的四個 stage，各 global average pool 後回傳 `[(B,128), (B,256), (B,512), (B,1024)]`
+    - stage 0 (128 維)：局部紋理、線條筆觸
+    - stage 1 (256 維)：色塊分布、局部結構
+    - stage 2 (512 維)：人物部位、光影風格
+    - stage 3 (1024 維)：整體語義、畫風流派
+- `class StageProjector(nn.Module)` → 將四個 stage embedding 各自線性投影到相同維度 `project_dim`
+    - `__init__(self, project_dim)` → 建立 4 個 `nn.Linear`（`[128,256,512,1024] → project_dim`）
+    - `forward(self, embeds)` → 回傳 `[(B,D), (B,D), (B,D), (B,D)]`
+    - 啟用時需將 projector 參數也加入 optimizer
 
 ### src/loss.py
 - `infonce_loss(aug_emb, orig_emb, tau)` → 計算 cosine similarity matrix，套用 InfoNCE 公式，回傳 scalar loss
@@ -255,8 +275,10 @@ project_root/
 ---
 
 ### src/YOLO.PY
-- `detect_person(image, level, version, conf_threshold, iou_threshold)` → 呼叫 `imgutils.detect.detect_person`，回傳 `List[((x0,y0,x1,y1), 'person', conf)]`
-- 依賴 `deepghs/anime_person_detection`，預設 level=`m`、version=`v1.1`
+- `detect_person(image, level, version, model_name, conf_threshold, iou_threshold)` → 呼叫 `imgutils.detect.detect_person`，回傳 `List[((x0,y0,x1,y1), 'person', conf)]`
+    - 依賴 `deepghs/anime_person_detection`，預設 level=`m`、version=`v1.1`
+- `detect_faces(image, level, version, model_name, conf_threshold, iou_threshold)` → 呼叫 `imgutils.detect.detect_faces`，回傳 `List[((x0,y0,x1,y1), 'face', conf)]`
+    - 依賴 `deepghs/anime_face_detection`，預設 level=`s`、version=`v1.4`，conf=0.25、iou=0.7
 
 ---
 
@@ -346,15 +368,23 @@ TensorBoard：
 
 ### util/yolo_for_image.py
 - `show_crops(idx, orig_img, frame_, output_dir, max_cols)` → matplotlib canvas（原圖 + crops）存為 jpg
-- 主流程：讀 `yolo_config.yaml` → `getImage_YOLO()` → 每張圖片下載、upscale、YOLO 偵測、crop、canvas
-- 執行方式：`python util/yolo_for_image.py`（內部轉換 `sys.path` ，兩種執行方式均可）
+- `_run_detect(img, mode, cfg)` → 依 `detect_mode`（`person` / `face` / `both`）呼叫對應偵測函式，合併結果後依信心分數排序，取前 `max_detections` 個
+    - `person`：使用 `detect_person` + `config['model']` / `config['detection']`
+    - `face`：使用 `detect_faces` + `config['face_model']` / `config['face_detection']`
+    - `both`：同時執行兩者，合併後排序
+- 主流程：讀 `yolo_config.yaml`（含 `detect_mode`）→ `getImage_YOLO()` → 每張圖片下載、upscale、`_run_detect()`、crop、canvas
+- 執行方式：`python util/yolo_for_image.py`（內部轉換 `sys.path`，兩種執行方式均可）
 
 ### util/predictor.py
-- `predict_one_col(model, loader, device)` → 支援 Tensor / List 輸入，`torch.no_grad()` inference，回傳 `{idx: embedding}` dict
-    - YOLO 路徑：逐樣本 mean pool embedding
-- `merge_embeddings(cover_embs, banner_embs)` → 合併成 DataFrame（欄位：`idx`、`coverImage_emb`、`bannerImage_emb`）
+- `predict_one_col(model, loader, device, use_stage=False)` → 支援 Tensor / List 輸入，`torch.no_grad()` inference
+    - `use_stage=False`：回傳 `{idx: Tensor(1024,)}`
+    - `use_stage=True`：回傳 `{idx: [Tensor(128,), Tensor(256,), Tensor(512,), Tensor(1024,)]}`
+    - YOLO 路徑：逐樣本 mean pool 各 stage embedding
+- `merge_embeddings(cover_embs, banner_embs, use_stage=False)` → 合併成 DataFrame
+    - `use_stage=False`：欄位 `idx`、`coverImage_emb`、`bannerImage_emb`
+    - `use_stage=True`：欄位 `idx`、`coverImage_emb_s0~s3`、`bannerImage_emb_s0~s3`
 - `save_embeddings(df, path)` → 儲存為 parquet
-- `predict(model, config, device, use_yolo)` → `predict_one_col`（cover + banner）→ `merge_embeddings` → `save_embeddings`
+- `predict(model, config, device, use_yolo)` → 讀 `config['model']['stage']` 決定 `use_stage` → `predict_one_col`（cover + banner）→ `merge_embeddings` → `save_embeddings`
 
 ---
 
