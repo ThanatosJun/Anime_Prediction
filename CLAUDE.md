@@ -259,15 +259,17 @@ project_root/
 ### src/model.py
 - `load_model(config)` → 從 HuggingFace 載入 SwinModel（pretrained），回傳 model（無 classifier head）
 - `get_embedding(model, pixel_values)` → forward pass，取 pooler_output，回傳 shape `(B, 1024)` tensor
-- `get_stage_embeddings(model, pixel_values)` → 取 `reshaped_hidden_states` 的四個 stage，各 global average pool 後回傳 `[(B,128), (B,256), (B,512), (B,1024)]`
+- `get_stage_embeddings(model, pixel_values)` → 取 `reshaped_hidden_states` 的四個 stage，各 global average pool 後回傳 list of 4 tensors
+    - 回傳：`[(B,128), (B,256), (B,512), (B,1024)]`
     - stage 0 (128 維)：局部紋理、線條筆觸
     - stage 1 (256 維)：色塊分布、局部結構
     - stage 2 (512 維)：人物部位、光影風格
     - stage 3 (1024 維)：整體語義、畫風流派
+    - **注意**：不接受 `config` 參數，呼叫端自行決定是否投影
 - `class StageProjector(nn.Module)` → 將四個 stage embedding 各自線性投影到相同維度 `project_dim`
     - `__init__(self, project_dim)` → 建立 4 個 `nn.Linear`（`[128,256,512,1024] → project_dim`）
     - `forward(self, embeds)` → 回傳 `[(B,D), (B,D), (B,D), (B,D)]`
-    - 啟用時需將 projector 參數也加入 optimizer
+    - 必須在訓練初始化時建立（`StageProjector(dim).to(device)`），並將參數加入 optimizer；**不可在 forward function 內建立**
 
 ### src/loss.py
 - `infonce_loss(aug_emb, orig_emb, tau)` → 計算 cosine similarity matrix，套用 InfoNCE 公式，回傳 scalar loss
@@ -377,10 +379,10 @@ TensorBoard：
 
 ### util/predictor.py
 - `predict_one_col(model, loader, device, use_stage=False)` → 支援 Tensor / List 輸入，`torch.no_grad()` inference
-    - `use_stage=False`：回傳 `{idx: Tensor(1024,)}`
-    - `use_stage=True`：回傳 `{idx: [Tensor(128,), Tensor(256,), Tensor(512,), Tensor(1024,)]}`
-    - YOLO 路徑：逐樣本 mean pool 各 stage embedding
-- `merge_embeddings(cover_embs, banner_embs, use_stage=False)` → 合併成 DataFrame
+    - `use_stage=False`：回傳 `{idx: Tensor(1024,)}`（CPU Tensor）
+    - `use_stage=True`：回傳 `{idx: [Tensor(128,), Tensor(256,), Tensor(512,), Tensor(1024,)]}`（CPU Tensor list）
+    - YOLO 路徑：逐樣本 mean pool 各 stage embedding 後 stack
+- `merge_embeddings(cover_embs, banner_embs, use_stage=False)` → 合併成 DataFrame，**在此處**將 CPU Tensor 轉為 numpy（`.numpy()`）供 parquet 序列化
     - `use_stage=False`：欄位 `idx`、`coverImage_emb`、`bannerImage_emb`
     - `use_stage=True`：欄位 `idx`、`coverImage_emb_s0~s3`、`bannerImage_emb_s0~s3`
 - `save_embeddings(df, path)` → 儲存為 parquet
@@ -389,19 +391,30 @@ TensorBoard：
 ---
 
 ### output.py
-對外推論介面，模型只載入一次，之後可連續調用。
+對外推論介面，模型只載入一次，之後可連續調用。支援 stage embedding 和 YOLO 偵測，設定由 `image_process_config.yaml` 和 `yolo_config.yaml` 控制。
 
 - `class ImageEmbedder`
-    - `__init__(self, model_path, config)` → 載入模型、建立 transform、`model.eval()`
-    - `embed(self, image_path)` → 單張圖片路徑 → 回傳 shape `(1024,)` numpy array
-    - `embed_batch(self, image_paths)` → 多張圖片路徑 → 回傳 shape `(N, 1024)` numpy array
-    - `embed_url(self, url)` → 從 URL 下載圖片 → 回傳 shape `(1024,)` numpy array
+    - `__init__(self, model_path, config)` → 載入模型、建立 transform、`model.eval()`；讀取 `use_stage`（config）和 `use_yolo`（yolo_config）
+    - `_get_yolo_crops(img)` → upscale → 依 `detect_mode` 呼叫 `detect_person` / `detect_faces` → 回傳裁切圖 list；無偵測時 fallback 整張圖
+    - `_preprocess(img)` → `ResizeWithPad` → `transform` → `(3, 224, 224)` tensor
+    - `_forward(batch)` → `(N, 3, 224, 224)` 輸入，mean pool across N
+        - `use_stage=False`：`pooler_output` → `(1024,)` numpy
+        - `use_stage=True`：`get_stage_embeddings` → `[ndarray(128,), ndarray(256,), ndarray(512,), ndarray(1024,)]`
+    - `embed(self, image_path)` → 單張圖片路徑 → YOLO 裁切（若啟用）→ `_forward`
+    - `embed_batch(self, image_paths)` → 逐張呼叫 `embed()`，回傳 list
+    - `embed_url(self, url)` → 下載到 tempfile → `embed()`
+    - `embed_dataframe(self, df, image_dir, col)` → 逐行呼叫 `embed()`，回傳 `{idx: list}`
+    - `save_embeddings(self, cover_embs, banner_embs)` → 依 `use_stage` 決定欄位格式 → parquet
+
+    > **注意**：`_get_yolo_crops` 不從 `yolo_for_image` import（該模組有 module-level 執行程式碼），改直接使用 `src.YOLO` 的 `detect_person` / `detect_faces`。
 
 | | predictor.py | output.py |
 |---|---|---|
 | 輸入 | DataLoader（整批） | 圖片路徑 / URL（彈性） |
-| 輸出 | parquet 檔案 | numpy array |
+| 輸出 | parquet 檔案 | numpy array / list |
 | 用途 | 一次性產生全部 embedding | 隨時調用、外部接口 |
+| stage 支援 | ✓ | ✓ |
+| YOLO 支援 | ✓ | ✓ |
 
 ---
 
