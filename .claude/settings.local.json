@@ -8,7 +8,9 @@
       "Bash(git stash *)",
       "Bash(git fetch *)",
       "Bash(git rebase *)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(conda run -n anime_prediction python -c ' *)",
+      "PowerShell(conda run -n anime_prediction python -c \"import sys; sys.path.insert\\(0, 'c:/Users/USER/Documents/資科/Anime_Prediction'\\); from src.model import load_model, get_embedding, get_stage_embeddings, StageProjector; from util.predictor import predict_one_col, merge_embeddings, save_embeddings; from output import ImageEmbedder; print\\('All imports OK'\\)\" 2>&1)"
     ],
     "additionalDirectories": [
       "C:\\Users\\USER\\Documents\\資科\\Anime_Prediction\\.git\\rebase-merge",

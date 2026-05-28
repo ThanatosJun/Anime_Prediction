@@ -3,13 +3,15 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 import torch
 import requests
+from PIL import Image
 from transformers import SwinModel
 
-from src.config import load_config
+from src.config import load_config, load_yolo_config
+from src.model import get_stage_embeddings
+from src.YOLO import detect_person, detect_faces
 from util.image_process import load_image, ResizeWithPad, get_transform_original
 
 
@@ -25,42 +27,65 @@ class ImageEmbedder:
         self.resize    = ResizeWithPad(config['data']['image_size'])
         self.transform = get_transform_original(config['data']['image_size'])
         self.output_path = config['output']['embedding_path']
+        self.use_stage = config['model'].get('stage', False)
 
-    def _preprocess(self, img):
-        img    = self.resize(img)
-        tensor = self.transform(img).unsqueeze(0).to(self.device)
-        return tensor
+        yolo_config    = load_yolo_config()
+        self.use_yolo  = yolo_config.get('yolo', {}).get('use', False)
+        self._yolo_cfg = yolo_config
 
-    def embed(self, image_path: str) -> np.ndarray:
+    def _get_yolo_crops(self, img: Image.Image) -> List[Image.Image]:
+        """偵測並回傳裁切後的 PIL Image list；無結果時 fallback 整張圖。"""
+        w, h = img.size
+        scale = max(640 / w, 640 / h)
+        if scale > 1:
+            img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
+        detect_mode = self._yolo_cfg.get('detect_mode', 'person')
+        results = []
+        if detect_mode in ('person', 'both'):
+            m, d = self._yolo_cfg['model'], self._yolo_cfg['detection']
+            results += detect_person(img, level=m['level'], version=m['version'],
+                                     conf_threshold=d['conf_threshold'], iou_threshold=d['iou_threshold'])
+        if detect_mode in ('face', 'both'):
+            m, d = self._yolo_cfg['face_model'], self._yolo_cfg['face_detection']
+            results += detect_faces(img, level=m['level'], version=m['version'],
+                                    conf_threshold=d['conf_threshold'], iou_threshold=d['iou_threshold'])
+
+        det_key = 'face_detection' if detect_mode == 'face' else 'detection'
+        max_det = self._yolo_cfg[det_key]['max_detections']
+        results = sorted(results, key=lambda x: x[2], reverse=True)[:max_det]
+
+        if not results:
+            return [img]
+        return [img.crop(bbox) for (bbox, _, _) in results]
+
+    def _preprocess(self, img: Image.Image) -> torch.Tensor:
+        return self.transform(self.resize(img))  # (3, 224, 224)
+
+    def _forward(self, batch: torch.Tensor):
+        """batch: (N, 3, 224, 224)
+          use_stage=False → np.ndarray (1024,)
+          use_stage=True  → [np.ndarray(128,), ndarray(256,), ndarray(512,), ndarray(1024,)]
+        """
+        with torch.no_grad():
+            if self.use_stage:
+                embs = get_stage_embeddings(self.model, batch)  # [(N,C), ...]
+                return [e.mean(dim=0).cpu().numpy() for e in embs]
+            else:
+                return self.model(pixel_values=batch).pooler_output.mean(dim=0).cpu().numpy()
+
+    def embed(self, image_path: str):
         img = load_image(image_path)
         if img is None:
             return None
-        tensor = self._preprocess(img)
-        with torch.no_grad():
-            output = self.model(pixel_values=tensor)
-        return output.pooler_output.squeeze(0).cpu().numpy()
+        imgs = self._get_yolo_crops(img) if self.use_yolo else [img]
+        batch = torch.stack([self._preprocess(i) for i in imgs]).to(self.device)
+        return self._forward(batch)
 
-    def embed_batch(self, image_paths: List[str]) -> List[Optional[np.ndarray]]:
-        valid_indices = []
-        tensors = []
-        for i, path in enumerate(image_paths):
-            img = load_image(path)
-            if img is not None:
-                img = self.resize(img)
-                tensors.append(self.transform(img))
-                valid_indices.append(i)
+    def embed_batch(self, image_paths: List[str]) -> List:
+        return [self.embed(path) for path in image_paths]
 
-        results: List[Optional[np.ndarray]] = [None] * len(image_paths)
-        if tensors:
-            batch = torch.stack(tensors).to(self.device)
-            with torch.no_grad():
-                output = self.model(pixel_values=batch)
-            embs = output.pooler_output.cpu().numpy()
-            for out_i, src_i in enumerate(valid_indices):
-                results[src_i] = embs[out_i]
-        return results
-
-    def embed_url(self, url: str) -> Optional[np.ndarray]:
+    def embed_url(self, url: str):
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
             tmp_path = f.name
         try:
@@ -80,7 +105,12 @@ class ImageEmbedder:
         for _, row in df.iterrows():
             idx = row['id']
             emb = self.embed(str(image_dir / f"{idx}_{col}.jpg"))
-            results[idx] = emb.tolist() if emb is not None else None
+            if emb is None:
+                results[idx] = None
+            elif self.use_stage:
+                results[idx] = [e.tolist() for e in emb]  # [list(128), list(256), list(512), list(1024)]
+            else:
+                results[idx] = emb.tolist()
         return results
 
     def save_embeddings(
@@ -90,14 +120,22 @@ class ImageEmbedder:
         output_path: str = None,
     ):
         all_idx = sorted(set(cover_embs) | set(banner_embs))
-        records = [
-            {
-                'idx': idx,
-                'coverImage_emb': cover_embs.get(idx),
-                'bannerImage_emb': banner_embs.get(idx),
-            }
-            for idx in all_idx
-        ]
+        records = []
+        for idx in all_idx:
+            cover_val  = cover_embs.get(idx)
+            banner_val = banner_embs.get(idx)
+            if self.use_stage:
+                row = {'idx': idx}
+                for s in range(4):
+                    row[f'coverImage_emb_s{s}']  = cover_val[s]  if cover_val  is not None else None
+                    row[f'bannerImage_emb_s{s}'] = banner_val[s] if banner_val is not None else None
+            else:
+                row = {
+                    'idx':             idx,
+                    'coverImage_emb':  cover_val,
+                    'bannerImage_emb': banner_val,
+                }
+            records.append(row)
         df = pd.DataFrame(records)
         path = Path(output_path or self.output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
