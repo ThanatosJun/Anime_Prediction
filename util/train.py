@@ -16,18 +16,18 @@ def _pool_embeddings(model, samples, device, no_grad=False):
     - Tensor (B, 3, 224, 224)：直接 forward，回傳 (B, 1024)
     - List[Tensor(N_i, 3, 224, 224)]：逐樣本 forward + mean pool，回傳 (B, 1024)
     """
+    def _fwd(x):
+        if no_grad:
+            with torch.no_grad():
+                return get_embedding(model, x)
+        return get_embedding(model, x)  # 繼承外層 context（train=grad, val=no_grad）
+
     if isinstance(samples, torch.Tensor):
-        samples = samples.to(device)
-        ctx = torch.no_grad() if no_grad else torch.enable_grad()
-        with ctx:
-            return get_embedding(model, samples)
+        return _fwd(samples.to(device))
     # YOLO 路徑：List of tensors
     embs = []
     for crops in samples:                          # crops: (N_i, 3, 224, 224)
-        crops = crops.to(device)
-        ctx = torch.no_grad() if no_grad else torch.enable_grad()
-        with ctx:
-            emb = get_embedding(model, crops)      # (N_i, 1024)
+        emb = _fwd(crops.to(device))               # (N_i, 1024)
         embs.append(emb.mean(dim=0))               # (1024,)
     return torch.stack(embs)                       # (B, 1024)
 

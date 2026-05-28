@@ -126,7 +126,8 @@ load_config() → load_model(config)
 ─── Training loop ───────────────────────────────────────────
 每 epoch：
     _forward_orig(orig) → torch.no_grad() → orig_emb（anchor）
-    _forward_aug(aug)   → grad            → aug_emb
+    _forward_aug(aug)   → 繼承外層 context → aug_emb
+                          （train: grad on；val/test: 繼承外層 no_grad）
     infonce_loss(aug_emb, orig_emb, tau)  → loss
     backprop → optimizer.step() → scheduler.step()
 
@@ -348,12 +349,15 @@ pad 左右 or 上下至 target_size    ← 補黑邊
 - `_pool_embeddings(model, samples, device, no_grad)` → 支援 Tensor 和 List[Tensor] 兩種輸入
     - Tensor `(B,3,224,224)` → 直接 forward → `(B,1024)`
     - `List[Tensor(N_i,3,224,224)]` → 逐樣本 forward + mean pool → `(B,1024)`
+    - `no_grad=True`：內部 `with torch.no_grad()`
+    - `no_grad=False`：**不加任何 context**，繼承外層環境（train 時 grad on；val/test 時繼承外層 `no_grad`）
+    - **注意**：舊版用 `torch.enable_grad()` 會覆蓋外層 `torch.no_grad()`，導致 val/test 白算 gradient，已修正
 - `_forward_orig(model, pixel_values, device)` → `_pool_embeddings(..., no_grad=True)`
 - `_forward_aug(model, pixel_values, device)` → `_pool_embeddings(..., no_grad=False)`
 
 單步 train / val：
 - `_train_step(model, orig, aug, optimizer, loss_fn, device)` → forward × 2 → loss → backprop → optimizer.step()，回傳 scalar loss
-- `_val_step(model, orig, aug, loss_fn, device)` → `torch.no_grad()`，forward × 2 → loss，不 backprop，回傳 scalar loss
+- `_val_step(model, orig, aug, loss_fn, device)` → `torch.no_grad()`，forward × 2 → loss，不 backprop，回傳 scalar loss；aug forward 繼承外層 no_grad，不白算 gradient
 
 epoch 迴圈：
 - `train_one_epoch(model, loader, optimizer, loss_fn, device)` → 迭代 loader，呼叫 `_train_step`，回傳平均 loss
