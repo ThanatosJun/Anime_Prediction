@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -140,3 +141,46 @@ class ImageEmbedder:
         path = Path(output_path or self.output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(path, index=False)
+
+
+def main():
+    config   = load_config()
+    inf_cfg  = config['inference']
+    model_path = os.path.join(inf_cfg['results_dir'], inf_cfg['run_id'], 'best')
+    embedder = ImageEmbedder(model_path=model_path, config=config)
+    if 'use_yolo' in inf_cfg:
+        embedder.use_yolo = inf_cfg['use_yolo']
+
+    file_kind = inf_cfg.get('file_kind', 'file')
+
+    if file_kind == 'file':
+        df = pd.read_csv(config['data']['csv_path'])
+        image_dir = config['data']['image_dir']
+        cover_embs  = embedder.embed_dataframe(df, image_dir, 'coverImage_medium')
+        banner_embs = embedder.embed_dataframe(df, image_dir, 'bannerImage')
+        embedder.save_embeddings(cover_embs, banner_embs, inf_cfg['embedding_path'])
+        print(f"Saved → {inf_cfg['embedding_path']}")
+
+    elif file_kind == 'image':
+        if len(sys.argv) < 2:
+            print("Usage: python output.py <image_path>")
+            sys.exit(1)
+        image_path = sys.argv[1]
+        emb = embedder.embed(image_path)
+        if emb is None:
+            print(f"Failed to load: {image_path}")
+            sys.exit(1)
+        if embedder.use_stage:
+            for i, e in enumerate(emb):
+                print(f"Stage {i}: shape={e.shape}")
+        else:
+            print(f"Embedding shape: {emb.shape}")
+            print(emb)
+
+    else:
+        print(f"Unknown file_kind: {file_kind!r}  (expected 'file' or 'image')")
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

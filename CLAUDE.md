@@ -186,22 +186,39 @@ save_embeddings() → data/processed/image_embeddings.parquet
 
 ---
 
-### output.py（日後使用）
+### output.py
 ```
+image_process_config.yaml（inference 區塊）
+    ↓
+main()
+    ├── file 模式（file_kind: file）
+    │   pd.read_csv → embed_dataframe(coverImage_medium)
+    │              → embed_dataframe(bannerImage)
+    │              → save_embeddings → parquet
+    └── image 模式（file_kind: image）
+        sys.argv[1] → embed()
+            ├── use_stage=False → 印出 shape + ndarray(1024,)
+            └── use_stage=True  → 逐 stage 印出 shape
+
+use_yolo：inference.use_yolo 可覆蓋 yolo_config.yaml 的 yolo.use 設定
+stage / YOLO 四種組合皆由 embed_dataframe → embed → _forward 內部處理，main() 無需重複分支
+```
+
 ImageEmbedder(model_path, config)
-    → load model from results/{run_id}/best/
+    → model_path 由 inference.results_dir + inference.run_id + /best 組合
     → transform_orig（ResizeWithPad → ToTensor → Normalize）
     → model.eval()
+    → use_stage 讀自 config['model']['stage']
+    → use_yolo 讀自 yolo_config['yolo']['use']，可由 inference.use_yolo 覆蓋
 
 embed(image_path)
-    → load_image → ResizeWithPad → transform_orig → forward → (1024,) numpy
+    → load_image → YOLO 裁切（若啟用）→ ResizeWithPad → transform_orig → _forward
 
 embed_batch(image_paths)
-    → 逐張 load → stack batch → forward → (N, 1024) numpy
+    → 逐張呼叫 embed()，回傳 list
 
 embed_url(url)
-    → 下載到 tempfile → embed() → (1024,) numpy
-```
+    → 下載到 tempfile → embed()
 
 ---
 
@@ -391,22 +408,40 @@ TensorBoard：
 ---
 
 ### output.py
-對外推論介面，模型只載入一次，之後可連續調用。支援 stage embedding 和 YOLO 偵測，設定由 `image_process_config.yaml` 和 `yolo_config.yaml` 控制。
+對外推論介面，模型只載入一次，之後可連續調用。支援 stage embedding 和 YOLO 偵測，設定由 `image_process_config.yaml` 和 `yolo_config.yaml` 控制。可直接以 `python output.py` 執行。
 
-- `class ImageEmbedder`
-    - `__init__(self, model_path, config)` → 載入模型、建立 transform、`model.eval()`；讀取 `use_stage`（config）和 `use_yolo`（yolo_config）
-    - `_get_yolo_crops(img)` → upscale → 依 `detect_mode` 呼叫 `detect_person` / `detect_faces` → 回傳裁切圖 list；無偵測時 fallback 整張圖
-    - `_preprocess(img)` → `ResizeWithPad` → `transform` → `(3, 224, 224)` tensor
-    - `_forward(batch)` → `(N, 3, 224, 224)` 輸入，mean pool across N
-        - `use_stage=False`：`pooler_output` → `(1024,)` numpy
-        - `use_stage=True`：`get_stage_embeddings` → `[ndarray(128,), ndarray(256,), ndarray(512,), ndarray(1024,)]`
-    - `embed(self, image_path)` → 單張圖片路徑 → YOLO 裁切（若啟用）→ `_forward`
-    - `embed_batch(self, image_paths)` → 逐張呼叫 `embed()`，回傳 list
-    - `embed_url(self, url)` → 下載到 tempfile → `embed()`
-    - `embed_dataframe(self, df, image_dir, col)` → 逐行呼叫 `embed()`，回傳 `{idx: list}`
-    - `save_embeddings(self, cover_embs, banner_embs)` → 依 `use_stage` 決定欄位格式 → parquet
+#### `image_process_config.yaml` — `inference` 區塊
+```yaml
+inference:
+  results_dir: results
+  run_id: "01"
+  embedding_path: data/processed/image_embeddings.parquet
+  file_kind: file   # file(整份CSV) | image(單張，需 sys.argv[1])
+  use_yolo: true    # 覆蓋 yolo_config.yaml 的 yolo.use 設定
+```
 
-    > **注意**：`_get_yolo_crops` 不從 `yolo_for_image` import（該模組有 module-level 執行程式碼），改直接使用 `src.YOLO` 的 `detect_person` / `detect_faces`。
+#### `class ImageEmbedder`
+- `__init__(self, model_path, config)` → 載入模型、建立 transform、`model.eval()`；讀取 `use_stage`（config）和 `use_yolo`（yolo_config，可由 `inference.use_yolo` 覆蓋）
+- `_get_yolo_crops(img)` → upscale → 依 `detect_mode` 呼叫 `detect_person` / `detect_faces` → 回傳裁切圖 list；無偵測時 fallback 整張圖
+- `_preprocess(img)` → `ResizeWithPad` → `transform` → `(3, 224, 224)` tensor
+- `_forward(batch)` → `(N, 3, 224, 224)` 輸入，mean pool across N
+    - `use_stage=False`：`pooler_output` → `(1024,)` numpy
+    - `use_stage=True`：`get_stage_embeddings` → `[ndarray(128,), ndarray(256,), ndarray(512,), ndarray(1024,)]`
+- `embed(self, image_path)` → 單張圖片路徑 → YOLO 裁切（若啟用）→ `_forward`
+- `embed_batch(self, image_paths)` → 逐張呼叫 `embed()`，回傳 list
+- `embed_url(self, url)` → 下載到 tempfile → `embed()`
+- `embed_dataframe(self, df, image_dir, col)` → 逐行呼叫 `embed()`，回傳 `{idx: list}`；stage / YOLO 四種組合皆由內部處理，無需外部分支
+- `save_embeddings(self, cover_embs, banner_embs)` → 依 `use_stage` 決定欄位格式 → parquet
+
+#### `main()`
+- 讀 `inference` 區塊 → 組合 `model_path`（`results_dir/run_id/best`）→ 實例化 `ImageEmbedder`
+- 若 `inference.use_yolo` 存在 → 覆蓋 `embedder.use_yolo`
+- `file_kind: file` → 讀整份 CSV → `embed_dataframe`（cover + banner）→ `save_embeddings` → parquet
+- `file_kind: image` → 讀 `sys.argv[1]` → `embed()` → 印出結果
+    - `use_stage=False`：印 shape + 向量
+    - `use_stage=True`：逐 stage 印 shape
+
+> **注意**：`_get_yolo_crops` 不從 `yolo_for_image` import（該模組有 module-level 執行程式碼），改直接使用 `src.YOLO` 的 `detect_person` / `detect_faces`。
 
 | | predictor.py | output.py |
 |---|---|---|

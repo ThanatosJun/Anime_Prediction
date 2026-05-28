@@ -70,8 +70,18 @@ training:
   val_interval: 1             # 每幾個 epoch 跑一次 validation
   checkpoint_interval: 5      # 每幾個 epoch 存一次 checkpoint
 
-# ── Output ────────────────────────────────────────────────────────────────────
+# ── Output (predict.py)────────────────────────────────────────────────────────────────────
 output:
   results_dir: results          # 根目錄，子路徑由程式碼以 run_id 組合
   run_id: "01"                  # 每次微調遞增，對應 results/{run_id}/
   embedding_path: data/processed/image_embeddings.parquet
+  # run_predict.py 修改 test set
+
+# Output (output.py)
+inference:
+  results_dir: results
+  run_id: "01"
+  embedding_path: data/processed/image_embeddings.parquet
+  file_kind: file  # file(csv) | image(single)
+  use_yolo: true   # 覆蓋 yolo_config.yaml 的 yolo.use 設定
+
