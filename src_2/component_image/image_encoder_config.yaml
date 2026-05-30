@@ -26,14 +26,14 @@ training:
 
 # ── Inference (output.py main()) ──────────────────────────────────────────────
 inference:
-  model_path: src_2/model-image/best   # 直接指定模型資料夾（含 config.json + model.safetensors）
+  model_path: src_2/component_image/model-image/best   # 含 config.json + model.safetensors
   embedding_path: data/processed/image_embeddings.parquet
   file_kind: file  # file(csv 批次) | image(單張圖)
   use_yolo: true   # 覆蓋下方 yolo_detection.use 設定
 
 # ── YOLO Detection ────────────────────────────────────────────────────────────
 yolo_detection:
-  detect_mode: face              # person | face | both
+  detect_mode: both              # person | face | both
   yolo:
     use: true
 

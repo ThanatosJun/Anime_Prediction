@@ -21,3 +21,20 @@
 ===
 1. 資料遷移問題：popularity 跟 meanscore 的分布 shift 很大，可能需要一些 domain adaptation 的方法。
     - 或許嘗試使用一個模型預測眾數 popularity 跟 meanscore。讓我們可以根據年份預測模型。
+
+
+# text（全部 splits）+ image（train only）
+# Step 1：RAG embeddings（text 全 splits + image train only）
+python src_2/RAG/run_build_embeddings.py
+
+# Step 2：YOLO crop
+python src_2/component_image/run_yolo_crop.py --splits train val test holdout_unknown
+
+# Step 3：Fusion image embeddings（yolo + cover + banner）
+python src_2/component_image/run_swin_embedding.py --splits train val test holdout_unknown
+
+# Step 4：建立 Qdrant collection
+python src_2/RAG/rag_builder.py
+
+# Step 5：查詢 RAG
+python src_2/RAG/rag_query.py --splits train val test holdout_unknown
