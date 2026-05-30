@@ -1,0 +1,64 @@
+# ── Data ──────────────────────────────────────────────────────────────────────
+data:
+  csv_path: data/processed/anilist_anime_multimodal_input_v1.csv
+  image_columns:
+    - coverImage_medium
+    - bannerImage
+  image_size: 224             # resize 目標尺寸（swin-base 標準輸入）
+  image_dir: data/image
+  split_csv:
+    train: data/processed/anilist_anime_multimodal_input_train.csv
+    val:   data/processed/anilist_anime_multimodal_input_val.csv
+    test:  data/processed/anilist_anime_multimodal_input_test.csv
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model:
+  name: microsoft/swin-base-patch4-window7-224
+  pretrained: true
+  stage: false          # true → 各 stage vector；false → pooler_output (B,1024)
+  projection: false
+  project_dim: 256
+
+# ── Training (ImageEmbedder 讀取 device / batch_size) ─────────────────────────
+training:
+  batch_size: 64
+  device: cuda                # cuda / cpu
+
+# ── Inference (output.py main()) ──────────────────────────────────────────────
+inference:
+  model_path: src_2/model-image/best   # 直接指定模型資料夾（含 config.json + model.safetensors）
+  embedding_path: data/processed/image_embeddings.parquet
+  file_kind: file  # file(csv 批次) | image(單張圖)
+  use_yolo: true   # 覆蓋下方 yolo_detection.use 設定
+
+# ── YOLO Detection ────────────────────────────────────────────────────────────
+yolo_detection:
+  detect_mode: face              # person | face | both
+  yolo:
+    use: true
+
+  model:                         # person 偵測模型
+    repo_id: deepghs/anime_person_detection
+    level: m                     # n（最快）/ s / m / x（最準）
+    version: v1.1
+
+  detection:                     # person 偵測參數
+    conf_threshold: 0.2
+    iou_threshold: 0.8
+    max_detections: 5
+    min_bbox_ratio: 0.05
+    save_crops: true
+    fallback_full_image: true
+
+  face_model:                    # face 偵測模型
+    repo_id: deepghs/anime_face_detection
+    level: s
+    version: v1.4
+
+  face_detection:                # face 偵測參數
+    conf_threshold: 0.15
+    iou_threshold: 0.9
+    max_detections: 5
+    min_bbox_ratio: 0.02
+    save_crops: true
+    fallback_full_image: true
