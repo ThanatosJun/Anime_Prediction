@@ -138,10 +138,9 @@ Code Review 修正紀錄（已套用）：
 | `dataset.py` | `denormalize_target` 無 clip → 極端預測值 expm1 overflow | 加 `np.clip(y_norm, -5, 5)` |
 | `evaluate.py` | `spearmanr().statistic`（scipy < 1.7 不支援） | 改用 `.correlation` |
 | `evaluate.py` | metrics：RMSE 不適合 skewed 分佈 | 改為 `log_R2`（popularity）/ `R2`（meanScore）+ `log_MAE`（popularity only） |
-
----
-
-## ⏳ 待完成
+| `evaluate.py` | metrics 欄位順序不一致 | 統一順序：spearman_rho → R2/log_R2 → MAE → log_MAE |
+| `evaluate.py` | test metrics 存為獨立 `eval_test.json` | 改為 merge 進 `final_metrics.json`，單一檔案含 train/val/test |
+| `dataset.py` | AMP float16 output → `denormalize_target` 中 `expm1` overflow → Infinity | 加 `np.asarray(y_norm, dtype=np.float64)` 強制轉型 |
 
 ### Step 8：評估與推論
 
@@ -155,11 +154,56 @@ python src_2/evaluate.py --split holdout_unknown
 
 | 輸出 | 說明 |
 |------|------|
-| `src_2/runs/{run_id}/{target}/eval_{split}.json` | popularity: spearman_rho / log_R2 / MAE / log_MAE；meanScore: spearman_rho / R2 / MAE |
-| `src_2/runs/{run_id}/{target}/pred_{split}.csv` | id, pred, target |
+| `src_2/runs/{run_id}/{target}/final_metrics.json` | train / val / test 完整 metrics 合併於此（spearman_rho / R2 or log_R2 / MAE / log_MAE） |
+| `src_2/runs/{run_id}/{target}/pred_{split}.csv` | id, pred, target（原始 scale） |
 
-- [x] `src_2/evaluate.py`（spearman_rho / R2 or log_R2 / MAE / log_MAE）
-- [ ] 推論 pipeline（即時 YOLO + Swin + RAG query + FusionMLP）
+- [x] `src_2/evaluate.py`（spearman_rho / R2 or log_R2 / MAE / log_MAE，results merge 進 final_metrics.json）
+- [x] Test set 評估完成（final_metrics.json 含 train / val / test）
+- [x] Holdout 推論（pred_holdout_unknown.csv）
+
+### Step 9：可解釋性分析
+
+```bash
+# RAG attention heatmap
+python src_2/explain/rag_heatmap.py --target popularity --n 5
+
+# Captum（modality 貢獻）+ SHAP（meta feature 貢獻）
+python src_2/explain/feature_attr.py --target popularity --n 20
+```
+
+| 輸出 | 說明 |
+|------|------|
+| `runs/{run_id}/{target}/explain/rag/{id}_attn.png` | Cross Attention heatmap：x = retrieved anime，y = meta/text/image modality |
+| `runs/{run_id}/{target}/explain/feature/captum_modality.csv` | 各 sample 的 modality 歸一化重要性 |
+| `runs/{run_id}/{target}/explain/feature/captum_modality.png` | 平均 modality 重要性長條圖 |
+| `runs/{run_id}/{target}/explain/feature/shap_values.npy` | raw SHAP values [n, 56] |
+| `runs/{run_id}/{target}/explain/feature/shap_summary.png` | top-k meta feature 重要性（release_year, genre_Action 等） |
+
+建置清單：
+- [x] `src_2/fussion_training/cross_attention.py`（`return_attn=True` 回傳 `[batch, top_k, 3]` weights）
+- [x] `src_2/fussion_training/model.py`（`forward(batch, return_attn=True)`）
+- [x] `src_2/explain/rag_heatmap.py`（RAG attention heatmap）
+- [x] `src_2/explain/feature_attr.py`（Captum IG + SHAP DeepExplainer）
+- [x] `src_2/requirements.txt`
+
+前置安裝（Step 9）：
+```bash
+pip install captum shap
+```
+
+---
+
+## ⏳ 待完成
+
+### Step 10：推論 Pipeline
+
+給定一部新動畫（封面圖 + metadata + 描述），即時走完完整推論流程：
+
+- [ ] YOLO crop（人物／臉部）
+- [ ] Swin-B embedding（cover + banner + yolo）
+- [ ] e5-base-v2 text embedding
+- [ ] RAG query（Qdrant）
+- [ ] FusionModel inference → popularity / meanScore 預測
 
 ---
 

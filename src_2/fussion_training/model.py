@@ -135,22 +135,27 @@ class FusionModel(nn.Module):
         # ── MLP backbone ──────────────────────────────────────────────────
         self.backbone = MLPBackbone(concat_dim, hidden_dims, dropout)
 
-    def forward(self, batch: dict) -> torch.Tensor:
+    def forward(self, batch: dict, return_attn: bool = False):
         image_feat = self.image_proj(batch["image_emb"], batch["image_mask"])
         text_feat  = self.text_proj(batch["text_emb"])
         meta_feat  = self.meta_proj(batch["meta_feat"])
 
         if self.use_rag:
             rag_mask = batch.get("rag_mask")
-            cross_feat = self.cross_attn(
-                query      = meta_feat,
-                rag_meta   = batch["rag_meta"],
-                rag_text   = batch["rag_text"],
-                rag_image  = batch["rag_image"],
-                rag_mask   = rag_mask,
+            rag_out = self.cross_attn(
+                query       = meta_feat,
+                rag_meta    = batch["rag_meta"],
+                rag_text    = batch["rag_text"],
+                rag_image   = batch["rag_image"],
+                rag_mask    = rag_mask,
+                return_attn = return_attn,
             )
+            cross_feat, attn_weights = (rag_out if return_attn
+                                        else (rag_out, None))
             fused = torch.cat([image_feat, text_feat, meta_feat, cross_feat], dim=1)
         else:
             fused = torch.cat([image_feat, text_feat, meta_feat], dim=1)
+            attn_weights = None
 
-        return self.backbone(fused)
+        out = self.backbone(fused)
+        return (out, attn_weights) if return_attn else out

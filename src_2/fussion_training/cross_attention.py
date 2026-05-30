@@ -62,32 +62,39 @@ class RAGCrossAttention(nn.Module):
 
     def forward(
         self,
-        query: torch.Tensor,          # [batch, 128]（MetaData Projection 輸出）
-        rag_meta: torch.Tensor,       # [batch, 5, 10]
-        rag_text: torch.Tensor,       # [batch, 5, 768]
-        rag_image: torch.Tensor,      # [batch, 5, 1024]
-        rag_mask: torch.Tensor = None,# [batch, 5] bool，True = padding（無效位置）
-    ) -> torch.Tensor:                # [batch, 128]
-
-        # 三種模態各自投影到 proj_dim
+        query: torch.Tensor,           # [batch, 128]（MetaData Projection 輸出）
+        rag_meta: torch.Tensor,        # [batch, 5, 10]
+        rag_text: torch.Tensor,        # [batch, 5, 768]
+        rag_image: torch.Tensor,       # [batch, 5, 1024]
+        rag_mask: torch.Tensor = None, # [batch, 5] bool，True = padding（無效位置）
+        return_attn: bool = False,     # True → 同時回傳 attention weights
+    ):
         meta_kv  = self.rag_meta_proj(rag_meta)    # [batch, 5, 128]
         text_kv  = self.rag_text_proj(rag_text)    # [batch, 5, 128]
         image_kv = self.rag_image_proj(rag_image)  # [batch, 5, 128]
 
-        # concat 成 K/V → [batch, 15, 128]
-        kv = torch.cat([meta_kv, text_kv, image_kv], dim=1)
+        # KV layout: [meta(0-4), text(5-9), image(10-14)]
+        kv = torch.cat([meta_kv, text_kv, image_kv], dim=1)  # [batch, 15, 128]
 
-        # Q: [batch, 128] → [batch, 1, 128]
-        q = query.unsqueeze(1)
+        q = query.unsqueeze(1)  # [batch, 1, 128]
 
-        # key_padding_mask: [batch, 15]（若有 mask，重複 3 次對應 3 種模態）
         key_padding_mask = None
         if rag_mask is not None:
             key_padding_mask = rag_mask.repeat(1, 3)  # [batch, 15]
 
-        # Cross Attention
-        attn_out, _ = self.attn(q, kv, kv, key_padding_mask=key_padding_mask)
-        # attn_out: [batch, 1, 128]
+        attn_out, attn_weights = self.attn(
+            q, kv, kv,
+            key_padding_mask=key_padding_mask,
+            need_weights=return_attn,
+            average_attn_weights=True,
+        )
 
         out = self.norm(attn_out.squeeze(1))  # [batch, 128]
+
+        if return_attn:
+            # attn_weights: [batch, 1, 15] → [batch, top_k=5, n_mod=3]
+            w = attn_weights.squeeze(1)              # [batch, 15]
+            top_k = rag_meta.shape[1]
+            w = w.reshape(-1, 3, top_k).permute(0, 2, 1)  # [batch, top_k, 3]
+            return out, w
         return out
