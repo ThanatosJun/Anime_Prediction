@@ -38,3 +38,12 @@ python src_2/RAG/rag_builder.py
 
 # Step 5：查詢 RAG
 python src_2/RAG/rag_query.py --splits train val test holdout_unknown
+
+LoRA (Low-Rank Adaptation)
+
+實驗結果的可解釋性：
+1. RAG： attetion heatmap
+2. Fusion Model Captumn and SHAP
+完成驗證後，幫我生成一份操作手冊，讓新的開發者可以快速部署這份系統，包含以下內容：
+1. 每個步驟的指令
+2. 每個步驟的輸出說明

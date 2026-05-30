@@ -71,3 +71,5 @@ src_2/RAG/qdrant_storage/
 src_2/RAG/return/
 src_2/embedding/
 src_2/data/image/crops/
+src_2/runs/
+src_2/fussion_training/meta_encoder.json
