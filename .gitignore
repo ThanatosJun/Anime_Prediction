@@ -63,3 +63,7 @@ data/fussion/fusion_meta_test.csv
 data/fussion/fusion_meta_train.csv
 data/fussion/fusion_meta_val.csv
 Problem.md
+src_2/data/image
+src_2/model-image/best/config.json
+src_2/model-image/best/model.safetensors
+src_2/model-image/checkpoint/epoch_15.pt
