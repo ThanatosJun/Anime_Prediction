@@ -15,7 +15,7 @@
 | `config.py` | 讀取設定檔 |
 | `image_encoder_config.yaml` | **所有設定合一**（路徑、模型、推論模式、YOLO 參數） |
 
-模型權重放在：`src_2/model-image/`
+模型權重放在：`src_2/component_image/model-image/`
 
 ---
 
@@ -143,7 +143,7 @@ from config import load_config
 from output import ImageEmbedder
 
 config   = load_config('image_encoder_config.yaml')
-embedder = ImageEmbedder(model_path='src_2/model-image/01/best', config=config)
+embedder = ImageEmbedder(model_path='src_2/component_image/model-image/best', config=config)
 
 # 單張圖片
 emb = embedder.embed('src_2/data/image/train_image/100003_coverImage_medium.jpg')

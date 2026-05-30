@@ -1,0 +1,22 @@
+# ── Model ─────────────────────────────────────────────────────────────────────
+model:
+  model_path: src_2/component_image_text_description/model-torii/ToriiGate-0.5_Q8_0.gguf   # GGUF 量化版
+  device: cuda
+  dtype: bfloat16
+  max_new_tokens: 1000
+  min_pixels: 256                 # 256 * 32 * 32
+  max_pixels: 512                 # 512 * 32 * 32
+
+# ── Caption Mode ──────────────────────────────────────────────────────────────
+# long_thoughts_v2  → 6 段結構化，最詳細（預設）
+# long_thoughts     → 6 段含逐角色分析
+# long              → 2~5 段自然文字
+# short             → 簡短 caption
+# json              → JSON 結構
+# min_structured_json → 簡化 JSON
+# min_structured_md   → 簡化 Markdown（含推理段）
+# chroma-style      → 4 段（Regular/Parts/Midjourney/DeviantArt）
+# md_comic          → Markdown 漫畫格式
+# json_comic        → JSON 漫畫格式
+caption:
+  mode: long_thoughts_v2
