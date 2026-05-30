@@ -11,8 +11,11 @@ skills/
 datasets/
 .idea/
 data/archive_local/
+data/external_transformed/*.csv
+data/external_transformed/*_metrics.json
 data/raw/anilist_anime_data_complete.csv
 data/raw/anilist_anime_data_complete.pkl
+outtestdataset/
 
 # Local environment (not tracked)
 requirements.txt
