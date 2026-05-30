@@ -20,12 +20,14 @@
 - **外部資料轉換**
   - `pipeline/external_dataset_transform_flow.md`
   - `pipeline/external_schema_mapping_example.json`
+  - `pipeline/external_evaluation_method.md`
 
 ## 3) 分支模型交接文件
 
 - 文字：`handoff/handoff_text_model.md`
 - 圖片：`handoff/handoff_image_model.md`
 - 融合：`handoff/handoff_fusion_model.md`
+- 外部評估 Adapter：`handoff/handoff_external_eval_adapter.md`
 
 ## 4) 歷史提案與歸檔
 
