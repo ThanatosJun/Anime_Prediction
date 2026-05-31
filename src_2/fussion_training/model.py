@@ -118,10 +118,25 @@ class FusionModel(nn.Module):
         meta_dim    = cfg_m.get("meta_dim",  56)
         self.use_rag = config.get("use_rag", True)
 
-        # ── Projection blocks ──────────────────────────────────────────────
-        self.image_proj = ImageProjection(image_dim, proj_dim, proj_drop)
-        self.text_proj  = ProjectionBlock(text_dim,  proj_dim, proj_drop)
-        self.meta_proj  = ProjectionBlock(meta_dim,  proj_dim, proj_drop)
+        # ── Modality flags（multimodal 消融用；未指定時全開 = 原行為）────────
+        mods = config.get("modalities", {}) or {}
+        self.use_image = mods.get("image", True)
+        self.use_text  = mods.get("text",  True)
+        self.use_meta  = mods.get("meta",  True)
+        if self.use_rag and not self.use_meta:
+            raise ValueError("use_rag=True 需要 meta 分支（meta 為 Cross Attention 的 Query）。")
+        if not (self.use_image or self.use_text or self.use_meta):
+            raise ValueError("image / text / meta 至少需啟用一個分支。")
+
+        # ── Projection blocks（只建啟用的分支）──────────────────────────────
+        if self.use_image:
+            self.image_proj = ImageProjection(image_dim, proj_dim, proj_drop)
+        if self.use_text:
+            self.text_proj  = ProjectionBlock(text_dim,  proj_dim, proj_drop)
+        if self.use_meta:
+            self.meta_proj  = ProjectionBlock(meta_dim,  proj_dim, proj_drop)
+
+        n_branches = int(self.use_image) + int(self.use_text) + int(self.use_meta)
 
         # ── Cross Attention（optional）────────────────────────────────────
         if self.use_rag:
@@ -131,9 +146,9 @@ class FusionModel(nn.Module):
                 dropout     = proj_drop,
                 attn_dropout= cfg_m.get("attn_dropout", 0.1),
             )
-            concat_dim = proj_dim * 4   # image + text + meta + cross_attn
+            concat_dim = proj_dim * (n_branches + 1)   # branches + cross_attn
         else:
-            concat_dim = proj_dim * 3   # image + text + meta
+            concat_dim = proj_dim * n_branches
 
         # ── MLP backbone ──────────────────────────────────────────────────
         self.backbone = MLPBackbone(concat_dim, hidden_dims, dropout)
@@ -146,26 +161,31 @@ class FusionModel(nn.Module):
             self.trend_head = nn.Linear(1, 1)   # release_year（normalized）→ trend
 
     def forward(self, batch: dict, return_attn: bool = False):
-        image_feat = self.image_proj(batch["image_emb"], batch["image_mask"])
-        text_feat  = self.text_proj(batch["text_emb"])
-        meta_feat  = self.meta_proj(batch["meta_feat"])
+        feats = []
+        meta_feat = None
+        if self.use_image:
+            feats.append(self.image_proj(batch["image_emb"], batch["image_mask"]))
+        if self.use_text:
+            feats.append(self.text_proj(batch["text_emb"]))
+        if self.use_meta:
+            meta_feat = self.meta_proj(batch["meta_feat"])
+            feats.append(meta_feat)
 
+        attn_weights = None
         if self.use_rag:
-            rag_mask = batch.get("rag_mask")
             rag_out = self.cross_attn(
                 query       = meta_feat,
                 rag_meta    = batch["rag_meta"],
                 rag_text    = batch["rag_text"],
                 rag_image   = batch["rag_image"],
-                rag_mask    = rag_mask,
+                rag_mask    = batch.get("rag_mask"),
                 return_attn = return_attn,
             )
             cross_feat, attn_weights = (rag_out if return_attn
                                         else (rag_out, None))
-            fused = torch.cat([image_feat, text_feat, meta_feat, cross_feat], dim=1)
-        else:
-            fused = torch.cat([image_feat, text_feat, meta_feat], dim=1)
-            attn_weights = None
+            feats.append(cross_feat)
+
+        fused = torch.cat(feats, dim=1)
 
         delta = self.backbone(fused)   # 殘差（anime-specific 偏差）
 

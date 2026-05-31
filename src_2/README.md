@@ -47,13 +47,16 @@ src_2/
 │   └── feature_attr.py           # Captum IG + SHAP
 │
 ├── runs/                         # gitignore，實驗輸出
-│   └── {run_id}/{target}/
-│       ├── best_model.pt
-│       ├── target_scaler.json
-│       ├── history.json
-│       ├── final_metrics.json    # train / val / test metrics 合併
-│       ├── pred_{split}.csv
-│       └── explain/
+│   └── {run_id}/
+│       ├── {target}/
+│       │   ├── best_model.pt
+│       │   ├── target_scaler.json
+│       │   ├── history.json
+│       │   ├── final_metrics.json    # train / val / test metrics 合併
+│       │   └── pred_{split}.csv
+│       └── explain/{target}/         # 可解釋性輸出（run 層級，非 target 層級）
+│           ├── feature/
+│           └── rag/
 │
 ├── train.py                      # 訓練主程式
 ├── evaluate.py                   # 評估（merge 進 final_metrics.json）
@@ -130,7 +133,8 @@ MLP backbone: concat_dim → 256 → 128 → 1 ───────────
 | `log_R2` | log1p 空間 R²（匹配訓練目標，對 skewed 分佈穩定）| popularity |
 | `R2` | 原始 scale R²（診斷 distribution shift）| meanScore |
 | `MAE` | 原始 scale 平均絕對誤差 | 兩個 target |
-| `log_MAE` | log1p 空間 MAE（scale-free）| popularity |
+| `log_MAE` | log1p 空間 MAE（scale-free，越小越好，0=完美，naive≈2.0）| popularity |
+| `factor_acc_2x` | 預測值落在真實值 [0.5×, 2×] 內的比例（0~1，越大越好）| popularity |
 
 ---
 
@@ -179,21 +183,82 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 
 ### popularity（主要指標：log_MAE，越低越好）
 
-| Run | val log_MAE | test log_MAE | val Spearman | val log_R2 | 主要改動 |
-|-----|------------|-------------|-------------|-----------|---------|
-| 01a | 0.7839 | 0.9357 | 0.8851 | 0.8072 | Baseline v2：cover_banner_yolo / use_rag=true / CrossAttn 4 heads / SAM+AdamW / HuberLoss（無時間加權） |
-| **01** | **0.7886** | **0.9016** ↓ | **0.8879** | **0.8161** | + Temporal Weighting（alpha=0.2）：exp(-0.2×(max_yr-yr))，normalize mean=1 |
-| 02 | — | — | — | — | + TrendHead（Linear 1→1，delta+trend）；gate soft-average；LogCosh 數值穩定版 |
+| Run | val log_MAE | test log_MAE | test factor_acc_2x | val Spearman | val log_R2 | 主要改動 |
+|-----|------------|-------------|-------------------|-------------|-----------|---------|
+| 01a | 0.7839 | 0.9357 | — | 0.8851 | 0.8072 | Baseline v2：cover_banner_yolo / use_rag=true / CrossAttn 4 heads / SAM+AdamW / HuberLoss（無時間加權） |
+| **01** | **0.7886** | 0.9088 | 0.4778 | **0.8879** | **0.8161** | + Temporal Weighting（alpha=0.2）：exp(-0.2×(max_yr-yr))，normalize mean=1 |
+| 02 | 0.7801 | 0.9151 | 0.4778 | 0.8785 | 0.8055 | + TrendHead（pop+score）；gate soft-average；LogCosh 數值穩定版 |
+
+#### hp_search（Run03~09：固定 TrendHead + batch=512，搜尋 dropout / weight_decay）
+
+| Run | dropout | weight_decay | val log_MAE | test log_MAE | test facc_2x | test Spearman | val Spearman |
+|-----|---------|-------------|------------|-------------|-------------|--------------|-------------|
+| 03 | 0.5 | 1e-3 | 0.8059 | 0.9198 | 0.4613 | 0.8466 | 0.8826 |
+| 04 | 0.3 | 1e-4 | 0.7977 | 0.9754 | 0.4461 | 0.8501 | 0.8776 |
+| 05 | 0.4 | 5e-4 | 0.8137 | 0.9130 | 0.4661 | 0.8508 | 0.8850 |
+| 06 | 0.5 | 1e-4 | 0.8249 | 0.9203 | 0.4593 | 0.8473 | 0.8812 |
+| **07** ⭐ | **0.3** | **1e-3** | **0.7854** | **0.8904** | **0.4856** | 0.8498 | 0.8792 |
+| 08 | 0.5 | 5e-4 | 0.8347 | 1.1288 | 0.3832 | 0.8491 | 0.8783 |
+| 09 | 0.5 | 1e-3 | 0.7855 | 0.8944 | 0.4817 | 0.8510 | 0.8840 |
+
+> **popularity 最佳：Run07**（test log_MAE 0.8904）。觀察：低 dropout（0.3）+ 高 weight_decay（1e-3）組合最好（07/09 test log_MAE 0.89 並列前段）；高 dropout 顯著退步（08 的 dropout=0.5+wd=5e-4 test log_MAE 1.13 最差）。Run03 與 Run09 同設定（dropout=0.5, wd=1e-3）但不同 seed，test log_MAE 0.9198 vs 0.8944，反映訓練隨機性。Run07 test 勝過 Run01 的 0.9088。
 
 ### meanScore（主要指標：MAE，越低越好）
 
 | Run | val MAE | test MAE | val Spearman | val R2 | 主要改動 |
 |-----|--------|---------|-------------|-------|---------|
 | 01a | 6.7441 | 8.0435 | 0.6763 | 0.4611 | Baseline v2（無時間加權） |
-| **01** | 6.8857 | 8.3511 ↑ | 0.6691 | 0.4255 | + Temporal Weighting（alpha=0.2）：popularity ✅ 改善；meanScore ❌ 退步 |
-| 02 | — | — | — | — | + TrendHead（Linear 1→1，delta+trend）；gate soft-average；LogCosh 數值穩定版 |
+| 01 | 6.8115 | 8.5722 | 0.6617 | 0.4143 | + Temporal Weighting（alpha=0.2）：popularity ✅；meanScore test ❌ R2=-0.006 |
+| **02** | **6.7604** | **7.2937** ↓ | **0.6570** | **0.4180** | + TrendHead（pop+score）；gate soft-average；test R2 大幅回升（-0.006→0.246） |
 
 > **觀察**：時間加權對 popularity 有效（test log_MAE 0.9357→0.9016），但 meanScore 反而退步。推測原因：meanScore 的 shift 主要是 Label Shift（評分基準整體上移），加權讓模型少看舊資料後反而失去泛化能力；而 popularity 的 shift 更多是 Covariate Shift，加權確實有助於縮小 val/test gap。
+
+#### hp_search（Run03~09：固定 TrendHead + batch=512，搜尋 dropout / weight_decay）
+
+| Run | dropout | weight_decay | val MAE | test MAE | test Spearman | test R2 | val MAE |
+|-----|---------|-------------|---------|----------|--------------|---------|---------|
+| 03 | 0.5 | 1e-3 | 6.9678 | 9.5681 | 0.5322 | -0.1761 | 6.9678 |
+| 04 | 0.3 | 1e-4 | 6.7269 | **7.6675** | 0.5402 | 0.1835 | 6.7269 |
+| 05 | 0.4 | 5e-4 | 6.7952 | 7.8831 | 0.5533 | 0.1565 | 6.7952 |
+| 06 | 0.5 | 1e-4 | 6.9003 | 8.5068 | 0.5383 | 0.0180 | 6.9003 |
+| 07 | 0.3 | 1e-3 | 6.7499 | 8.1776 | 0.5397 | 0.0984 | 6.7499 |
+| **08** ⭐ | **0.5** | **5e-4** | **6.6715** | 7.5847 | 0.5485 | **0.1911** | 6.6715 |
+| 09 | 0.5 | 1e-3 | 6.9463 | 9.0994 | 0.5346 | -0.0707 | 6.9463 |
+
+> **meanScore val 最佳：Run08**（val MAE 6.6715），test MAE 7.5847、test R2 0.1911 也是 hp_search 中最佳。但**對照更早的 Run02（test MAE 7.2937, R2 0.246）仍勝出**——val 最佳不保證 test 最佳，distribution shift 主導 meanScore 的 test 表現。hp_search 內部 test MAE 跨度極大（7.58~9.57），且 test R2 數個為負，再次顯示 meanScore 在 test 區段泛化困難。
+
+### 消融實驗（test set，`python src_2/ablation.py`）
+
+固定超參（= Run07：dropout=0.3, wd=1e-3, batch=512, TrendHead on），只改被消融的變因。對照組 full model = Run07。
+
+| 設定 | pop log_MAE | pop facc_2x | pop spearman | score MAE | score spearman | 結論 |
+|------|------------|------------|-------------|-----------|---------------|------|
+| **full（RAG + cover_banner_yolo）** | **0.8904** | **0.4856** | **0.8498** | 8.1776 | **0.5397** | 對照組 |
+| RAG off | 0.9279 | 0.4739 | 0.8385 | 7.6716 | 0.5093 | RAG 對 pop 有益（log_MAE -0.038） |
+| image = cover only | 1.1041 | 0.3965 | 0.8405 | 8.3641 | 0.5130 | 移除 banner+yolo，pop 大幅退步 |
+| image = cover + banner | 0.8922 | 0.4836 | 0.8500 | 7.5995 | 0.5377 | ≈ full，yolo 邊際貢獻 ~0 |
+
+> **三大發現**：
+> 1. **RAG 對 popularity 明確有益**（log_MAE 0.8904 vs 0.9279，spearman +0.011）。對 meanScore spearman 上升但 MAE 變差（distribution shift 下放大數值偏移）。
+> 2. **banner 是最關鍵的視覺模態**：cover only → cover+banner，pop log_MAE 從 1.1041 → 0.8922（-0.21）。
+> 3. **YOLO crop 邊際貢獻幾乎為零**：cover+banner（0.8922）≈ full（0.8904）。若要精簡 pipeline，可移除 YOLO crop，對 popularity 幾乎無損。
+
+### Multimodal 分支消融（重訓版，`python src_2/ablation_multimodal.py`）
+
+`model.py` 加 `modalities: {image, text, meta}` flag（向後相容），架構真的移除分支後重訓。single-modality 組關閉 RAG + TrendHead。
+
+| 設定 | pop log_MAE | pop facc_2x | pop spearman | score MAE | score spearman |
+|------|------------|------------|-------------|-----------|---------------|
+| **full（img+txt+meta+rag, Run07）** | **0.8904** | **0.4856** | **0.8498** | 8.1776 | **0.5397** |
+| only_meta | 0.9507 | 0.4561 | 0.8322 | **8.1420** | 0.5065 |
+| no_image（txt+meta+rag） | 1.0520 | 0.4270 | 0.8287 | 8.4805 | 0.4998 |
+| only_text | 1.2634 | 0.3602 | 0.7056 | 10.2581 | 0.2164 |
+| only_image | 1.3458 | 0.3337 | 0.7230 | 8.4261 | 0.3948 |
+
+> **發現**：
+> 1. **meta 是最強的單一模態**（only_meta：pop log_MAE 0.9507、score MAE 8.142），metadata（前作 / studio·VA TE / format）攜帶最多訊號。
+> 2. **text / image 單獨都很弱**（log_MAE 1.26 / 1.35），需與 metadata 結合才有效。
+> 3. **多模態互補性確立**：full model 明顯勝過任何單模態，融合架構有實質價值。
 
 ---
 
@@ -216,7 +281,23 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 `expm1(y)` 在 float16 下上限 65,504，normalized 空間 y ≈ 17.6 時直接 overflow → Infinity。
 **解法**：`denormalize_target()` 強制轉 float64，clip(±5σ) 後再執行 expm1。
 
-### 3. GPU 使用率相對 v1 偏低
+### 3. Overfitting：Train Loss 快速下降，Val Loss 早熟
+
+Run01/02 的訓練動態顯示明顯的 overfitting pattern：
+
+```
+Run01 popularity:
+  ep1:  train=0.242  val=0.159  gap=-0.083
+  ep7:  train=0.063  val=0.115  gap=+0.052  ← best
+  ep12: train=0.041  val=0.136  gap=+0.095
+```
+
+Train loss 從 ep1 到 ep12 降了 **6 倍**，val loss 只改善 **1.4 倍**。Best checkpoint 在 ep7~10 就觸底，之後 val 持續震盪或上升，train 還在下降。  
+根本原因：模型在 memorize train set 的個別動畫特徵，而非學到跨時序的泛化規律。
+
+**緩解方向（Run03）**：提高 dropout（0.3→0.5）、weight_decay（1e-4→1e-3）、batch_size（256→512，降低 gradient noise，讓 val 指標更穩定）。
+
+### 4. GPU 使用率相對 v1 偏低
 
 v1 在訓練時執行 TextGNN + ImageGNN forward pass（額外 GPU 運算）。v2 的 embedding 全部預先計算並存入 parquet，訓練時只跑 FusionModel（~965K params），GPU 負載較輕。
 
@@ -234,13 +315,14 @@ MetaEncoder TE 對未見過的 studio / 聲優補訓練集全體均值；`is_new
 ## 輸出檔案
 
 ```
-src_2/runs/{run_id}/{target}/
-├── best_model.pt          ← 最佳 val loss checkpoint（state_dict）
-├── target_scaler.json     ← 正規化參數（center, scale, log_transform）
-├── history.json           ← 每 epoch train_loss / val_loss / val_mae / lr（含 run_id / notes）
-├── final_metrics.json     ← train / val / test 完整 metrics 合併（含 run_id / notes）
-├── pred_{split}.csv       ← id, pred, target（原始 scale）
-└── explain/
+src_2/runs/{run_id}/
+├── {target}/
+│   ├── best_model.pt          ← 最佳 val loss checkpoint（state_dict）
+│   ├── target_scaler.json     ← 正規化參數（center, scale, log_transform）
+│   ├── history.json           ← 每 epoch train_loss / val_loss / val_mae / lr（含 run_id / notes）
+│   ├── final_metrics.json     ← train / val / test 完整 metrics 合併（含 run_id / notes）
+│   └── pred_{split}.csv       ← id, pred, target（原始 scale）
+└── explain/{target}/          ← 可解釋性輸出（run 層級）
     ├── rag/{id}_attn.png          ← Cross Attention heatmap
     ├── feature/captum_modality.csv
     ├── feature/captum_modality.png

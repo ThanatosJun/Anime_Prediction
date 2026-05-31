@@ -28,7 +28,7 @@ import yaml
 
 from dataset import AnimeDataset, denormalize_target
 from meta_encoder import MetaEncoder
-from model import FusionModel
+from model import FusionModel, make_model_config
 
 
 # ── Captum wrapper ────────────────────────────────────────────────────────────
@@ -51,6 +51,13 @@ class FusionWrapper(torch.nn.Module):
             batch["rag_meta"]  = rag_meta
             batch["rag_text"]  = rag_text
             batch["rag_image"] = rag_image
+
+        # Captum IG 會把輸入沿 batch 擴成 n_steps；固定的 mask 需同步 expand
+        bsz = image_emb.shape[0]
+        for mask_key in ("image_mask", "rag_mask"):
+            m = batch.get(mask_key)
+            if isinstance(m, torch.Tensor) and m.shape[0] != bsz:
+                batch[mask_key] = m.expand(bsz, *m.shape[1:])
         return self.model(batch)
 
 
@@ -155,6 +162,11 @@ class MetaOnlyWrapper(torch.nn.Module):
     def forward(self, meta_feat: torch.Tensor) -> torch.Tensor:
         batch = dict(self.fixed_batch)
         batch["meta_feat"] = meta_feat
+        # SHAP 傳入 batch=N 的 meta，但固定的 image/rag tensor 為 batch=1，需 expand 對齊
+        bsz = meta_feat.shape[0]
+        for key, v in list(batch.items()):
+            if isinstance(v, torch.Tensor) and key != "meta_feat" and v.shape[0] != bsz:
+                batch[key] = v.expand(bsz, *v.shape[1:])
         return self.model(batch).unsqueeze(-1)   # SHAP 需要 2-D 輸出
 
 
@@ -192,7 +204,9 @@ def shap_meta_importance(
              if k in sample0}
 
     wrapper = MetaOnlyWrapper(model, fixed)
-    explainer = shap.DeepExplainer(wrapper, bg_meta)
+    # GradientExplainer（expected gradients）：對 attention/LayerNorm/GELU 等
+    # 複雜算子比 DeepExplainer（DeepLIFT）穩健，不會觸發 additivity 檢查失敗
+    explainer = shap.GradientExplainer(wrapper, bg_meta)
 
     test_meta = torch.stack([ds[i]["meta_feat"] for i in indices]).to(device)
     shap_vals  = explainer.shap_values(test_meta)   # [n, 56, 1] or [n, 56]
@@ -245,7 +259,8 @@ def main():
 
     cfg_out = config["output"]
     run_dir = Path(cfg_out["run_dir"]) / cfg_out["run_id"] / args.target
-    out_dir = Path(args.out_dir) if args.out_dir else run_dir / "explain" / "feature"
+    out_dir = (Path(args.out_dir) if args.out_dir
+               else Path(cfg_out["run_dir"]) / cfg_out["run_id"] / "explain" / args.target / "feature")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -257,7 +272,7 @@ def main():
     ds = AnimeDataset(args.split, config, meta_encoder,
                       target=args.target, target_scaler=target_scaler)
 
-    model = FusionModel(config).to(device)
+    model = FusionModel(make_model_config(config, args.target)).to(device)
     model.load_state_dict(torch.load(run_dir / "best_model.pt",
                                      map_location=device, weights_only=True))
     model.eval()

@@ -51,5 +51,11 @@ LoRA (Low-Rank Adaptation)
 要完成的三項主要實驗，外加一個分析：
 1. 整個 pipeline 的最佳效果
 2. RAG 加入的影響
-3. 外部資料的比對
+3. 外部資料的比對 (這個實驗先跳過)
+4. SHAP , Captum , attention heatmap 的可解釋性分析
+
+接下來我們要完成的三項主要實驗，外加一個分析，幫我加入 order.md 當中：
+1. 整個 pipeline 的最佳效果
+2. RAG 加入的影響
+3. 消融實驗 (attention, image)這兩者是否加入 MLP 輸入的消融
 4. SHAP , Captum , attention heatmap 的可解釋性分析

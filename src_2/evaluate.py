@@ -81,12 +81,15 @@ def evaluate(target: str, split: str, config: dict, meta_encoder: MetaEncoder):
             log_t  = np.log1p(np.clip(targets_orig, 0, None))
             ss_res = float(np.sum((log_t - log_p) ** 2))
             ss_tot = float(np.sum((log_t - np.mean(log_t)) ** 2))
+            log_diff     = np.abs(log_p - log_t)
+            factor_acc_2x = float(np.mean(log_diff < np.log(2)))
             metrics = {
                 "target": target, "split": split, "n": len(preds_orig),
-                "spearman_rho": round(spearman, 4),
-                "log_R2":       round(1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0, 4),
-                "MAE":          round(mae, 4),
-                "log_MAE":      round(float(np.mean(np.abs(log_p - log_t))), 4),
+                "spearman_rho":  round(spearman, 4),
+                "log_R2":        round(1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0, 4),
+                "MAE":           round(mae, 4),
+                "log_MAE":       round(float(np.mean(log_diff)), 4),
+                "factor_acc_2x": round(factor_acc_2x, 4),
             }
         else:
             ss_res = float(np.sum((targets_orig - preds_orig) ** 2))
