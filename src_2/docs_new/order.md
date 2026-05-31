@@ -105,7 +105,8 @@ RAG retrieved items                                          │              �
 - **DataLoader**：`num_workers=min(4, cpu_count())`，`persistent_workers=True`
 - **train_separately**：true → 同一 script 兩遍循環，各 target 獨立模型
 - **Checkpoint**：每 epoch 若 val_loss 改善則儲存 `best_model.pt` + `target_scaler.json`
-- **超參數範圍**：per-target 僅 loss / log_transform / winsor_pct / trend_head·temporal_weight 的 apply_to；`dropout` / `weight_decay` / `lr` / `batch_size` 為**全域共用**。兩 target 各自最佳超參（pop: dropout=0.3,wd=1e-3；score: dropout=0.5,wd=5e-4）目前靠 hp_search 以 `--target` 分開跑達成，單一 config 一次跑兩 target 無法同時最佳化
+- **超參數範圍**：per-target 可覆寫 loss / log_transform / winsor_pct / trend_head·temporal_weight 的 apply_to，**以及 `dropout` / `attn_dropout` / `lr` / `weight_decay` / `batch_size`**（透過 `training.{target}.overrides`，見 Step 16）。兩 target 最佳超參方向不同（pop 要低 dropout；score 要低 attn_dropout + 小 batch），一次 `train.py` 即可各自最佳
+- **seed**：`config.seed`（預設 42）固定 weight init / shuffle / dropout，實驗可重現、變因對齊（見 Step 16）
 
 執行：
 
@@ -448,9 +449,38 @@ python src_2/evaluate.py --config src_2/fussion_configs_stages.yaml --split test
 
 ---
 
+### ✅ Step 16：固定 seed + per-target 超參覆寫（變因對齊 + 雙 target 各自最佳）
+
+**動機**：早期 Run01~21 **未固定 seed**，「最佳 run」差異多在 seed 雜訊（~±0.025）內，結論不可靠。
+
+**固定 seed**：`train.py` 的 `set_seed()` 固定 `random`/`numpy`/`torch`/`cudnn.benchmark=False`；`config.seed`（預設 42）+ DataLoader `generator`。
+
+**全實驗 seed=42 重跑**（`rerun_s42.py`，16 組 × 2 target，run_id 帶 `_s42`；`rerun_extra_s42.py` 補 02/03 + 單模態 banner/yolo）：
+- 關鍵發現：舊「最佳」部分是運氣（meanScore Run02 的 7.29 → seed-fixed 後 7.59）；`pooler_s42` = `09_s42` 逐位元相同（驗證 seed 生效）。
+- **單模態 image 對照**（dataset 新增 `banner` / `yolo` 模式）：cover/banner/yolo 三者 ~0.90 都差不多，character 對 pop 最弱、對 score 最有用。
+- **stage 確定輸 pooler**（非「打平」，早期是 seed 巧合）。
+
+**per-target 超參覆寫**（`model.apply_target_overrides`）：`training.{target}.overrides` 可覆寫 dropout/attn_dropout/lr/weight_decay/batch_size，train.py / evaluate.py / inference.py 都套用。
+```yaml
+training:
+  popularity:
+    overrides: { dropout: 0.3 }
+  meanScore:
+    overrides: { dropout: 0.3, attn_dropout: 0.1, weight_decay: 0.0001, batch_size: 256 }
+```
+- **Run22**（per-target HP, seed=42）：一次 `python src_2/train.py` 達到兩 target 各自 seed-fixed 最佳 —— pop log_MAE **0.8823**、score MAE **7.5911**。
+- 發現 **meanScore 對 `attn_dropout` 極敏感**（0.2→0.1 使 MAE 8.25→7.59）。
+
+- [x] `set_seed` + `config.seed`（train.py）
+- [x] `rerun_s42.py` / `rerun_extra_s42.py`（seed=42 全重跑）
+- [x] dataset 單模態 `banner` / `yolo`
+- [x] `apply_target_overrides`（per-target 超參）+ Run22
+
+---
+
 ## ⏳ 待完成
 
-（VLM 文字描述並接 text 分支為探索中方向，見 `component_image_text_description/`；Stage 實驗見 Step 15）
+（VLM 文字描述並接 text 分支為探索中方向，見 `component_image_text_description/`；Stage 實驗見 Step 15，結論 stage 不優於 pooler）
 
 ---
 

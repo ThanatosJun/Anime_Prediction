@@ -67,15 +67,22 @@ training:
     enabled:  true        #   true → w = exp(-alpha*(max_year-release_year))，normalize mean=1
     alpha:    0.2         #   0.2: 2018→1.0, 2015→0.55, 2010→0.20, 2000→0.07
     apply_to: [popularity]   #   只對這些 target 套用（meanScore 不適合）
-  popularity:             # ── popularity 目標轉換 ──
+  popularity:             # ── popularity 目標轉換 + per-target 超參覆寫 ──
     log_transform: true   #   log1p（人氣右偏，log 空間訓練）
     winsor_pct:    99     #   Winsorize 上限百分位（截極端值）
-  meanScore:              # ── meanScore 目標轉換 ──
+    overrides:            #   seed=42 最佳：低 dropout（pop 偏好）→ log_MAE 0.882
+      dropout: 0.3        #     覆寫全域 0.5 → 0.3
+  meanScore:              # ── meanScore 目標轉換 + per-target 超參覆寫 ──
     log_transform: false  #   不 log（0–100 線性分數）
     winsor_pct:    99     #   Winsorize 上限百分位
+    overrides:            #   seed=42 最佳（= Run02 設定）→ MAE 7.59
+      dropout:      0.3      #   覆寫全域 0.5 → 0.3
+      attn_dropout: 0.1      #   覆寫全域 0.2 → 0.1（meanScore 對此敏感，關鍵）
+      weight_decay: 0.0001   #   覆寫全域 0.001 → 0.0001（明確小數，避免 YAML 解析成字串）
+      batch_size:   256      #   覆寫全域 512 → 256
 
 # ── 輸出 ───────────────────────────────────────────────────────────────────────
 output:
   run_dir: src_2/runs     # 實驗根目錄（結果存於 runs/{run_id}/{target}/）
-  run_id:  "21"           # 實驗編號（每次新實驗換編號，避免覆蓋）
-  notes:   "Run21: +regularization(dropout=0.5,attn_drop=0.2,wd=1e-3); batch=512; TrendHead(pop+score); baseline=Run02; seed=42"   # 實驗描述（寫入所有輸出 JSON）
+  run_id:  "22"           # 實驗編號（每次新實驗換編號，避免覆蓋）
+  notes:   "Run22: per-target HP override（pop dr=0.3 / score dr=0.3,wd=1e-4,batch=256）; seed=42"

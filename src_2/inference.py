@@ -44,7 +44,7 @@ sys.path.insert(0, str(_HERE / "fussion_training"))
 sys.path.insert(0, str(_HERE / "RAG"))
 
 from meta_encoder import MetaEncoder
-from model import FusionModel, make_model_config
+from model import FusionModel, make_model_config, apply_target_overrides
 from dataset import (_build_rag_meta_lookup, _load_emb_parquet,
                      denormalize_target, _parse_list)
 from sparse_encoder import (SparseEncoder, parse_genres, parse_studios,
@@ -72,7 +72,7 @@ def _load_isolated(mod_name: str, file_path: Path, dep_dir: Path):
 
 class InferencePipeline:
     def __init__(self, config: dict,
-                 pop_run: str = "07", score_run: str = "02",
+                 pop_run: str = "22", score_run: str = "22",
                  rag_use_image: bool = False):
         self.config = config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -133,7 +133,8 @@ class InferencePipeline:
         self.models, self.scalers = {}, {}
         for target, run_id in (("popularity", pop_run), ("meanScore", score_run)):
             run_dir = Path(config["output"]["run_dir"]) / run_id / target
-            m = FusionModel(make_model_config(config, target)).to(self.device)
+            tcfg = apply_target_overrides(config, target)   # 與訓練架構一致
+            m = FusionModel(make_model_config(tcfg, target)).to(self.device)
             m.load_state_dict(torch.load(run_dir / "best_model.pt",
                                          map_location=self.device, weights_only=True))
             m.eval()
@@ -318,8 +319,7 @@ def main():
 
     if args.verify and args.anime_id is not None:
         for target in ("popularity", "meanScore"):
-            pred_csv = Path(config["output"]["run_dir"]) / \
-                       ("07" if target == "popularity" else "02") / target / f"pred_{args.split}.csv"
+            pred_csv = Path(config["output"]["run_dir"]) / "22" / target / f"pred_{args.split}.csv"
             if pred_csv.exists():
                 pdf = pd.read_csv(pred_csv)
                 ref = pdf[pdf["id"] == args.anime_id]

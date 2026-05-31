@@ -256,3 +256,30 @@ def make_model_config(config: dict, target: str) -> dict:
     th["_active"] = th.get("enabled", False) and target in th.get("apply_to", [])
     mc["model"]["trend_head"] = th
     return mc
+
+
+# per-target 覆寫：key 路由到 model / training 區段
+_MODEL_OVERRIDE_KEYS = {"dropout", "attn_dropout", "proj_dim", "hidden_dims", "image_project_dim"}
+_TRAIN_OVERRIDE_KEYS = {"lr", "weight_decay", "batch_size", "epochs", "patience"}
+
+
+def apply_target_overrides(config: dict, target: str) -> dict:
+    """
+    套用 config["training"][target]["overrides"] 的 per-target 超參覆寫。
+    各 target 可有自己的 dropout / weight_decay / batch_size 等（全域無法兩全時用）。
+    train.py 與 evaluate.py 都須呼叫，確保架構與超參一致。
+    """
+    cfg = copy.deepcopy(config)
+    ov = cfg.get("training", {}).get(target, {}).get("overrides", {}) or {}
+    for k, v in ov.items():
+        if k in ("lr", "weight_decay", "dropout", "attn_dropout"):
+            v = float(v)   # 防 YAML 把 1e-4 解析成字串
+        elif k in ("batch_size", "epochs", "patience"):
+            v = int(v)
+        if k in _MODEL_OVERRIDE_KEYS:
+            cfg["model"][k] = v
+        elif k in _TRAIN_OVERRIDE_KEYS:
+            cfg["training"][k] = v
+        else:
+            raise KeyError(f"未知的 per-target override key: {k}")
+    return cfg

@@ -22,7 +22,7 @@ from torch.utils.data import DataLoader
 
 from dataset import AnimeDataset, denormalize_target
 from meta_encoder import MetaEncoder
-from model import FusionModel, make_model_config
+from model import FusionModel, make_model_config, apply_target_overrides
 
 
 @torch.no_grad()
@@ -38,6 +38,7 @@ def _predict(model, loader, device):
 
 
 def evaluate(target: str, split: str, config: dict, meta_encoder: MetaEncoder):
+    config    = apply_target_overrides(config, target)   # 與 train 一致（架構/超參對齊）
     cfg_train = config["training"]
     cfg_out   = config["output"]
     device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")

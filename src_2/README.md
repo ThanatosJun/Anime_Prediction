@@ -9,14 +9,18 @@ v1（src/fussion_branch）與 v2 核心差異：
 - **Optimizer**：AdamW → **SAM + AdamW**（Sharpness-Aware Minimization）
 - **Loss**：HuberLoss → **HuberLoss（popularity）/ Log-Cosh（meanScore）**
 
-## 目前最佳結果（test set）
+## 目前最佳結果（test set，**Run22：seed=42 + per-target 超參覆寫**）
 
-| Target | 最佳 Run | 主指標 | 準確率 | Spearman | 設定 |
-|--------|---------|--------|--------|----------|------|
-| **popularity** | Run21 | log_MAE **0.8859** | facc_2x **0.4921** | 0.8505 | dropout=0.5, attn_drop=0.2, wd=1e-3, batch=512, TrendHead |
-| **meanScore** | Run02 | MAE **7.2937**（R2 0.246）| within_10pt **0.7360** | 0.5478 | TrendHead, gate soft-avg, dropout=0.3 |
+| Target | 主指標 | 準確率 | Spearman | per-target 超參 |
+|--------|--------|--------|----------|----------------|
+| **popularity** | log_MAE **0.8823** | facc_2x **0.4943** | 0.8520 | dropout=0.3（其餘同全域）|
+| **meanScore** | MAE **7.5911**（R2 0.193）| within_10pt **0.7104** | 0.5424 | dropout=0.3, attn_drop=0.1, wd=1e-4, batch=256 |
 
-> meanScore 的 test 最佳是 Run02 而非 hp_search 的 Run08——distribution shift 導致「val 最佳 ≠ test 最佳」（詳見[已知限制](#已知限制)）。
+> **Run22** 用 `training.{target}.overrides` 讓兩 target 各自套最佳超參，**一次 `python train.py` 同時達到兩者的 seed-fixed 最佳**（pop 0.8823 ≈ 全域最佳 04_s42 的 0.8821；score 7.5911 = 02_s42 的 7.5911）。
+>
+> ⚠️ **seed + per-target 的關鍵發現**：
+> - 早期實驗（Run01~21）**未固定 seed**，「最佳 run」部分是運氣（舊 meanScore Run02 的 7.29 → seed-fixed 後 7.59）。
+> - **兩 target 最佳超參方向不同**：pop 要低 dropout；**meanScore 對 `attn_dropout` 極敏感**（0.2→0.1 使 MAE 8.25→7.59），且偏好小 batch。全域單一超參無法兩全 → 故加 per-target 覆寫機制。
 
 ---
 
@@ -74,7 +78,11 @@ src_2/
 ├── ablation.py                   # RAG / image 消融
 ├── ablation_multimodal.py        # 多模態分支消融（重訓版）
 ├── backfill_metrics.py           # 補算舊 run 缺的指標欄位（不重訓）
-├── fussion_configs.yaml          # 訓練設定
+├── rerun_s42.py                  # 固定 seed=42 重跑全部 scripted 實驗（_s42 後綴）
+├── rerun_extra_s42.py            # seed=42 補跑（02/03 + 單模態 banner/yolo）
+├── fussion_configs.yaml          # 訓練設定（含 seed / per-target overrides）
+├── fussion_configs_stages.yaml   # stage 版（+LN）
+├── fussion_configs_stages_nonorm.yaml # stage 版（無 LN，對照）
 └── requirements.txt
 ```
 
@@ -137,8 +145,10 @@ MLP backbone: concat_dim → 256 → 128 → 1 ───────────
 | Optimizer | SAM (rho=0.05, pure wrapper) + AdamW |
 | LR Schedule | ReduceLROnPlateau（factor=0.5, patience=3, min_lr=1e-6） |
 | Early Stopping | patience=5 |
-| AMP | autocast float16（gradient 仍 float32，不用 GradScaler） |
-| Batch Size | 256 |
+| AMP | autocast float16（gradient 仍 float32，不用 GradScaler；stage 模式停用）|
+| Batch Size | 全域 512；meanScore per-target 覆寫 256 |
+| seed | `config.seed`=42（固定 init/shuffle/dropout）|
+| per-target 超參 | `training.{target}.overrides` 覆寫 dropout/attn_dropout/lr/wd/batch_size |
 | DataLoader | num_workers=min(4, cpu_count()), persistent_workers=True |
 
 ---
@@ -175,12 +185,12 @@ python src_2/inference.py --anime-id 21294 --split test --verify
 
 | 項目 | 說明 |
 |------|------|
-| 最佳 checkpoint | popularity → Run21；meanScore → Run02（架構相同，僅超參不同） |
+| 最佳 checkpoint | **Run22**（per-target HP，pop+score 同一 run_id；inference.py 預設 pop_run=score_run="22"） |
 | RAG modality | 預設 `rag_use_image=False`（image_rag 僅 train，val/test 檢索為 sparse+text，對齊驗證指標） |
 | 模組隔離 | 各 component 同名 `config.py`/`model.py` 用 `importlib` 隔離載入 |
 | 驗證 | cover/banner embedding 逐位元一致；yolo 因預存 crops 經 JPEG round-trip 微差（pipeline 直接裁切，更乾淨） |
 
-> ⚠️ 超參數限制：`dropout` / `weight_decay` / `lr` / `batch_size` 為**全域**，兩個 target 共用同一組；per-target 各自最佳超參需在 config 加覆寫機制（目前由 hp_search 以 `--target` 分開跑繞過）。
+> ℹ️ 超參數：全域設定可被 `training.{target}.overrides` 覆寫，讓 popularity / meanScore 各用自己最佳的 dropout / attn_dropout / lr / weight_decay / batch_size（Run22）。
 
 ---
 
@@ -238,6 +248,55 @@ mean/std 僅從訓練集計算，再套用到 val / test。
 ## 實驗記錄
 
 config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
+
+> ⚠️ **seed 注意**：以下 Run01~21 / hp_search / 消融表為**早期未固定 seed** 的結果（方向性結論可信，但絕對值有 ~±0.025 的 seed 雜訊，「最佳 run」可能受運氣影響）。
+> **權威的 seed=42 對齊版**見下方「seed=42 全實驗對照」（`python src_2/rerun_s42.py` 產生，run_id 帶 `_s42` 後綴，摘要 `runs/rerun_s42_summary.json`）。
+
+### seed=42 全實驗對照（16 組，`rerun_s42.py`）
+
+全部 seed=42、同一份 base config，唯一差異是各組標示的變因。pop 主指標 log_MAE↓、score 主指標 MAE↓。
+
+| 組別 | run（_s42）| pop log_MAE | pop facc | pop spear | score MAE | score win10 | score spear |
+|------|-----------|:---:|:---:|:---:|:---:|:---:|:---:|
+| **baseline** | pooler | **0.8859** | 0.4921 | 0.8505 | **7.7575** | 0.7075 | 0.5439 |
+| stage | stage_ln | 0.9653 | 0.4580 | 0.8476 | 7.8422 | 0.6968 | 0.5419 |
+| stage | stage_noln | 0.8989 | 0.4843 | 0.8442 | 7.9428 | 0.6936 | 0.5429 |
+| hp dr=0.3 wd=1e-4 | 04 | **0.8821** ⭐ | 0.4927 | 0.8499 | 8.1718 | 0.6744 | 0.5388 |
+| hp dr=0.4 wd=5e-4 | 05 | 0.8890 | 0.4846 | 0.8498 | 7.9545 | 0.6926 | 0.5402 |
+| hp dr=0.5 wd=1e-4 | 06 | 0.8857 | 0.4921 | 0.8505 | 7.7597 | 0.7075 | 0.5439 |
+| hp dr=0.3 wd=1e-3 | 07 | 0.8824 | 0.4927 | 0.8499 | 8.1751 | 0.6738 | 0.5387 |
+| hp dr=0.5 wd=5e-4 | 08 | 0.8859 | 0.4924 | 0.8505 | **7.7572** ⭐ | 0.7078 | 0.5439 |
+| hp dr=0.5 wd=1e-3 | 09 | 0.8859 | 0.4921 | 0.8505 | 7.7575 | 0.7075 | 0.5439 |
+| RAG off | abl_rag_off | 0.9719 | 0.4555 | 0.8408 | 7.7311 | 0.7042 | 0.5262 |
+| image=cover | abl_img_cover | 0.8998 | 0.4853 | 0.8419 | 8.3380 | 0.6722 | 0.5218 |
+| image=cover+banner | abl_img_cover_banner | 0.8954 | 0.4882 | 0.8483 | 8.1734 | 0.6663 | 0.5380 |
+| 移除 image | abl_no_image | 0.9401 | 0.4700 | 0.8292 | 8.8163 | 0.6301 | 0.5071 |
+| text only | abl_only_text | 1.2541 | 0.3605 | 0.7047 | 10.0170 | 0.5539 | 0.1737 |
+| image only | abl_only_image | 1.2876 | 0.3388 | 0.7298 | 8.5115 | 0.6560 | 0.4125 |
+| meta only | abl_only_meta | 0.9369 | 0.4590 | 0.8329 | 7.9642 | 0.6955 | 0.5046 |
+| Run02 原設定（dr=0.3,batch=256）| 02 | 0.9010 | — | — | **7.5911** | — | — |
+| Run03 原設定（=base）| 03 | 0.8859 | 0.4921 | 0.8505 | 7.7575 | 0.7075 | 0.5439 |
+
+> **seed 對齊後的結論**：
+> 1. **popularity 最佳 = 低 dropout（0.3）**：04/07（log_MAE 0.882）勝。
+> 2. **meanScore 最佳 = Run02 設定（MAE 7.591）**。後續 Run22 隔離變因確認**關鍵是 `attn_dropout`**（0.2→0.1 使 MAE 8.25→7.59），非 batch_size（先前誤判）；batch 256 為次要。
+> 3. **per-target 最佳超參方向相反**（pop 要低 dropout；score 要低 attn_dropout）→ 全域單一超參無法兩全，故加 per-target 覆寫（Run22，見頂部最佳結果）。
+> 4. **Run02 舊 7.29 是 seed 運氣**（seed-fixed 後 7.591）；**Run03 = pooler_s42 逐位元相同** → 驗證 seed 生效。
+> 5. **stage 兩 target 都輸 pooler**（非「打平」，早期是 seed 巧合）；消融方向性與未固定 seed 版一致（RAG 助 pop / 微傷 score；only_meta 最強單模態）。
+
+#### 單模態 image 對照（cover / banner / yolo 各自單獨，seed=42）
+
+| 單模態 | pop log_MAE↓ | pop spear | score MAE↓ | score spear |
+|--------|:---:|:---:|:---:|:---:|
+| cover | **0.8998** | 0.8419 | 8.3380 | 0.5218 |
+| banner | 0.9032 | 0.8370 | 8.3762 | 0.5376 |
+| yolo（character）| 0.9108 | **0.8424** | **8.1170** | 0.5269 |
+| full（三者合, pooler）| 0.8859 | 0.8505 | 7.7575 | 0.5439 |
+
+> **三個視覺模態都差不多（~0.90），無一獨強**：
+> - **popularity**：cover 最好（0.8998）、**yolo 最差**（0.9108）→ character 對「人氣」幫助最小，呼應「yolo 邊際貢獻≈0」。
+> - **meanScore**：**yolo 最好**（8.117）→ character 對「評分」反而最有用。
+> - 三者合（0.886）> 任一單模態，但對 popularity 而言 cover-only（0.900）已接近 full → 視覺模態冗餘度高。
 
 ### popularity（主要指標：log_MAE，越低越好）
 
@@ -324,28 +383,30 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 
 主 image 從 Swin pooler（1024）換成 4 個 stage concat（1920）+ stage 投影（4×256→1024），RAG 維持 pooler（解耦）。Run12 加 per-stage LayerNorm，Run13 為對照（無 LayerNorm，隔離 LN 變因）。
 
+**全部 seed=42 對齊（`rerun_s42.py`），唯一差異是 image 模式 / LN。**
+
 **popularity（test）：**
 
 | 設定 | log_MAE | facc_2x | spearman | log_R2 |
 |------|---------|---------|----------|--------|
-| **pooler 最佳（Run21）** | **0.8859** | **0.4921** | **0.8505** | **0.7616** |
-| stage + LN（Run12） | 0.9653 | 0.4580 | 0.8476 | 0.7177 |
-| stage 無 LN（Run13） | 0.8989 | 0.4843 | 0.8442 | 0.7509 |
+| **pooler（pooler_s42）** | **0.8859** | **0.4921** | **0.8505** | **0.7616** |
+| stage + LN（stage_ln_s42） | 0.9653 | 0.4580 | 0.8476 | 0.7177 |
+| stage 無 LN（stage_noln_s42） | 0.8989 | 0.4843 | 0.8442 | 0.7509 |
 
 **meanScore（test）：**
 
 | 設定 | MAE | R2 | within_10pt | spearman |
 |------|-----|-----|------------|----------|
-| **pooler 最佳（Run02）** | **7.2937** | **0.2459** | **0.7360** | **0.5478** |
-| stage + LN（Run12） | 7.8422 | 0.1428 | 0.6968 | 0.5419 |
-| stage 無 LN（Run13） | 7.9428 | 0.1346 | 0.6936 | 0.5429 |
+| **pooler（pooler_s42）** | **7.7575** | **0.1669** | **0.7075** | 0.5439 |
+| stage + LN（stage_ln_s42） | 7.8422 | 0.1428 | 0.6968 | 0.5419 |
+| stage 無 LN（stage_noln_s42） | 7.9428 | 0.1346 | 0.6936 | 0.5429 |
 
-> **結論：stage 仍未超越 pooler，但 LayerNorm 扮演混淆角色。**
-> 1. **per-stage LayerNorm 對 popularity 顯著傷害**：移除 LN 後 pop log_MAE 0.9653→**0.8989** 大幅改善。推測：LN 抹掉了各 stage 的「量級」資訊，而 Swin stage 的激活強度本身帶訊號。然而 score MAE 從 7.8422 微降至 7.9428。
-> 2. **即使無 LN，stage 還是打輸 pooler**：popularity 0.8989 仍輸 pooler（0.8859）；meanScore MAE（7.8~7.9）皆遠遜於 pooler（7.29）。
-> 3. **判斷**：多尺度 stage 特徵未帶來增益，**pooler 仍是最佳**（更簡單、維度低、能開 AMP）。低層 stage 紋理特徵對「人氣/評分」幫助有限。
+> **結論（seed 對齊）：stage 在兩個 target 都明確輸 pooler。**
+> 1. **stage 確定較差，非「打平」**：seed 固定後 stage_noln（pop 0.8989 / score 7.9428）兩個 target 都輸 pooler（0.8859 / 7.7575）。早期看似「打平」是未固定 seed 的巧合。
+> 2. **per-stage LayerNorm 對 popularity 嚴重傷害**（0.9653 vs 0.8989），對 meanScore 反而略好（7.8422 vs 7.9428）；但兩 target 都輸 pooler，故 LN 設為**預設 false**。推測 LN 抹掉了各 stage 的「量級」資訊，而 image 分支的 content gate 靠量級判斷模態重要性。
+> 3. **判斷**：多尺度 stage 特徵未帶來增益，**pooler 仍最佳**（更簡單、維度低、能開 AMP）。**stage 這條線收掉。**
 >
-> 數值修正紀錄：stage 初期會遇到 NaN，根因是 raw stage 量級大 + AMP float16 梯度溢位。解法：stage config 停用 AMP（`mixed_precision: false`）。LayerNorm（`image_stage_norm`）設為預設 false。
+> 數值修正紀錄：stage 初期 NaN，根因 raw stage 量級大 + AMP float16 梯度溢位。解法：stage config 停用 AMP（`mixed_precision: false`）；LayerNorm（`image_stage_norm`）預設 false。
 
 ---
 

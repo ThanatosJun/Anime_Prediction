@@ -30,6 +30,8 @@ from torch.utils.data import Dataset
 # image_mode → 使用的欄位前綴（順序即 concat 順序）
 _IMAGE_MODE_COLS = {
     "cover":              ["cover"],
+    "banner":             ["banner"],            # 單模態：只有 banner
+    "yolo":               ["yolo"],              # 單模態：只有 character（yolo crop）
     "cover_banner":       ["cover", "banner"],
     "cover_banner_yolo":  ["cover", "banner", "yolo"],
 }

@@ -39,7 +39,7 @@ def set_seed(seed: int):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = False   # 關閉非確定性 kernel 選擇
-from model import FusionModel, make_model_config
+from model import FusionModel, make_model_config, apply_target_overrides
 
 
 # ── Loss functions ────────────────────────────────────────────────────────────
@@ -241,6 +241,7 @@ def _compute_final_metrics(target, run_dir, datasets, config, device, use_amp):
 # ── Train single target ───────────────────────────────────────────────────────
 
 def train_target(target: str, config: dict, meta_encoder: MetaEncoder):
+    config    = apply_target_overrides(config, target)   # per-target 超參覆寫
     cfg_train = config["training"]
     cfg_out   = config["output"]
     seed      = config.get("seed", 42)
