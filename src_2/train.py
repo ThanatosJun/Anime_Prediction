@@ -206,13 +206,15 @@ def _compute_final_metrics(target, run_dir, datasets, config, device, use_amp):
         if target == "popularity":
             lp = np.log1p(np.clip(po, 0, None))
             lt = np.log1p(np.clip(to, 0, None))
+            log_diff = np.abs(lp - lt)
             sr = float(np.sum((lt - lp) ** 2))
             st = float(np.sum((lt - np.mean(lt)) ** 2))
             m = {
-                "spearman_rho": round(spearman, 4),
-                "log_R2":       round(1.0 - sr / st if st > 0 else 0.0, 4),
-                "MAE":          round(mae, 4),
-                "log_MAE":      round(float(np.mean(np.abs(lp - lt))), 4),
+                "spearman_rho":  round(spearman, 4),
+                "log_R2":        round(1.0 - sr / st if st > 0 else 0.0, 4),
+                "MAE":           round(mae, 4),
+                "log_MAE":       round(float(np.mean(log_diff)), 4),
+                "factor_acc_2x": round(float(np.mean(log_diff < np.log(2))), 4),
             }
         else:
             m = {

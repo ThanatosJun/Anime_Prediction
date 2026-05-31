@@ -78,3 +78,4 @@ src_2/embedding/
 src_2/data/image/crops/
 src_2/runs/
 src_2/fussion_training/meta_encoder.json
+src_2/component_image_text_description/model-torii-hf
