@@ -14,15 +14,28 @@
 | `prompts.py` | 10 種 caption prompt 模板 + `make_user_query()` |
 | `config.py` | 讀取設定檔 |
 | `torii_config.yaml` | 設定（模型路徑、caption 模式） |
+| `run_poc_describe.py` | POC 腳本：對 N 部動畫 cover 批次生成描述 → `poc_descriptions.csv` |
 
-模型權重放在：`src_2/component_image_text_description/model-torii/`
+## 模型權重（兩種後端，二擇一）
+
+| 後端 | 目錄 | 內容 | 觸發條件 |
+|------|------|------|---------|
+| **transformers**（POC 用）| `model-torii-hf/` | HF safetensors（`model.safetensors` ~10GB + config/tokenizer）| 目錄內**無** `.gguf` |
+| GGUF（llama-cpp）| `model-torii/` | `ToriiGate-0.5_Q8_0.gguf`（5.1GB Q8 量化）| 目錄內**有** `.gguf` |
+
+> `describer._detect_backend()`：路徑為 `.gguf` 檔或資料夾內含 `.gguf` → GGUF 後端；否則 → transformers。
+> ⚠️ 因此 HF 權重須放 `model-torii-hf/`（不可與 gguf 同目錄，否則會誤選 GGUF 後端）。
 
 ---
 
 ## 安裝依賴
 
 ```bash
-pip install transformers
+# transformers 後端（HF safetensors，POC 用）
+pip install transformers accelerate    # accelerate 為 device_map 載入所需
+
+# GGUF 後端（可選，需 CUDA build）
+pip install llama-cpp-python
 ```
 
 > v0.5 **不需要** `qwen-vl-utils`（v0.4 才需要）
@@ -36,7 +49,8 @@ pip install transformers
 ```python
 from describer import ToriiGateDescriber
 
-describer = ToriiGateDescriber('src_2/component_image_text_description/model-torii')
+# transformers 後端（HF safetensors）；GGUF 後端改指向 model-torii/
+describer = ToriiGateDescriber('src_2/component_image_text_description/model-torii-hf')
 
 # 基本描述（long_thoughts_v2，最詳細）
 text = describer.describe('image.jpg')
@@ -60,6 +74,17 @@ python describer.py path/to/image.jpg           # 預設 long_thoughts_v2
 python describer.py path/to/image.jpg short
 python describer.py path/to/image.jpg json
 ```
+
+### POC 批次描述（驗證 VLM 描述能否補強 text 分支）
+
+```bash
+# 對 train split 隨機 50 部 cover 生成描述 → poc_descriptions.csv
+python src_2/component_image_text_description/run_poc_describe.py --n 50 --mode short
+```
+
+目的：將 VLM 描述當作 text 分支的**替代/並接輸入來源**（非補 Swin 視覺），
+驗證是否比官方 description 帶更多預測訊號（text Captum 貢獻僅 0.027，rag_text 0.004）。
+輸出 `poc_descriptions.csv`（id, title, has_cover, description）供人工檢視語意品質。
 
 ---
 

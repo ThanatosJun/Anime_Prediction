@@ -3,7 +3,9 @@ Fusion Model 特徵重要性分析
 
 1. Captum IntegratedGradients：各 modality 層級貢獻
    - image（yolo / cover / banner）、text、meta、rag
-2. SHAP DeepExplainer：meta features 各維度貢獻（56 可解釋維度）
+2. SHAP GradientExplainer：meta features 各維度貢獻（56 可解釋維度）
+   （改用 GradientExplainer 而非 DeepExplainer：對 attention/LayerNorm/GELU 等
+    複雜算子更穩健，不會觸發 additivity 檢查失敗）
 
 前置安裝：
     pip install captum shap

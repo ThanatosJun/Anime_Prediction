@@ -20,7 +20,11 @@ conda activate animeprediction   # 或對應的 Python 環境
 | `src_2/component_image/model-image/best/` | Fine-tuned Swin-B（`config.json` + `model.safetensors`） |
 
 ### 必要服務
-- **Docker**（Qdrant 用）
+- **Docker**（Qdrant 用）— Step 4、5（RAG 建置/查詢）與 Step 10（推論）需運行
+
+### 可解釋性 / VLM 額外依賴
+- Step 9（explain）：`captum` / `shap`（已列入 `requirements.txt`）
+- `component_image_text_description/`（VLM 圖片描述，探索中）：`transformers` + `accelerate`
 
 ---
 
@@ -131,22 +135,25 @@ python src_2/train.py --target meanScore
 |------|------|
 | `src_2/runs/{run_id}/{target}/best_model.pt` | 最佳 val loss 的 checkpoint |
 | `src_2/runs/{run_id}/{target}/target_scaler.json` | 目標值正規化參數（center / scale / log_transform） |
-| `src_2/runs/{run_id}/{target}/history.json` | 每 epoch 的 train_loss / val_loss / val_mae / lr |
-| `src_2/runs/{run_id}/{target}/final_metrics.json` | 訓練結束後 train + val 的完整 metrics |
+| `src_2/runs/{run_id}/{target}/history.json` | 每 epoch 的 train_loss / val_loss / val_mae（原始 scale）/ lr |
+| `src_2/runs/{run_id}/{target}/final_metrics.json` | 訓練結束後 train + val 的完整 metrics（test 由 Step 7 merge 進來） |
 | `src_2/fussion_training/meta_encoder.json` | 訓練集 fit 的 MetaEncoder（自動生成，只需 fit 一次） |
 
-### final_metrics.json 格式
+### final_metrics.json 格式（popularity 範例，含 test）
 
 ```json
 {
-  "run_id": "01",
+  "run_id": "07",
   "target": "popularity",
   "notes": "...",
-  "best_epoch": 7,
-  "train": { "spearman_rho": 0.95, "log_R2": 0.90, "MAE": 4849, "log_MAE": 0.49 },
-  "val":   { "spearman_rho": 0.89, "log_R2": 0.81, "MAE": 9924, "log_MAE": 0.78 }
+  "best_epoch": 8,
+  "train": { "spearman_rho": 0.93, "log_R2": 0.87, "MAE": 4957, "log_MAE": 0.56, "factor_acc_2x": 0.59 },
+  "val":   { "spearman_rho": 0.88, "log_R2": 0.81, "MAE": 9295, "log_MAE": 0.79, "factor_acc_2x": 0.53 },
+  "test":  { "spearman_rho": 0.85, "log_R2": 0.76, "MAE": 9499, "log_MAE": 0.89, "factor_acc_2x": 0.49 }
 }
 ```
+
+> meanScore 的指標欄位為 `spearman_rho / R2 / MAE / acc_within_10pt`（無 log 版，見 Step 7）。
 
 ---
 
@@ -172,10 +179,12 @@ python src_2/evaluate.py --target popularity --split test
 | Metric | Target | 說明 |
 |--------|--------|------|
 | `spearman_rho` | 兩者 | 排名相關係數，主要指標 |
-| `log_R2` | popularity | log1p 空間的 R²，匹配訓練目標 |
-| `R2` | meanScore | 原始 scale 的 R² |
+| `log_R2` | popularity | log1p 空間的 R²，匹配訓練目標（原始 R² 會被少數爆紅動畫綁架） |
+| `R2` | meanScore | 原始 scale 的 R²（0–100 線性，不需 log） |
 | `MAE` | 兩者 | 原始 scale 的平均絕對誤差 |
-| `log_MAE` | popularity | log1p 空間的 MAE，scale-free |
+| `log_MAE` | popularity | log1p 空間的 MAE，scale-free（0=完美，naive≈2.0） |
+| `factor_acc_2x` | popularity | 預測落在真實值 [0.5×, 2×] 內的比例（乘法尺度準確率，0~1） |
+| `acc_within_10pt` | meanScore | 預測誤差 < 10 分的比例（加法尺度準確率，0~1；facc_2x 對 0–100 分無鑑別力） |
 
 ---
 
@@ -195,9 +204,15 @@ python src_2/evaluate.py --split holdout_unknown
 
 ## Step 9：可解釋性分析
 
-### 前置安裝
+> explain **不需要 Qdrant**（讀預存的 `rag_features` parquet）。`captum` / `shap` 已列入 `requirements.txt`。
+
+### 指定要解釋的 run
+
+explain 腳本從 config 的 `run_id` 決定載哪個 checkpoint + 輸出位置。最佳 run 為 pop=07 / score=02，需用對應 run_id 的 config：
+
 ```bash
-pip install captum shap matplotlib
+python3 -c "import yaml; c=yaml.safe_load(open('src_2/fussion_configs.yaml')); c['output']['run_id']='07'; yaml.dump(c, open('/tmp/run07.yaml','w'), allow_unicode=True)"
+python3 -c "import yaml; c=yaml.safe_load(open('src_2/fussion_configs.yaml')); c['output']['run_id']='02'; yaml.dump(c, open('/tmp/run02.yaml','w'), allow_unicode=True)"
 ```
 
 ### RAG Attention Heatmap
@@ -205,39 +220,65 @@ pip install captum shap matplotlib
 顯示模型對各 retrieved anime 及各 modality（meta / text / image）的注意力權重。
 
 ```bash
-# 從 val set 隨機抽 5 筆
-python src_2/explain/rag_heatmap.py --target popularity --n 5
+python src_2/explain/rag_heatmap.py --config /tmp/run07.yaml --target popularity --n 5
+python src_2/explain/rag_heatmap.py --config /tmp/run02.yaml --target meanScore  --n 5
 
 # 指定特定 anime ID
-python src_2/explain/rag_heatmap.py --target popularity --ids 12345 67890
+python src_2/explain/rag_heatmap.py --config /tmp/run07.yaml --target popularity --ids 12345 67890
 ```
 
 | 輸出 | 說明 |
 |------|------|
-| `src_2/runs/{run_id}/{target}/explain/rag/{id}_attn.png` | heatmap：x = retrieved anime，y = modality，顏色 = attention weight |
+| `src_2/runs/{run_id}/explain/{target}/rag/{id}_attn.png` | heatmap：x = retrieved anime（顯示動畫名稱），y = modality，顏色 = attention weight |
 
 ### Captum + SHAP
 
 ```bash
 # Captum（modality 貢獻）+ SHAP（meta feature 貢獻），各抽 20 筆
-python src_2/explain/feature_attr.py --target popularity --n 20
+python src_2/explain/feature_attr.py --config /tmp/run07.yaml --target popularity --n 20 --background 50
 
 # 只跑其中一個
-python src_2/explain/feature_attr.py --target popularity --skip_shap
-python src_2/explain/feature_attr.py --target popularity --skip_captum
+python src_2/explain/feature_attr.py --config /tmp/run07.yaml --target popularity --skip_shap
+python src_2/explain/feature_attr.py --config /tmp/run07.yaml --target popularity --skip_captum
 ```
 
 | 輸出 | 說明 |
 |------|------|
-| `explain/feature/captum_modality.csv` | 每筆 sample 的各 modality 歸一化重要性 |
-| `explain/feature/captum_modality.png` | 平均 modality 重要性長條圖 |
-| `explain/feature/shap_values.npy` | raw SHAP values `[n, 56]` |
-| `explain/feature/shap_summary.png` | top-k meta feature 重要性（`release_year`, `genre_Action` 等） |
+| `explain/{target}/feature/captum_modality.csv` | 每筆 sample 的各 modality 歸一化重要性 |
+| `explain/{target}/feature/captum_modality.png` | 平均 modality 重要性長條圖（8 模態） |
+| `explain/{target}/feature/shap_values.npy` | raw SHAP values `[n, 56]` |
+| `explain/{target}/feature/shap_summary.png` | top-k meta feature 重要性（`prequel_meanScore_mean`, `va_te_*` 等） |
 
 | 分析方法 | 說明 |
 |----------|------|
-| **Captum IG** | Integrated Gradients，計算各 modality 對最終預測的貢獻（image_yolo / image_cover / image_banner / text / meta / rag） |
-| **SHAP** | 固定 image/text/rag，對 meta 的 56 個可解釋維度計算 Shapley value（哪些 metadata 欄位影響預測最大） |
+| **Captum IG** | Integrated Gradients，計算 8 模態貢獻（image_yolo / image_cover / image_banner / text / meta / rag_meta / rag_text / rag_image） |
+| **SHAP GradientExplainer** | 固定 image/text/rag，對 meta 的 56 個可解釋維度計算貢獻（用 GradientExplainer 而非 DeepExplainer，對 attention/LayerNorm 較穩健） |
+
+---
+
+## Step 10：推論 Pipeline（新動畫即時預測）
+
+`src_2/inference.py`：給定一部新動畫（封面圖 + metadata + 描述），即時走完 YOLO → Swin → e5 → RAG → FusionModel。**需 Qdrant 運行**（RAG 用）。
+
+```bash
+bash src_2/RAG/start_qdrant.sh        # 確認 Qdrant 運行中
+
+# metadata 用單列 CSV（欄位同訓練 schema，可無 popularity/meanScore）
+python src_2/inference.py \
+    --cover  path/to/cover.jpg \
+    --banner path/to/banner.jpg \
+    --meta   path/to/new_anime.csv \
+    --description "動畫劇情描述..."
+
+# 驗證模式：用既有 test 動畫，對照 pred_test.csv
+python src_2/inference.py --anime-id 21294 --split test --verify
+```
+
+| 項目 | 說明 |
+|------|------|
+| 輸出 | stdout 印出 `popularity` / `meanScore` / `retrieved_ids` |
+| 最佳 checkpoint | popularity → `runs/07/...`；meanScore → `runs/02/...`（架構相同，僅超參不同） |
+| RAG 檢索 | 預設 `rag_use_image=False`（image_rag 僅 train，val/test 為 sparse+text，對齊驗證指標） |
 
 ---
 
@@ -258,7 +299,19 @@ Step 1（Text Emb）────────────────────
 Step 2（YOLO Crop）→ Step 3（Image Emb）─────────┤
 Step 1 + Step 3 → Step 4（Qdrant）→ Step 5（RAG）┤
                                                   ↓
-                                            Step 6（Train）→ Step 7（Eval）→ Step 8（Holdout）
+                          Step 6（Train）→ Step 7（Eval）→ Step 8（Holdout）
+                                  ↓                ↓
+                          Step 9（Explain）   Step 10（Inference，新動畫，需 Qdrant）
 ```
 
-Steps 1–5 只需執行一次（資料不變時）。Steps 6–8 每次新實驗重跑。
+- Steps 1–5 只需執行一次（資料不變時）。Steps 6–8 每次新實驗重跑。
+- Step 9（explain）/ Step 10（inference）用已訓練 checkpoint，隨需執行。
+- **Qdrant 需運行的步驟**：Step 4、5（建置/查詢）與 Step 10（推論）。Step 6–9 不需 Qdrant（讀預存 parquet）。
+
+---
+
+## 超參數範圍（注意）
+
+per-target 可調：loss（Huber/LogCosh，由 target 決定）、`log_transform`、`winsor_pct`、`trend_head`/`temporal_weight` 的 `apply_to`。
+**全域共用**（兩 target 同一組）：`dropout`、`weight_decay`、`lr`、`batch_size`。
+→ 兩 target 各自最佳超參（pop: dropout=0.3,wd=1e-3；score: dropout=0.5,wd=5e-4）目前靠 `--target` 分開跑、各帶不同 config 達成。

@@ -97,6 +97,7 @@ RAG retrieved items                                          │              �
 - **DataLoader**：`num_workers=min(4, cpu_count())`，`persistent_workers=True`
 - **train_separately**：true → 同一 script 兩遍循環，各 target 獨立模型
 - **Checkpoint**：每 epoch 若 val_loss 改善則儲存 `best_model.pt` + `target_scaler.json`
+- **超參數範圍**：per-target 僅 loss / log_transform / winsor_pct / trend_head·temporal_weight 的 apply_to；`dropout` / `weight_decay` / `lr` / `batch_size` 為**全域共用**。兩 target 各自最佳超參（pop: dropout=0.3,wd=1e-3；score: dropout=0.5,wd=5e-4）目前靠 hp_search 以 `--target` 分開跑達成，單一 config 一次跑兩 target 無法同時最佳化
 
 執行：
 
@@ -110,7 +111,7 @@ python src_2/train.py --target popularity
 | `src_2/runs/{run_id}/{target}/best_model.pt` | 最佳 val loss checkpoint |
 | `src_2/runs/{run_id}/{target}/target_scaler.json` | 正規化參數 |
 | `src_2/runs/{run_id}/{target}/history.json` | 訓練曲線（含 run_id / notes） |
-| `src_2/runs/{run_id}/{target}/final_metrics.json` | train + val 全量 metrics（含 run_id / notes） |
+| `src_2/runs/{run_id}/{target}/final_metrics.json` | train / val / test 全量 metrics（evaluate.py 會 merge test，含 run_id / notes） |
 
 建置清單：
 - [x] `src_2/fussion_training/meta_encoder.py`（56-dim）
@@ -159,21 +160,29 @@ python src_2/evaluate.py --split holdout_unknown
 
 | 輸出 | 說明 |
 |------|------|
-| `src_2/runs/{run_id}/{target}/final_metrics.json` | train / val / test 完整 metrics 合併於此（spearman_rho / R2 or log_R2 / MAE / log_MAE） |
+| `src_2/runs/{run_id}/{target}/final_metrics.json` | train / val / test 完整 metrics 合併於此 |
 | `src_2/runs/{run_id}/{target}/pred_{split}.csv` | id, pred, target（原始 scale） |
 
-- [x] `src_2/evaluate.py`（spearman_rho / R2 or log_R2 / MAE / log_MAE，results merge 進 final_metrics.json）
+指標（per target，與 train.py / evaluate.py 一致）：
+- **popularity**：`spearman_rho` / `log_R2` / `MAE` / `log_MAE` / `factor_acc_2x`（log 空間，乘法尺度）
+- **meanScore**：`spearman_rho` / `R2` / `MAE` / `acc_within_10pt`（原始尺度，加法尺度 ±10 分）
+
+- [x] `src_2/evaluate.py`（指標如上，results merge 進 final_metrics.json）
 - [x] Test set 評估完成（final_metrics.json 含 train / val / test）
 - [x] Holdout 推論（pred_holdout_unknown.csv）
 
-### Step 9：可解釋性分析
+### Step 9：可解釋性分析 — 模型端建置
+
+> 完整執行指令、修正紀錄與分析結果見 **Step 13**（同一套腳本，指令一致）。本步驟記錄模型端支援可解釋性的 plumbing。
 
 ```bash
-# RAG attention heatmap
-python src_2/explain/rag_heatmap.py --target popularity --n 5
+pip install captum shap   # 前置安裝
 
-# Captum（modality 貢獻）+ SHAP（meta feature 貢獻）
-python src_2/explain/feature_attr.py --target popularity --n 20
+# RAG attention heatmap（需 --config 指向目標 run，見 Step 13）
+python src_2/explain/rag_heatmap.py --config <run07.yaml> --target popularity --n 5
+
+# Captum（modality 貢獻）+ SHAP GradientExplainer（meta feature 貢獻）
+python src_2/explain/feature_attr.py --config <run07.yaml> --target popularity --n 20 --background 50
 ```
 
 | 輸出 | 說明 |
@@ -188,30 +197,23 @@ python src_2/explain/feature_attr.py --target popularity --n 20
 - [x] `src_2/fussion_training/cross_attention.py`（`return_attn=True` 回傳 `[batch, top_k, 3]` weights）
 - [x] `src_2/fussion_training/model.py`（`forward(batch, return_attn=True)`）
 - [x] `src_2/explain/rag_heatmap.py`（RAG attention heatmap）
-- [x] `src_2/explain/feature_attr.py`（Captum IG + SHAP DeepExplainer）
+- [x] `src_2/explain/feature_attr.py`（Captum IG + SHAP GradientExplainer）
 - [x] `src_2/requirements.txt`
-
-前置安裝（Step 9）：
-```bash
-pip install captum shap
-```
 
 ---
 
-## ⏳ 待完成
+### ✅ Step 10：整個 Pipeline 最佳效果
 
-### Step 10：整個 Pipeline 最佳效果
+從 hp_search（Run03~09）找出最佳超參數組合，以 test set 驗證最終效果。
 
-從 hp_search（Run04~09）找出最佳超參數組合，以 test set 驗證最終效果。
+| Target | val 最佳 | **test 最佳（實際採用）** | test 主指標 |
+|--------|---------|--------------------------|------------|
+| popularity | hp07 | **Run07** | log_MAE 0.8904 / facc_2x 0.4856 |
+| meanScore | hp08 | **Run02** | MAE 7.2937 / within_10pt 0.7360 |
 
-| Target | 最佳 run（val） | 最佳設定 |
-|--------|----------------|---------|
-| popularity | hp07 | dropout=0.3, wd=1e-3, batch=512 |
-| meanScore | hp08 | dropout=0.5, wd=5e-4, batch=512 |
-
-- [ ] 對 hp07（popularity）執行 `python src_2/evaluate.py --split test --target popularity --config <hp07_config>`
-- [ ] 對 hp08（meanScore）執行 `python src_2/evaluate.py --split test --target meanScore --config <hp08_config>`
-- [ ] 更新 `src_2/README.md` 實驗記錄（test metrics）
+- [x] hp07 / hp08 test 評估完成（`python src_2/evaluate.py --split test --config <run_config>`）
+- [x] 更新 `src_2/README.md` 實驗記錄（含完整 test metrics）
+- [x] **關鍵發現**：meanScore 的 test 最佳是 Run02 而非 val 最佳的 hp08——distribution shift 導致「val 最佳 ≠ test 最佳」
 
 ---
 
@@ -349,15 +351,50 @@ python src_2/explain/feature_attr.py --config <run07.yaml> --target meanScore  -
 
 ---
 
-### Step 14：推論 Pipeline
+### ✅ Step 14：推論 Pipeline
 
-給定一部新動畫（封面圖 + metadata + 描述），即時走完完整推論流程：
+`src_2/inference.py`：給定一部新動畫（封面圖 + metadata + 描述），即時走完完整推論流程。
 
-- [ ] YOLO crop（人物／臉部）
-- [ ] Swin-B embedding（cover + banner + yolo）
-- [ ] e5-base-v2 text embedding
-- [ ] RAG query（Qdrant）
-- [ ] FusionModel inference → popularity / meanScore 預測
+```bash
+# 啟動 Qdrant（RAG 需要）
+bash src_2/RAG/start_qdrant.sh
+
+# 新動畫推論（metadata 用單列 CSV，欄位同訓練 schema）
+python src_2/inference.py \
+    --cover  path/to/cover.jpg \
+    --banner path/to/banner.jpg \
+    --meta   path/to/new_anime.csv \
+    --description "動畫劇情描述..."
+
+# 驗證模式：用既有 test 動畫，對照 pred_test.csv
+python src_2/inference.py --anime-id 21294 --split test --verify
+```
+
+流程（`InferencePipeline.predict`）：
+- [x] YOLO crop（封面 → 人物/臉部，in-memory）
+- [x] Swin-B embedding（cover + banner + yolo，各 1024-dim）
+- [x] e5-base-v2 text embedding（描述 → 768-dim）
+- [x] RAG query（Qdrant，sparse+text 檢索，對齊 val/test 行為）
+- [x] FusionModel inference → popularity / meanScore（載最佳 checkpoint）
+
+最佳 checkpoint（架構相同，僅超參不同）：
+| Target | run | checkpoint |
+|--------|-----|-----------|
+| popularity | Run07 | `runs/07/popularity/best_model.pt`（log_MAE 0.8904） |
+| meanScore | Run02 | `runs/02/meanScore/best_model.pt`（MAE 7.2937） |
+
+實作重點與驗證：
+| 項目 | 說明 |
+|------|------|
+| **模組隔離載入** | component_text / component_image / RAG / fussion_training 各有同名 `config.py`/`model.py`，用 `importlib` 以唯一名稱隔離載入避免衝突 |
+| **RAG modality 對齊** | `image_rag/` 只有 train embedding → val/test 檢索為 **sparse+text only**；pipeline 預設 `rag_use_image=False` 以重現驗證指標（否則撈回不同鄰居） |
+| **驗證（test 動畫 21294）** | cover/banner embedding 逐位元一致（Δ=0）；RAG 撈回同一組鄰居；yolo 因預存 crops 經 JPEG round-trip 而微差（pipeline 直接裁切→Swin，更乾淨） |
+
+---
+
+## ⏳ 待完成
+
+（暫無；VLM 文字描述並接 text 分支為探索中方向，見 `component_image_text_description/`）
 
 ---
 
