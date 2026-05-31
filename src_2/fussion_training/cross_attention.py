@@ -42,13 +42,14 @@ class RAGCrossAttention(nn.Module):
         num_heads: int = 4,
         dropout: float = 0.1,
         attn_dropout: float = 0.1,
+        rag_image_dim: int = 1024,
     ):
         super().__init__()
 
-        # RAG 三種模態的 Projection Block
-        self.rag_meta_proj  = ProjectionBlock(10,   proj_dim, dropout)
-        self.rag_text_proj  = ProjectionBlock(768,  proj_dim, dropout)
-        self.rag_image_proj = ProjectionBlock(1024, proj_dim, dropout)
+        # RAG 三種模態的 Projection Block（rag_image_dim 隨 image embed mode 變動）
+        self.rag_meta_proj  = ProjectionBlock(10,            proj_dim, dropout)
+        self.rag_text_proj  = ProjectionBlock(768,           proj_dim, dropout)
+        self.rag_image_proj = ProjectionBlock(rag_image_dim, proj_dim, dropout)
 
         # Multi-Head Cross Attention
         self.attn = nn.MultiheadAttention(

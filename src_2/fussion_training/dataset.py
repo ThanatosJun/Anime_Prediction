@@ -289,6 +289,7 @@ class AnimeDataset(Dataset):
         self.image_map, self.image_mask_map = _load_image_emb_stack(str(img_path), self.image_mode)
         _sample_img = next(iter(self.image_map.values()))
         self.n_image_modality = _sample_img.shape[0]  # 1, 2, or 3
+        self.image_dim        = _sample_img.shape[1]  # 自動偵測：pooler=1024 / stage=1920
 
         # ── target ─────────────────────────────────────────────────────────
         self.target_col = target
@@ -317,6 +318,9 @@ class AnimeDataset(Dataset):
             self.rag_text_map  = (self.text_map if split == "train"
                                   else _load_emb_parquet(str(text_train_path)))
             self.rag_image_map = _load_emb_parquet(str(img_rag_path))
+            # RAG image 維度自動偵測（可獨立於主 image：pooler=1024 / stage=1920）
+            self.rag_image_dim = (len(next(iter(self.rag_image_map.values())))
+                                  if self.rag_image_map else 1024)
 
             # retrieved ids
             rag_indexed  = rag_df.set_index("id")
@@ -335,8 +339,10 @@ class AnimeDataset(Dataset):
 
         # ── fallback dims ──────────────────────────────────────────────────
         sample_text = next(iter(self.text_map.values()))
-        self.text_dim  = len(sample_text)       # 768
-        self.image_dim = 1024                   # 每個模態固定 1024-dim（Swin-B）
+        self.text_dim = len(sample_text)        # 768
+        # self.image_dim 已於 image 載入時自動偵測（pooler=1024 / stage=1920）
+        if not self.use_rag:
+            self.rag_image_dim = self.image_dim
 
     def __len__(self) -> int:
         return len(self.ids)
@@ -345,9 +351,9 @@ class AnimeDataset(Dataset):
         anime_id = self.ids[idx]
 
         text   = self.text_map.get(anime_id, np.zeros(self.text_dim, dtype=np.float32))
-        # image_emb: [N_modality, 1024]，image_mask: [N_modality] True=缺失
+        # image_emb: [N_modality, image_dim]，image_mask: [N_modality] True=缺失
         image  = self.image_map.get(
-            anime_id, np.zeros((self.n_image_modality, 1024), dtype=np.float32))
+            anime_id, np.zeros((self.n_image_modality, self.image_dim), dtype=np.float32))
         i_mask = self.image_mask_map.get(
             anime_id, np.ones(self.n_image_modality, dtype=bool))
         meta   = self.meta_feats[anime_id]
@@ -366,13 +372,13 @@ class AnimeDataset(Dataset):
         if self.use_rag:
             rids = self.retrieved_ids_map.get(anime_id, [])
 
-            rag_text  = np.zeros((self.top_k, self.text_dim), dtype=np.float32)
-            rag_image = np.zeros((self.top_k, 1024),          dtype=np.float32)
+            rag_text  = np.zeros((self.top_k, self.text_dim),      dtype=np.float32)
+            rag_image = np.zeros((self.top_k, self.rag_image_dim), dtype=np.float32)
             rag_mask  = np.ones(self.top_k, dtype=bool)   # True = padding
 
             for i, rid in enumerate(rids):
                 rag_text[i]  = self.rag_text_map.get(rid,  np.zeros(self.text_dim))
-                rag_image[i] = self.rag_image_map.get(rid, np.zeros(1024))
+                rag_image[i] = self.rag_image_map.get(rid, np.zeros(self.rag_image_dim))
                 rag_mask[i]  = False  # valid
 
             # 全遮罩 → MultiheadAttention softmax 產生 NaN；強制第 0 格有效

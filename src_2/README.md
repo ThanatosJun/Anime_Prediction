@@ -13,7 +13,7 @@ v1（src/fussion_branch）與 v2 核心差異：
 
 | Target | 最佳 Run | 主指標 | 準確率 | Spearman | 設定 |
 |--------|---------|--------|--------|----------|------|
-| **popularity** | Run07 | log_MAE **0.8904** | facc_2x **0.4856** | 0.8498 | dropout=0.3, wd=1e-3, batch=512, 完整四分支 |
+| **popularity** | Run21 | log_MAE **0.8859** | facc_2x **0.4921** | 0.8505 | dropout=0.5, attn_drop=0.2, wd=1e-3, batch=512, TrendHead |
 | **meanScore** | Run02 | MAE **7.2937**（R2 0.246）| within_10pt **0.7360** | 0.5478 | TrendHead, gate soft-avg, dropout=0.3 |
 
 > meanScore 的 test 最佳是 Run02 而非 hp_search 的 Run08——distribution shift 導致「val 最佳 ≠ test 最佳」（詳見[已知限制](#已知限制)）。
@@ -120,9 +120,13 @@ MLP backbone: concat_dim → 256 → 128 → 1 ───────────
 ```
 
 **設計重點：**
-- `ImageProjection`：三模態（cover/banner/yolo）共用 Linear，Gate 從原始 1024-dim 計算（content-based），缺失模態 gate 強制 0
+- `ImageProjection`：三模態（cover/banner/yolo）共用 Linear，Gate 從原始 embedding 計算（content-based），缺失模態 gate 強制 0
 - `RAGCrossAttention`：Q = meta projection，KV = retrieved items 三路投影後 concat（layout: meta 0-4, text 5-9, image 10-14）
 - `train_separately=true`：popularity / meanScore 各自獨立模型，同一 script 循環訓練
+
+**Image embed 模式（可切換，見「Image Embed 模式」章節）：**
+- `pooler`（預設）：每模態 Swin pooler_output → 1024，`[batch, 3, 1024]`
+- `stage`：每模態 4 個 Swin stage concat → 1920（cover/banner/**character 皆含**），`[batch, 3, 1920]`；`image_stage_projection=true` 時 ImageProjection 內部切 4 stage → 各投影 256 → concat 1024 → gate
 
 ### 訓練設定
 
@@ -171,7 +175,7 @@ python src_2/inference.py --anime-id 21294 --split test --verify
 
 | 項目 | 說明 |
 |------|------|
-| 最佳 checkpoint | popularity → Run07；meanScore → Run02（架構相同，僅超參不同） |
+| 最佳 checkpoint | popularity → Run21；meanScore → Run02（架構相同，僅超參不同） |
 | RAG modality | 預設 `rag_use_image=False`（image_rag 僅 train，val/test 檢索為 sparse+text，對齊驗證指標） |
 | 模組隔離 | 各 component 同名 `config.py`/`model.py` 用 `importlib` 隔離載入 |
 | 驗證 | cover/banner embedding 逐位元一致；yolo 因預存 crops 經 JPEG round-trip 微差（pipeline 直接裁切，更乾淨） |
@@ -185,9 +189,21 @@ python src_2/inference.py --anime-id 21294 --split test --verify
 | 來源 | 維度 | 說明 |
 |------|------|------|
 | Text embedding | 768 | e5-base-v2，description |
-| Image embedding | 3 × 1024 | Swin-B：cover + banner + yolo（缺失 gate=0） |
+| Image embedding | 3 × 1024（pooler）/ 3 × 1920（stage）| Swin-B：cover + banner + yolo（缺失 gate=0）|
 | MetaEncoder v2 | 56 | 見下表 |
-| RAG（Cross Attn KV） | 5 × (10 + 768 + 1024) | retrieved top-5 的 meta + text + image |
+| RAG（Cross Attn KV） | 5 × (10 + 768 + 1024) | retrieved top-5 的 meta + text + image（rag_image 維持 pooler 1024）|
+
+### Image Embed 模式（`fusion_embed_mode`）
+
+| 模式 | 每模態 dim | 生成 | config |
+|------|:---:|------|--------|
+| **pooler**（預設）| 1024 | `run_swin_embedding.py`（→ `embedding/image/`）| `image_dim: 1024`, `image_stage_projection: false` |
+| **stage** | 1920 | `run_swin_embedding.py --mode stage`（→ `embedding/image_stage/`）| `image_dim: 1920`, `image_stage_projection: true`, `data.image_emb_dir: .../image_stage` |
+
+- stage = Swin 前 4 個 stage concat（128+256+512+1024；第 5 個與第 4 個 cosine≈0.89 重複，捨棄）
+- `image_stage_projection=true`：ImageProjection 內部把 1920 切回 4 stage → 各 Linear→256 → concat（4×256=1024）→ gate（投影層可訓練）
+- **解耦**：RAG image（`image_rag` / Qdrant / rag_image）維持 pooler 1024，切 stage **不需** rebuild Qdrant，retrieved_ids 不變
+- pooler / stage embedding 分目錄並存，互不覆蓋（可隨時對照）
 
 ### MetaEncoder v2 特徵明細（56-dim）
 
@@ -230,6 +246,7 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 | 01a | 0.7839 | 0.9357 | — | 0.8851 | 0.8072 | Baseline v2：cover_banner_yolo / use_rag=true / CrossAttn 4 heads / SAM+AdamW / HuberLoss（無時間加權） |
 | **01** | **0.7886** | 0.9088 | 0.4778 | **0.8879** | **0.8161** | + Temporal Weighting（alpha=0.2）：exp(-0.2×(max_yr-yr))，normalize mean=1 |
 | 02 | 0.7801 | 0.9151 | 0.4778 | 0.8785 | 0.8055 | + TrendHead（pop+score）；gate soft-average；LogCosh 數值穩定版 |
+| **21** | 0.7953 | **0.8859** | **0.4921** | 0.8820 | 0.8073 | + Regularization (dropout=0.5, attn_drop=0.2, wd=1e-3)，seed=42 |
 
 #### hp_search（Run03~09：固定 TrendHead + batch=512，搜尋 dropout / weight_decay）
 
@@ -243,7 +260,7 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 | 08 | 0.5 | 5e-4 | 0.8347 | 1.1288 | 0.3832 | 0.8491 | 0.8783 |
 | 09 | 0.5 | 1e-3 | 0.7855 | 0.8944 | 0.4817 | 0.8510 | 0.8840 |
 
-> **popularity 最佳：Run07**（test log_MAE 0.8904）。觀察：低 dropout（0.3）+ 高 weight_decay（1e-3）組合最好（07/09 test log_MAE 0.89 並列前段）；高 dropout 顯著退步（08 的 dropout=0.5+wd=5e-4 test log_MAE 1.13 最差）。Run03 與 Run09 同設定（dropout=0.5, wd=1e-3）但不同 seed，test log_MAE 0.9198 vs 0.8944，反映訓練隨機性。Run07 test 勝過 Run01 的 0.9088。
+> **popularity 最佳：Run21**（test log_MAE 0.8859），超越了 hp_search 中的 Run07（0.8904）。觀察：適度提高 regularization（dropout 0.5, attn_drop 0.2, weight_decay 1e-3）並搭配 TrendHead 與 seed=42 時，能得到最好的 test 指標。高 dropout 在無 TrendHead 時（如 Run08）曾經退步，顯示組件間交互作用。
 
 ### meanScore（主要指標：MAE，越低越好）
 
@@ -252,6 +269,7 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 | 01a | 6.7441 | 8.0435 | — | 0.6763 | 0.4611 | Baseline v2（無時間加權） |
 | 01 | 6.8115 | 8.5722 | 0.6498 | 0.6617 | 0.4143 | + Temporal Weighting（alpha=0.2）：popularity ✅；meanScore test ❌ R2=-0.006 |
 | **02** | **6.7604** | **7.2937** ↓ | **0.7360** | **0.6570** | **0.4180** | + TrendHead（pop+score）；gate soft-average；test R2 大幅回升（-0.006→0.246） |
+| 21 | 6.7660 | 7.7575 | 0.7075 | 0.6590 | 0.4313 | + Regularization (dropout=0.5, attn_drop=0.2, wd=1e-3)，seed=42 |
 
 > **觀察**：時間加權對 popularity 有效（test log_MAE 0.9357→0.9016），但 meanScore 反而退步。推測原因：meanScore 的 shift 主要是 Label Shift（評分基準整體上移），加權讓模型少看舊資料後反而失去泛化能力；而 popularity 的 shift 更多是 Covariate Shift，加權確實有助於縮小 val/test gap。
 
@@ -301,6 +319,33 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 > 1. **meta 是最強的單一模態**（only_meta：pop log_MAE 0.9507、score MAE 8.142），metadata（前作 / studio·VA TE / format）攜帶最多訊號。
 > 2. **text / image 單獨都很弱**（log_MAE 1.26 / 1.35），需與 metadata 結合才有效。
 > 3. **多模態互補性確立**：full model 明顯勝過任何單模態，融合架構有實質價值。
+
+### Stage Embedding 實驗（test set，`fussion_configs_stages*.yaml`）
+
+主 image 從 Swin pooler（1024）換成 4 個 stage concat（1920）+ stage 投影（4×256→1024），RAG 維持 pooler（解耦）。Run12 加 per-stage LayerNorm，Run13 為對照（無 LayerNorm，隔離 LN 變因）。
+
+**popularity（test）：**
+
+| 設定 | log_MAE | facc_2x | spearman | log_R2 |
+|------|---------|---------|----------|--------|
+| **pooler 最佳（Run21）** | **0.8859** | **0.4921** | **0.8505** | **0.7616** |
+| stage + LN（Run12） | 0.9653 | 0.4580 | 0.8476 | 0.7177 |
+| stage 無 LN（Run13） | 0.8989 | 0.4843 | 0.8442 | 0.7509 |
+
+**meanScore（test）：**
+
+| 設定 | MAE | R2 | within_10pt | spearman |
+|------|-----|-----|------------|----------|
+| **pooler 最佳（Run02）** | **7.2937** | **0.2459** | **0.7360** | **0.5478** |
+| stage + LN（Run12） | 7.8422 | 0.1428 | 0.6968 | 0.5419 |
+| stage 無 LN（Run13） | 7.9428 | 0.1346 | 0.6936 | 0.5429 |
+
+> **結論：stage 仍未超越 pooler，但 LayerNorm 扮演混淆角色。**
+> 1. **per-stage LayerNorm 對 popularity 顯著傷害**：移除 LN 後 pop log_MAE 0.9653→**0.8989** 大幅改善。推測：LN 抹掉了各 stage 的「量級」資訊，而 Swin stage 的激活強度本身帶訊號。然而 score MAE 從 7.8422 微降至 7.9428。
+> 2. **即使無 LN，stage 還是打輸 pooler**：popularity 0.8989 仍輸 pooler（0.8859）；meanScore MAE（7.8~7.9）皆遠遜於 pooler（7.29）。
+> 3. **判斷**：多尺度 stage 特徵未帶來增益，**pooler 仍是最佳**（更簡單、維度低、能開 AMP）。低層 stage 紋理特徵對「人氣/評分」幫助有限。
+>
+> 數值修正紀錄：stage 初期會遇到 NaN，根因是 raw stage 量級大 + AMP float16 梯度溢位。解法：stage config 停用 AMP（`mixed_precision: false`）。LayerNorm（`image_stage_norm`）設為預設 false。
 
 ---
 

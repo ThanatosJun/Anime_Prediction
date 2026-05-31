@@ -15,9 +15,13 @@ data:
 model:
   name: microsoft/swin-base-patch4-window7-224
   pretrained: true
-  stage: false          # true → 各 stage vector；false → pooler_output (B,1024)
-  projection: false
-  project_dim: 256
+  stage: false          # output.py / ImageEmbedder 用（image_rag 路徑），true → 各 stage 分開存 _s0~s3
+                        #（注意：Fusion 的 stage 投影設定在 fussion_configs.yaml 的 image_stage_projection）
+  # run_swin_embedding.py（Fusion image 生成）的 embed 模式：
+  #   pooler → 每模態 1024（pooler_output）
+  #   stage  → 每模態 1920（4 個 stage concat：128+256+512+1024）
+  # 切換為 stage 後須同步：fussion_configs.yaml 的 model.image_dim 改 1920，並重跑 Step 3 + 6/7
+  fusion_embed_mode: pooler
 
 # ── Training (ImageEmbedder 讀取 device / batch_size) ─────────────────────────
 training:

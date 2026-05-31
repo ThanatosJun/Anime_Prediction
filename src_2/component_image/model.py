@@ -1,6 +1,5 @@
 import torch
 from transformers import SwinModel
-import torch.nn as nn
 
 
 def load_model(config):
@@ -23,28 +22,6 @@ def get_stage_embeddings(model, pixel_values):
     # stages[3]: (B, 1024,  7,  7) 整體語義、畫風流派
     outputs = model(pixel_values=pixel_values, output_hidden_states=True)
 
-    # 回傳: [(B,128), (B,256), (B,512), (B,1024)]
+    # reshaped_hidden_states 實際有 5 個 [128,256,512,1024,1024]；呼叫端（run_swin_embedding）
+    # 取前 4 個 [128,256,512,1024]（第 5 個與第 4 個 cosine≈0.89 重複）
     return [stage.mean(dim=[2, 3]) for stage in outputs.reshaped_hidden_states]
-
-
-class StageProjector(nn.Module):
-    """將各 stage embedding 投影到相同維度。
-
-    使用方式：
-        projector = StageProjector(project_dim=256).to(device)
-        optimizer = Adam(list(model.parameters()) + list(projector.parameters()))
-        projected = projector(get_stage_embeddings(model, pixel_values))
-        # projected: [(B,256), (B,256), (B,256), (B,256)]
-    """
-    _STAGE_DIMS = [128, 256, 512, 1024]
-
-    def __init__(self, project_dim: int):
-        super().__init__()
-        self.projectors = nn.ModuleList([
-            nn.Linear(d, project_dim) for d in self._STAGE_DIMS
-        ])
-
-    def forward(self, embeds):
-        # embeds: [(B,128), (B,256), (B,512), (B,1024)]
-        # 回傳:   [(B,D),  (B,D),  (B,D),  (B,D)]
-        return [proj(e) for proj, e in zip(self.projectors, embeds)]
