@@ -77,12 +77,15 @@
 4. 可對齊內部 AniList 的 image-ready rows：15,485。
 5. 保守 MAL-only image-ready popularity rows：3,798。
 6. 保守 MAL-only image-ready dual-target rows：1,209。
+7. 下載圖片後 local-ready popularity rows：3,765。
+8. 下載圖片後 local-ready dual-target rows：1,202。
 
 限制：
 
 1. 只有 cover image URL，沒有 banner image。
 2. YOLO crops 必須由下載後的 cover 圖重新產生。
-3. 仍需產生新的 text/image/RAG features，不能直接餵現有 full model。
+3. 第一版外部評估將 banner 與 YOLO branch 視為 missing modality，由
+   missing mask/zero vector 處理。
 
 ## 3. 外部考卷定義
 
@@ -116,7 +119,7 @@
 
 1. 主外部新資料考卷。
 2. 同一批樣本同時評估 popularity 與 score。
-3. 支援後續 full multimodal feature generation。
+3. 已支援 full multimodal feature generation 與 run02 外部推論。
 
 目前狀態：
 
@@ -126,7 +129,9 @@
 4. 有 release year + quarter：1,209。
 5. 有 text description：1,209。
 6. 有 cover image URL：1,209。
-7. 可直接跑目前 full multimodal model：0，需先下載圖片與產生 embeddings。
+7. local-ready rows：1,202。
+8. 已產生 text/image/RAG features。
+9. 已完成 run02 外部推論。
 
 ### MAL-only image-ready popularity-only exam
 
@@ -147,38 +152,47 @@
 3. 有 release year + quarter：3,798。
 4. 有 text description：3,798。
 5. 有 cover image URL：3,798。
-6. 可直接跑目前 full multimodal model：0，需先下載圖片與產生 embeddings。
+6. local-ready rows：3,765。
+7. 已產生 text/image/RAG features。
+8. 已完成 run02 外部推論。
 
-## 4. 為什麼目前不能直接跑 full multimodal
+## 4. Full multimodal adapter 狀態
 
-MAL-only 外部資料不是內部 AniList rows，因此缺少目前 full multimodal pipeline 依賴的中間產物。
+MAL-only 外部資料不是內部 AniList rows，因此不能直接重用內部
+train/val/test 的中間產物；但目前已補上 adapter，能將外部資料轉成
+`src_2` 可讀的 external split。
 
-主要缺口：
+目前已完成：
 
-1. 沒有現成 text embeddings。
-2. 沒有現成 image embeddings。
-3. 多數沒有內部 AniList ID。
-4. `mal2025_image_*` 有 cover URL，但還沒有 local image asset。
-5. 沒有 banner image；banner branch 應以 missing mask 處理。
-6. RAG 檢索流程目前以 AniList ID 與內部 embedding index 為中心。
+1. 下載 MAL cover image，並輸出 local-ready exam CSV。
+2. 以 `900000000 + mal_id` 建立 surrogate numeric id，避免與 AniList ID 撞號。
+3. 將 MAL metadata 轉成 `fusion_meta_clean_<split>_v2.csv`。
+4. 從 MAL description 產生 text embeddings。
+5. 從 MAL cover image 產生 image embeddings。
+6. 對缺少的 banner/YOLO 分支以 missing mask/zero vector 處理。
+7. 以內部 AniList Qdrant collection 產生 external RAG returns。
+8. 用 `run_external_inference.py` 產生 prediction 與外部 metric JSON。
 
-因此，目前 MAL-only image-ready 考卷已是清洗後 evaluation contract 與 image download manifest，但還不是可直接餵進 full model 的 inference table。
+限制仍需在論文中說明：
 
-## 5. 後續 adapter 需求
+1. 外部資料只有 cover，沒有 banner。
+2. 第一版沒有重新生成 YOLO crop embedding。
+3. RAG knowledge base 仍是內部 AniList universe，外部 rows 只作 query。
 
-等模型架構穩定後，應新增 MAL-only inference adapter。
+## 5. 第一版 run02 外部結果
 
-最低需求：
+run02 外部推論結果如下：
 
-1. 讀取 MAL-only exam CSV。
-2. 將 `external_exam_id` 作為外部 row id。
-3. 將 MAL metadata 轉成模型 metadata schema。
-4. 產生或載入 text embeddings。
-5. 定義 image-missing 策略。
-6. 定義沒有 AniList ID 時的 RAG fallback。
-7. 輸出 prediction 檔，保留 `mal_id`, `external_exam_id`, predictions, external labels。
+1. `mal2025_popularity_local_ready`，3,765 rows：
+   - popularity Spearman vs MAL `members`：0.4709。
+   - popularity log Pearson vs MAL `members`：0.5482。
+2. `mal2025_dual_local_ready`，1,202 rows：
+   - popularity Spearman vs MAL `members`：0.5495。
+   - meanScore MAE vs MAL `score * 10`：7.5086。
+   - meanScore Spearman vs MAL `score * 10`：0.6079。
 
-建議直接以 `mal2025_image_*` 做 full multimodal adapter；若 pipeline 尚未支援外部圖片，才暫時退回 text + metadata smoke test。
+這是第一版可回報的外部泛化測試。若後續模型架構或最佳 checkpoint 變動，
+應使用同一套 external split 與腳本重跑 final run。
 
 ## 6. 重跑方式
 
@@ -203,12 +217,23 @@ python scripts/external/prepare_external_model_inputs.py
 ```bash
 python scripts/external/build_external_embeddings.py \
   --splits mal2025_popularity_local_ready mal2025_dual_local_ready \
-  --modality both
+  --modality text
+python scripts/external/build_external_embeddings.py \
+  --splits mal2025_popularity_local_ready mal2025_dual_local_ready \
+  --modality image \
+  --image-model-path results/01/best
+python src_2/RAG/rag_builder.py
 python src_2/RAG/rag_query.py \
   --splits mal2025_popularity_local_ready mal2025_dual_local_ready
 python scripts/external/run_external_inference.py \
+  --run-id 02 \
   --split mal2025_dual_local_ready \
   --output-prefix run02_mal2025_dual_local_ready
+python scripts/external/run_external_inference.py \
+  --run-id 02 \
+  --split mal2025_popularity_local_ready \
+  --targets popularity \
+  --output-prefix run02_mal2025_popularity_local_ready
 ```
 
 `prepare_external_model_inputs.py` 會用 `900000000 + mal_id` 建立 numeric surrogate id，並輸出 id map sidecar，避免外部 MAL row 和內部 AniList row 撞號。
