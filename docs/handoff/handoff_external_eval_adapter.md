@@ -8,11 +8,13 @@
 
 主考卷：
 
-- `data/external_transformed/mal_july2025_mal_only_dual_target_exam.csv`
+- `data/external_transformed/mal2025_image_mal_only_dual_target_exam.csv`
 
 補充考卷：
 
-- `data/external_transformed/mal_july2025_mal_only_popularity_exam.csv`
+- `data/external_transformed/mal2025_image_mal_only_popularity_exam.csv`
+
+`mal_july2025_*` 保留為外部 label sanity check。該來源沒有圖片欄位，不作為 full multimodal 主考卷。
 
 ## 2. 輸入契約
 
@@ -37,6 +39,8 @@ MAL-only exam rows 使用 `external_exam_id` 作為推論 row id。
 15. `description`
 16. `external_popularity_members`
 17. `external_score_0_100`
+18. `external_cover_image_url`
+19. `external_cover_image_path`
 
 可選欄位：
 
@@ -44,44 +48,59 @@ MAL-only exam rows 使用 `external_exam_id` 作為推論 row id。
 2. `external_popularity_rank`
 3. `external_score_0_10`
 4. `external_scored_by`
+5. `coverImage_extraLarge`
+6. `bannerImage`
 
 ## 3. 推論策略
 
-建議分三階段接入。
+建議以 full multimodal adapter 為主，分三段落地。
 
-### A. Metadata + text smoke test
+### A. Image asset materialization
 
-用途：先驗證外部考卷是否能被模型接口吃進去。
+用途：把 exam CSV 內的 cover URL 變成本地圖片資產。
 
 需求：
 
-1. 將 MAL metadata 轉成目前 metadata encoder 接受的欄位。
+1. 讀取 `external_cover_image_url`。
+2. 下載到 `external_cover_image_path`。
+3. 失敗列保留，但在 image embedding 中標為 `has_cover=0`。
+4. banner 目前沒有來源，固定 missing。
+
+可先使用：
+
+```bash
+python scripts/external/download_external_images.py \
+  --exam-csv data/external_transformed/mal2025_image_mal_only_popularity_exam.csv \
+  --sleep 0
+python scripts/external/prepare_external_local_ready_exams.py
+```
+
+下載 popularity exam 會同時涵蓋 dual-target exam 的圖片。後續 adapter 應讀取
+`*_local_ready.csv`，避免 404 圖片列混入正式 full multimodal 評估。
+
+### B. External feature generation
+
+用途：產生目前模型需要的 metadata/text/image/RAG inputs。
+
+需求：
+
+1. 將 MAL metadata 欄位直接餵給目前 metadata encoder。
 2. 用 `description` 產生 text embeddings。
-3. image branch 使用 missing-image fallback 或關閉。
-4. RAG branch 使用 fallback 特徵或關閉。
+3. 用下載的 cover 產生 cover image embeddings。
+4. banner/yolo branch 以 zero vector + missing mask 處理，或由 cover 產生 YOLO crops。
+5. RAG 以 `release_year` + `release_quarter` 做時間過濾。
+6. 對有 `resolved_anilist_id` 的 rows 做 self-exclusion；沒有則不做 self-exclusion。
 
-### B. Metadata + text + RAG
+### C. Full multimodal inference
 
-用途：測試沒有完整 image asset 時，RAG 是否仍能提升外部泛化。
-
-需求：
-
-1. 對有 `aodb_anilist_id` 的 rows 可以用 AniList ID 做 self-exclusion。
-2. 對沒有 AniList ID 的 rows 不做 self-exclusion。
-3. 以 `release_year` + `release_quarter` 做時間過濾。
-4. 若 text embedding 不存在，回退到 global RAG fallback。
-
-### C. Full multimodal
-
-用途：模型架構穩定後的正式外部新資料推論。
+用途：用現有模型對 MAL-only rows 產生 prediction，並和外部答案比較。
 
 需求：
 
-1. 下載或解析 MAL cover image asset。
-2. 產生 image embeddings。
-3. 產生 text embeddings。
-4. 對 image-missing rows 定義 consistent fallback。
-5. 輸出雙目標 predictions。
+1. 使用 `external_exam_id` 作為外部 row id。
+2. 保留 `mal_id` 與 `resolved_anilist_id`。
+3. 分別輸出 popularity 與 meanScore prediction。
+4. 保留 inference profile，例如 `cover_only_missing_banner_yolo`。
 
 ## 4. 輸出契約
 
@@ -126,4 +145,3 @@ Score：
 2. 不把 Largest MAL User Dataset 併入主流程。
 3. 不在模型架構穩定前綁死 full multimodal inference code。
 4. 不覆蓋既有 `data/processed` train/val/test 檔案。
-

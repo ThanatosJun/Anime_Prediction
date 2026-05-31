@@ -39,9 +39,9 @@
 
 用途：
 
-1. 主要外部評估資料。
+1. 外部 label sanity check。
 2. 對齊後的 cross-platform label sanity check。
-3. 建立 MAL-only 外部新考卷。
+3. 建立 text/metadata-only MAL-only 外部新資料候選。
 
 外部 label 對應：
 
@@ -57,6 +57,32 @@
 4. MAL-only rows：9,545。
 5. MAL-only dual-target rows：2,510。
 6. MAL-only popularity-only rows：9,545。
+7. 原始 CSV 沒有 image/cover/banner/thumbnail 欄位。
+
+因此 July 2025 不作為 full multimodal 外部考卷，只保留作為外部答案與文字/metadata 檢查資料。
+
+### MyAnimeList 2025
+
+用途：
+
+1. 正式 full multimodal MAL-only 外部考卷來源。
+2. 提供 MAL ID、cover image URL、description、metadata、members、score。
+3. 只透過 MAL ID + AODB/raw crosswalk 排除內部 AniList rows，不使用 title matching。
+
+目前驗證：
+
+1. source rows：19,931。
+2. 有 cover image URL：19,544。
+3. 有 cover URL、description、release year + quarter：19,283。
+4. 可對齊內部 AniList 的 image-ready rows：15,485。
+5. 保守 MAL-only image-ready popularity rows：3,798。
+6. 保守 MAL-only image-ready dual-target rows：1,209。
+
+限制：
+
+1. 只有 cover image URL，沒有 banner image。
+2. YOLO crops 必須由下載後的 cover 圖重新產生。
+3. 仍需產生新的 text/image/RAG features，不能直接餵現有 full model。
 
 ## 3. 外部考卷定義
 
@@ -80,58 +106,63 @@
 
 解讀：MAL label 適合作為外部考卷答案，但不代表模型已經完成外部泛化驗證。
 
-### MAL-only dual-target exam
+### MAL-only image-ready dual-target exam
 
 檔案：
 
-- `data/external_transformed/mal_july2025_mal_only_dual_target_exam.csv`
+- `data/external_transformed/mal2025_image_mal_only_dual_target_exam.csv`
 
 用途：
 
 1. 主外部新資料考卷。
 2. 同一批樣本同時評估 popularity 與 score。
+3. 支援後續 full multimodal feature generation。
 
 目前狀態：
 
-1. rows：2,510。
-2. 有 `members`：2,510。
-3. 有 `score * 10`：2,510。
-4. 有 release year + quarter：2,482。
-5. 有 text description：2,510。
-6. 可直接跑目前 full multimodal model：0。
+1. rows：1,209。
+2. 有 `members`：1,209。
+3. 有 `score * 10`：1,209。
+4. 有 release year + quarter：1,209。
+5. 有 text description：1,209。
+6. 有 cover image URL：1,209。
+7. 可直接跑目前 full multimodal model：0，需先下載圖片與產生 embeddings。
 
-### MAL-only popularity-only exam
+### MAL-only image-ready popularity-only exam
 
 檔案：
 
-- `data/external_transformed/mal_july2025_mal_only_popularity_exam.csv`
+- `data/external_transformed/mal2025_image_mal_only_popularity_exam.csv`
 
 用途：
 
 1. 補充實驗。
 2. 只評估 popularity 泛化能力。
+3. 樣本數比 dual-target exam 大，適合檢查人氣排序泛化。
 
 目前狀態：
 
-1. rows：9,545。
-2. 有 `members`：9,545。
-3. 有 release year + quarter：7,035。
-4. 有 text description：9,541。
-5. 可直接跑目前 full multimodal model：0。
+1. rows：3,798。
+2. 有 `members`：3,798。
+3. 有 release year + quarter：3,798。
+4. 有 text description：3,798。
+5. 有 cover image URL：3,798。
+6. 可直接跑目前 full multimodal model：0，需先下載圖片與產生 embeddings。
 
 ## 4. 為什麼目前不能直接跑 full multimodal
 
-MAL-only 外部資料不是內部 AniList rows，因此缺少目前 full multimodal pipeline 依賴的部分資產。
+MAL-only 外部資料不是內部 AniList rows，因此缺少目前 full multimodal pipeline 依賴的中間產物。
 
 主要缺口：
 
 1. 沒有現成 text embeddings。
 2. 沒有現成 image embeddings。
 3. 多數沒有內部 AniList ID。
-4. 沒有完整 cover image local asset。
-5. RAG 檢索流程目前以 AniList ID 與內部 embedding index 為中心。
+4. `mal2025_image_*` 有 cover URL，但還沒有 local image asset。
+5. 沒有 banner image；banner branch 應以 missing mask 處理。
+6. RAG 檢索流程目前以 AniList ID 與內部 embedding index 為中心。
 
-因此，目前 MAL-only 考卷已是清洗後 evaluation contract，但還不是可直接餵進 full model 的 inference table。
+因此，目前 MAL-only image-ready 考卷已是清洗後 evaluation contract 與 image download manifest，但還不是可直接餵進 full model 的 inference table。
 
 ## 5. 後續 adapter 需求
 
@@ -147,13 +178,24 @@ MAL-only 外部資料不是內部 AniList rows，因此缺少目前 full multimo
 6. 定義沒有 AniList ID 時的 RAG fallback。
 7. 輸出 prediction 檔，保留 `mal_id`, `external_exam_id`, predictions, external labels。
 
-建議先做 text + metadata smoke test，再接 full multimodal。
+建議直接以 `mal2025_image_*` 做 full multimodal adapter；若 pipeline 尚未支援外部圖片，才暫時退回 text + metadata smoke test。
 
 ## 6. 重跑方式
 
 ```bash
 python scripts/external/prepare_external_evaluation_assets.py
 ```
+
+若要重現 MAL 2025 full multimodal 外部考卷的圖片與 local-ready 篩選：
+
+```bash
+python scripts/external/download_external_images.py \
+  --exam-csv data/external_transformed/mal2025_image_mal_only_popularity_exam.csv \
+  --sleep 0
+python scripts/external/prepare_external_local_ready_exams.py
+```
+
+正式 full multimodal 評估應讀取 `*_local_ready.csv`，因為少數 MAL 圖片 URL 可能回傳 404。
 
 若要將既有 prediction 檔與 MAL aligned labels 比對：
 
@@ -164,3 +206,19 @@ python scripts/external/evaluate_external_predictions.py \
   --output-prefix run39_c2_dual_visual_mal_july2025_external
 ```
 
+新版 `src_2/evaluate.py` 輸出也可直接評估：
+
+```bash
+python src_2/evaluate.py --target popularity --split test
+python src_2/evaluate.py --target meanScore --split test
+
+python scripts/external/evaluate_external_predictions.py \
+  --predictions-root "src_2/runs/01" \
+  --split test \
+  --output-prefix run01_mal_july2025_external
+```
+
+評估腳本同時支援兩種 prediction 檔名與欄位格式：
+
+1. 舊版：`<target>/<split>_predictions.csv`，欄位 `id,target,prediction`。
+2. 新版：`<target>/pred_<split>.csv`，欄位 `id,pred,target`。

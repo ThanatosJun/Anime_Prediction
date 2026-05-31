@@ -1,0 +1,25 @@
+{
+  "generated_at_utc": "2026-05-31T06:44:02.398432+00:00",
+  "inputs": [
+    "data/external_transformed/mal2025_image_mal_only_popularity_exam.csv",
+    "data/external_transformed/mal2025_image_mal_only_dual_target_exam.csv"
+  ],
+  "outputs": [
+    {
+      "exam_csv": "data/external_transformed/mal2025_image_mal_only_popularity_exam.csv",
+      "rows": 3798,
+      "local_ready_rows": 3765,
+      "missing_local_image_rows": 33,
+      "local_ready_csv": "data/external_transformed/mal2025_image_mal_only_popularity_exam_local_ready.csv",
+      "missing_local_images_csv": "data/external_transformed/mal2025_image_mal_only_popularity_exam_missing_local_images.csv"
+    },
+    {
+      "exam_csv": "data/external_transformed/mal2025_image_mal_only_dual_target_exam.csv",
+      "rows": 1209,
+      "local_ready_rows": 1202,
+      "missing_local_image_rows": 7,
+      "local_ready_csv": "data/external_transformed/mal2025_image_mal_only_dual_target_exam_local_ready.csv",
+      "missing_local_images_csv": "data/external_transformed/mal2025_image_mal_only_dual_target_exam_missing_local_images.csv"
+    }
+  ]
+}

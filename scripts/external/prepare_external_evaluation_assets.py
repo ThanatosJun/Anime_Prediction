@@ -35,6 +35,7 @@ MAL_JULY_ANIME_CSV = (
     / "MyAnimeList Anime & Manga Dataset (July 2025)"
     / "anime_entries.csv"
 )
+MAL_2025_IMAGE_ANIME_CSV = ROOT / "outtestdataset" / "MyAnimeList 2025" / "mal_anime.csv"
 
 SEASON_TO_QUARTER = {"WINTER": 1, "SPRING": 2, "SUMMER": 3, "FALL": 4}
 SEASON_WORD_TO_PROJECT = {
@@ -136,6 +137,86 @@ def _parse_duration_minutes(series: pd.Series) -> pd.Series:
         return float(number.group(1)) if number else None
 
     return series.map(parse_one)
+
+
+def _split_comma_list(value: object) -> list[str]:
+    if pd.isna(value):
+        return []
+    return [
+        item.strip()
+        for item in str(value).split(",")
+        if item.strip() and item.strip().lower() not in {"nan", "none", "unknown"}
+    ]
+
+
+def _json_list_from_comma_series(series: pd.Series) -> pd.Series:
+    return series.map(lambda value: json.dumps(_split_comma_list(value), ensure_ascii=False))
+
+
+def _json_studios_from_comma_series(series: pd.Series) -> pd.Series:
+    def encode(value: object) -> str:
+        studios = []
+        for idx, name in enumerate(_split_comma_list(value), start=1):
+            studios.append(
+                {
+                    "id": None,
+                    "isMain": idx == 1,
+                    "node": {
+                        "id": None,
+                        "name": name,
+                        "isAnimationStudio": True,
+                    },
+                }
+            )
+        return json.dumps(studios, ensure_ascii=False)
+
+    return series.map(encode)
+
+
+def _normalize_enum_series(series: pd.Series) -> pd.Series:
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.upper()
+        .str.replace(r"[^A-Z0-9]+", "_", regex=True)
+        .str.strip("_")
+        .replace("", pd.NA)
+    )
+
+
+def _format_to_project(series: pd.Series) -> pd.Series:
+    normalized = _normalize_enum_series(series)
+    mapping = {
+        "MOVIE": "MOVIE",
+        "TV": "TV",
+        "TV_SPECIAL": "SPECIAL",
+        "SPECIAL": "SPECIAL",
+        "OVA": "OVA",
+        "ONA": "ONA",
+        "MUSIC": "MUSIC",
+    }
+    return normalized.map(lambda value: mapping.get(value, value if pd.notna(value) else pd.NA))
+
+
+def _source_to_project(series: pd.Series) -> pd.Series:
+    normalized = _normalize_enum_series(series)
+    mapping = {
+        "LIGHT_NOVEL": "LIGHT_NOVEL",
+        "VISUAL_NOVEL": "VISUAL_NOVEL",
+        "VIDEO_GAME": "VIDEO_GAME",
+        "WEB_MANGA": "MANGA",
+        "WEB_NOVEL": "OTHER",
+        "4_KOMA_MANGA": "MANGA",
+        "MANGA": "MANGA",
+        "ORIGINAL": "ORIGINAL",
+        "NOVEL": "LIGHT_NOVEL",
+        "GAME": "VIDEO_GAME",
+    }
+    return normalized.map(lambda value: mapping.get(value, value if pd.notna(value) else "UNKNOWN_SOURCE"))
+
+
+def _quarter_to_start_month(quarter: pd.Series) -> pd.Series:
+    return quarter.map({1: 1, 2: 4, 3: 7, 4: 10}).astype("Int64")
 
 
 def _valid_text(series: pd.Series) -> pd.Series:
@@ -411,6 +492,7 @@ def _prepare_mal_only_exams(joined: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
         "description",
         "external_popularity_members",
         "external_popularity_rank",
+        "external_score_rank",
         "external_score_0_10",
         "external_score_0_100",
         "external_scored_by",
@@ -512,6 +594,7 @@ def _prepare_mal_july_external_eval(
         "item_type",
         "external_popularity_members",
         "external_popularity_rank",
+        "external_score_rank",
         "external_score_0_10",
         "external_score_0_100",
         "external_scored_by",
@@ -575,6 +658,251 @@ def _prepare_mal_july_external_eval(
     return joined, dual_exam, popularity_exam, summary
 
 
+def _prepare_mal2025_image_external_eval(
+    raw: pd.DataFrame, crosswalk: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
+    mal = pd.read_csv(MAL_2025_IMAGE_ANIME_CSV, low_memory=False)
+    multimodal = pd.read_csv(MULTIMODAL_CSV)
+
+    internal_ids = set(pd.to_numeric(multimodal["id"], errors="coerce").dropna().astype(int))
+    raw_keys = raw[["id", "idMal"]].copy()
+    raw_keys["internal_anilist_id"] = pd.to_numeric(raw_keys["id"], errors="coerce").astype("Int64")
+    raw_keys["mal_id"] = pd.to_numeric(raw_keys["idMal"], errors="coerce").astype("Int64")
+    raw_keys = raw_keys.drop(columns=["id", "idMal"]).dropna(subset=["mal_id"]).drop_duplicates("mal_id")
+
+    aodb_by_mal = (
+        crosswalk[crosswalk["mal_id"].notna()]
+        .drop_duplicates("mal_id", keep="first")
+        [[
+            "mal_id",
+            "anilist_id",
+            "aodb_season",
+            "aodb_season_year",
+            "aodb_release_quarter",
+        ]]
+        .rename(columns={"anilist_id": "aodb_anilist_id"})
+    )
+
+    contract = mal.copy()
+    contract["mal_id"] = pd.to_numeric(contract["myanimelist_id"], errors="coerce").astype("Int64")
+    contract["external_popularity_members"] = _clean_number(contract["Members"])
+    contract["external_popularity_rank"] = _clean_number(contract["Popularity"])
+    contract["external_score_0_10"] = pd.to_numeric(contract["Score"], errors="coerce")
+    contract["external_score_0_100"] = contract["external_score_0_10"] * 10
+    contract["external_score_rank"] = _clean_number(contract["Ranked"])
+    contract["external_scored_by"] = pd.NA
+    contract = contract.merge(raw_keys, on="mal_id", how="left")
+    contract = contract.merge(aodb_by_mal, on="mal_id", how="left")
+
+    released_year = pd.to_numeric(contract["Released_Year"], errors="coerce").astype("Int64")
+    released_quarter = (
+        contract["Released_Season"].astype("string").str.upper().str.strip().map(SEASON_TO_QUARTER).astype("Int64")
+    )
+    contract["release_year"] = released_year.fillna(contract["aodb_season_year"]).astype("Int64")
+    contract["release_quarter"] = released_quarter.fillna(contract["aodb_release_quarter"]).astype("Int64")
+    valid_quarter = contract["release_year"].notna() & contract["release_quarter"].notna()
+    contract["release_quarter_key"] = pd.NA
+    contract.loc[valid_quarter, "release_quarter_key"] = (
+        contract.loc[valid_quarter, "release_year"].astype(int).astype(str)
+        + "Q"
+        + contract.loc[valid_quarter, "release_quarter"].astype(int).astype(str)
+    )
+
+    contract["resolved_anilist_id"] = contract["internal_anilist_id"].fillna(contract["aodb_anilist_id"]).astype("Int64")
+    contract["is_internal_anilist_row"] = contract["resolved_anilist_id"].isin(internal_ids)
+    contract["external_exam_id"] = "mal2025_" + contract["mal_id"].astype("Int64").astype(str)
+    contract["title_romaji"] = contract["title"]
+    contract["title_english"] = contract["title"]
+    contract["description"] = contract["description"]
+    contract["format"] = _format_to_project(contract["Type"])
+    contract["status"] = contract["Status"]
+    contract["season"] = contract["Released_Season"].astype("string").str.upper().str.strip()
+    contract["season"] = contract["season"].where(contract["season"].isin(SEASON_TO_QUARTER), contract["aodb_season"])
+    contract["episodes_numeric"] = pd.to_numeric(contract["Episodes"], errors="coerce")
+    contract["episodes"] = contract["episodes_numeric"]
+    contract["duration_minutes"] = _parse_duration_minutes(contract["Duration"])
+    contract["duration"] = contract["duration_minutes"]
+    contract["source"] = _source_to_project(contract["Source"])
+    contract["genres"] = _json_list_from_comma_series(contract["Genres"])
+    contract["themes"] = _json_list_from_comma_series(contract["Themes"])
+    contract["studios"] = _json_studios_from_comma_series(contract["Studios"])
+    contract["countryOfOrigin"] = "JP"
+    contract["isAdult"] = contract["Rating"].astype("string").str.contains("Hentai", case=False, na=False)
+    contract["is_sequel"] = False
+    contract["has_sequel"] = False
+    contract["prequel_count"] = 0
+    contract["prequel_popularity_mean"] = 0.0
+    contract["prequel_meanScore_mean"] = 0.0
+    contract["startDate_month"] = _quarter_to_start_month(contract["release_quarter"])
+    contract["startDate_day"] = 1
+    contract["voice_actor_names"] = ""
+    contract["popularity"] = pd.NA
+    contract["meanScore"] = pd.NA
+    contract["coverImage_extraLarge"] = contract["image"]
+    contract["coverImage_large"] = contract["image"]
+    contract["coverImage_medium"] = contract["image"]
+    contract["bannerImage"] = pd.NA
+    contract["external_cover_image_url"] = contract["image"]
+    contract["external_cover_image_path"] = (
+        "data/external_assets/mal2025_image/cover/"
+        + contract["external_exam_id"].astype(str)
+        + "_coverImage_extraLarge.jpg"
+    )
+    contract["external_banner_image_path"] = pd.NA
+    contract["has_text_description"] = _valid_text(contract["description"])
+    contract["has_cover_image"] = contract["external_cover_image_url"].astype("string").str.startswith("http")
+    contract["has_banner_image"] = False
+    contract["has_external_popularity_target"] = contract["external_popularity_members"].notna()
+    contract["has_external_score_target"] = contract["external_score_0_100"].notna()
+    contract["has_dual_targets"] = (
+        contract["has_external_popularity_target"] & contract["has_external_score_target"]
+    )
+    contract["has_release_year_quarter"] = valid_quarter
+    contract["has_aodb_anilist_id"] = contract["aodb_anilist_id"].notna()
+    contract["can_prepare_image_text_metadata_inference"] = (
+        contract["has_cover_image"]
+        & contract["has_text_description"]
+        & contract["has_release_year_quarter"]
+    )
+    contract["can_run_current_full_multimodal_without_new_assets"] = False
+    contract["readiness_note"] = (
+        "MAL 2025 image-ready row. It has cover URL, text, metadata, and labels; "
+        "download images and generate fresh embeddings before current full model inference."
+    )
+
+    model_inputs = multimodal.rename(columns={"id": "resolved_anilist_id"})
+    model_inputs["resolved_anilist_id"] = pd.to_numeric(
+        model_inputs["resolved_anilist_id"], errors="coerce"
+    ).astype("Int64")
+    aligned = contract.merge(
+        model_inputs,
+        on="resolved_anilist_id",
+        how="left",
+        suffixes=("_external", "_internal"),
+    )
+    aligned = aligned.rename(
+        columns={
+            "popularity_internal": "anilist_popularity",
+            "meanScore_internal": "anilist_meanScore",
+            "split_pre_release_effective_internal": "split_pre_release_effective",
+        }
+    )
+
+    exam_cols = [
+        "external_exam_id",
+        "mal_id",
+        "internal_anilist_id",
+        "aodb_anilist_id",
+        "resolved_anilist_id",
+        "is_internal_anilist_row",
+        "title_romaji",
+        "title_english",
+        "format",
+        "status",
+        "season",
+        "release_year",
+        "release_quarter",
+        "release_quarter_key",
+        "episodes",
+        "episodes_numeric",
+        "duration",
+        "duration_minutes",
+        "source",
+        "genres",
+        "themes",
+        "Studios",
+        "studios",
+        "description",
+        "countryOfOrigin",
+        "isAdult",
+        "startDate_month",
+        "startDate_day",
+        "voice_actor_names",
+        "is_sequel",
+        "has_sequel",
+        "prequel_count",
+        "prequel_popularity_mean",
+        "prequel_meanScore_mean",
+        "coverImage_extraLarge",
+        "coverImage_large",
+        "coverImage_medium",
+        "bannerImage",
+        "external_cover_image_url",
+        "external_cover_image_path",
+        "external_banner_image_path",
+        "external_popularity_members",
+        "external_popularity_rank",
+        "external_score_0_10",
+        "external_score_0_100",
+        "external_scored_by",
+        "has_external_popularity_target",
+        "has_external_score_target",
+        "has_dual_targets",
+        "has_release_year_quarter",
+        "has_text_description",
+        "has_cover_image",
+        "has_banner_image",
+        "has_aodb_anilist_id",
+        "can_prepare_image_text_metadata_inference",
+        "can_run_current_full_multimodal_without_new_assets",
+        "readiness_note",
+    ]
+    existing_exam_cols = [col for col in exam_cols if col in contract.columns]
+    image_ready = contract[contract["can_prepare_image_text_metadata_inference"]].copy()
+    mal_only_image_ready = image_ready[~image_ready["is_internal_anilist_row"]].copy()
+    popularity_exam = mal_only_image_ready[
+        mal_only_image_ready["has_external_popularity_target"]
+    ][existing_exam_cols].copy()
+    dual_exam = mal_only_image_ready[mal_only_image_ready["has_dual_targets"]][existing_exam_cols].copy()
+
+    aligned_cols = [
+        "mal_id",
+        "resolved_anilist_id",
+        "title",
+        "external_popularity_members",
+        "external_popularity_rank",
+        "external_score_0_10",
+        "external_score_0_100",
+        "external_cover_image_url",
+        "release_year_external",
+        "release_quarter_external",
+        "split_pre_release_effective",
+        "anilist_popularity",
+        "anilist_meanScore",
+        "can_prepare_image_text_metadata_inference",
+    ]
+    existing_aligned_cols = [col for col in aligned_cols if col in aligned.columns]
+    aligned_contract = aligned[aligned["is_internal_anilist_row"]][existing_aligned_cols].copy()
+    aligned_contract["external_eval_ready"] = (
+        aligned_contract["external_popularity_members"].notna()
+        & aligned_contract["external_score_0_100"].notna()
+        & aligned_contract["can_prepare_image_text_metadata_inference"]
+    )
+    aligned_contract["external_label_note"] = (
+        "MyAnimeList 2025 provides MAL members, score, and cover image URL; no title matching was used."
+    )
+
+    summary = {
+        "source_rows": int(len(mal)),
+        "rows_with_mal_id": int(contract["mal_id"].notna().sum()),
+        "rows_with_cover_image_url": int(contract["has_cover_image"].sum()),
+        "rows_with_text_description": int(contract["has_text_description"].sum()),
+        "rows_with_release_year_quarter": int(contract["has_release_year_quarter"].sum()),
+        "rows_with_external_members": int(contract["has_external_popularity_target"].sum()),
+        "rows_with_external_score_0_100": int(contract["has_external_score_target"].sum()),
+        "rows_mapped_to_internal_anilist_id": int(contract["is_internal_anilist_row"].sum()),
+        "image_ready_rows": int(contract["can_prepare_image_text_metadata_inference"].sum()),
+        "aligned_internal_image_ready_rows": int(
+            (contract["is_internal_anilist_row"] & contract["can_prepare_image_text_metadata_inference"]).sum()
+        ),
+        "mal_only_rows_by_id": int((~contract["is_internal_anilist_row"]).sum()),
+        "mal_only_image_ready_popularity_rows": int(len(popularity_exam)),
+        "mal_only_image_ready_dual_target_rows": int(len(dual_exam)),
+        "image_asset_note": "Only cover image URLs are available; banner and YOLO crops must be treated as missing/generated assets.",
+    }
+    return aligned_contract, dual_exam, popularity_exam, summary
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     raw = _load_raw()
@@ -597,11 +925,25 @@ def main() -> None:
     mal_only_dual_exam.to_csv(mal_only_dual_path, index=False)
     mal_only_popularity_exam.to_csv(mal_only_popularity_path, index=False)
 
+    (
+        mal2025_image_external_eval,
+        mal2025_image_dual_exam,
+        mal2025_image_popularity_exam,
+        mal2025_image_summary,
+    ) = _prepare_mal2025_image_external_eval(raw, crosswalk)
+    mal2025_image_external_eval_path = OUT_DIR / "mal2025_image_external_eval_contract.csv"
+    mal2025_image_dual_path = OUT_DIR / "mal2025_image_mal_only_dual_target_exam.csv"
+    mal2025_image_popularity_path = OUT_DIR / "mal2025_image_mal_only_popularity_exam.csv"
+    mal2025_image_external_eval.to_csv(mal2025_image_external_eval_path, index=False)
+    mal2025_image_dual_exam.to_csv(mal2025_image_dual_path, index=False)
+    mal2025_image_popularity_exam.to_csv(mal2025_image_popularity_path, index=False)
+
     summary = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "inputs": {
             "aodb_csv": AODB_CSV.as_posix(),
             "mal_july_anime_csv": MAL_JULY_ANIME_CSV.as_posix(),
+            "mal2025_image_anime_csv": MAL_2025_IMAGE_ANIME_CSV.as_posix(),
             "processed_csv": PROCESSED_CSV.as_posix(),
             "multimodal_csv": MULTIMODAL_CSV.as_posix(),
             "holdout_csv": HOLDOUT_CSV.as_posix(),
@@ -613,6 +955,9 @@ def main() -> None:
             "mal_july2025_external_eval_contract": external_eval_path.as_posix(),
             "mal_july2025_mal_only_dual_target_exam": mal_only_dual_path.as_posix(),
             "mal_july2025_mal_only_popularity_exam": mal_only_popularity_path.as_posix(),
+            "mal2025_image_external_eval_contract": mal2025_image_external_eval_path.as_posix(),
+            "mal2025_image_mal_only_dual_target_exam": mal2025_image_dual_path.as_posix(),
+            "mal2025_image_mal_only_popularity_exam": mal2025_image_popularity_path.as_posix(),
         },
         "crosswalk": {
             "rows": int(len(crosswalk)),
@@ -623,6 +968,7 @@ def main() -> None:
         },
         "holdout_recovery": holdout_summary,
         "external_eval": external_summary,
+        "mal2025_image_external_eval": mal2025_image_summary,
     }
     summary_path = OUT_DIR / "external_evaluation_assets_summary.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")

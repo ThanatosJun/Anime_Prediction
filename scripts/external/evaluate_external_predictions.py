@@ -75,11 +75,22 @@ def _log_mae(y_true: pd.Series, y_pred: pd.Series) -> float | None:
 
 
 def _load_predictions(predictions_root: Path, target: str, split: str) -> pd.DataFrame:
-    path = predictions_root / target / f"{split}_predictions.csv"
-    if not path.exists():
-        raise FileNotFoundError(f"Prediction file not found: {path}")
+    candidates = [
+        predictions_root / target / f"pred_{split}.csv",
+        predictions_root / target / f"{split}_predictions.csv",
+    ]
+    path = next((candidate for candidate in candidates if candidate.exists()), None)
+    if path is None:
+        raise FileNotFoundError(
+            "Prediction file not found. Tried: "
+            + ", ".join(candidate.as_posix() for candidate in candidates)
+        )
     df = pd.read_csv(path)
-    required = {"id", "target", "prediction"}
+    if "prediction" not in df.columns and "pred" in df.columns:
+        df = df.rename(columns={"pred": "prediction"})
+    if "target" not in df.columns:
+        df["target"] = np.nan
+    required = {"id", "prediction"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"{path} missing required columns: {sorted(missing)}")

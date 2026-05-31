@@ -31,6 +31,15 @@ The script writes these ignored CSV artifacts:
   - MAL-only external exam rows with both `members` and `score * 10`.
 - `mal_july2025_mal_only_popularity_exam.csv`
   - MAL-only external exam rows with `members`.
+- `mal2025_image_external_eval_contract.csv`
+  - MyAnimeList 2025 rows aligned to internal AniList rows with cover image
+    URLs, for image-aware external-label sanity checks.
+- `mal2025_image_mal_only_dual_target_exam.csv`
+  - Conservative MAL-only full multimodal exam rows with cover URL, text,
+    metadata, `members`, and `score * 10`.
+- `mal2025_image_mal_only_popularity_exam.csv`
+  - Conservative MAL-only full multimodal exam rows with cover URL, text,
+    metadata, and `members`.
 
 ## Current validated counts
 
@@ -54,6 +63,17 @@ As of the latest run:
   - 2,482 dual-target rows have release year and quarter
   - 0 rows are currently ready for the existing full multimodal model without
     generating new features/assets
+- MyAnimeList 2025 image-ready exams:
+  - 19,931 source rows
+  - 19,544 rows with cover image URLs
+  - 19,283 rows with cover URL, text, and release year/quarter
+  - 15,485 aligned internal rows with image-ready inputs
+  - 3,798 conservative MAL-only popularity rows with image/text/metadata
+  - 1,209 conservative MAL-only dual-target rows with image/text/metadata
+
+`mal_july2025_*` remains useful for label sanity checks, but the July 2025
+source file has no image column. Use `mal2025_image_*` for full multimodal
+external exams.
 
 ## External label mapping
 
@@ -63,6 +83,54 @@ As of the latest run:
   0-100 score scale.
 - `external_popularity_rank`: MAL popularity rank. Lower means more popular, so
   keep it for ranking diagnostics only.
+
+## Image asset convention
+
+The image-ready MAL 2025 exams include:
+
+- `external_cover_image_url`: source cover URL from MAL.
+- `external_cover_image_path`: intended local download target under
+  `data/external_assets/mal2025_image/cover/`.
+
+Generated external image assets are ignored by git.
+
+Use this helper when network access is available:
+
+```bash
+python scripts/external/download_external_images.py \
+  --exam-csv data/external_transformed/mal2025_image_mal_only_dual_target_exam.csv
+```
+
+Then materialize local-ready exam CSVs:
+
+```bash
+python scripts/external/prepare_external_local_ready_exams.py
+```
+
+This writes ignored CSV artifacts:
+
+- `mal2025_image_mal_only_popularity_exam_local_ready.csv`
+- `mal2025_image_mal_only_popularity_exam_missing_local_images.csv`
+- `mal2025_image_mal_only_dual_target_exam_local_ready.csv`
+- `mal2025_image_mal_only_dual_target_exam_missing_local_images.csv`
+
+It also writes `mal2025_image_local_ready_summary.json` with the row counts for
+the current machine.
+
+## Reproducible workflow
+
+From a clean checkout with the external datasets under `outtestdataset/`:
+
+```bash
+python scripts/external/prepare_external_evaluation_assets.py
+python scripts/external/download_external_images.py \
+  --exam-csv data/external_transformed/mal2025_image_mal_only_popularity_exam.csv \
+  --sleep 0
+python scripts/external/prepare_external_local_ready_exams.py
+```
+
+The popularity image exam contains the dual-target rows, so downloading the
+popularity exam first also prepares the dual-target exam images.
 
 ## Evaluation helper
 
@@ -74,4 +142,3 @@ python scripts/external/evaluate_external_predictions.py \
   --split test \
   --output-prefix run39_c2_dual_visual_mal_july2025_external
 ```
-
