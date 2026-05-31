@@ -141,6 +141,11 @@ Code Review 修正紀錄（已套用）：
 | `evaluate.py` | metrics 欄位順序不一致 | 統一順序：spearman_rho → R2/log_R2 → MAE → log_MAE |
 | `evaluate.py` | test metrics 存為獨立 `eval_test.json` | 改為 merge 進 `final_metrics.json`，單一檔案含 train/val/test |
 | `dataset.py` | AMP float16 output → `denormalize_target` 中 `expm1` overflow → Infinity | 加 `np.asarray(y_norm, dtype=np.float64)` 強制轉型 |
+| `model.py` | `ImageProjection` gate 為 soft-sum → 缺失模態時輸出量級縮小，sample 間不一致 | 改為 soft-average：`(proj * gate / gate_sum).sum(dim=1)` |
+| `train.py` | `LogCoshLoss` 的 `1e-12` 在 `cosh()` 內部，大 diff 時 `cosh` 仍 overflow | 改為數值穩定公式：`\|x\| + log1p(exp(-2\|x\|)) - log2` |
+| `train.py` / `evaluate.py` | `trend_head._active` 未在 `_compute_final_metrics` 與 `evaluate.py` 設定，trend_head 啟用時模型架構不一致，`load_state_dict` 報錯 | 新增 `make_model_config(config, target)` helper（在 `model.py`），統一所有建構 FusionModel 的呼叫點 |
+| `train.py` | `_eval_epoch` 回傳 normalized space 的 MAE，`history.json` 的 `val_mae` 難以直覺判讀 | 新增 `target_scaler` 參數，傳入後回傳原始 scale MAE |
+| `dataset.py` | train split 時 text embeddings 載入兩次（`text_map` 與 `rag_text_map` 同一份檔案） | `split == "train"` 時 `rag_text_map = self.text_map`，共用 dict |
 
 ### Step 8：評估與推論
 

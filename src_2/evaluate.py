@@ -22,7 +22,7 @@ from torch.utils.data import DataLoader
 
 from dataset import AnimeDataset, denormalize_target
 from meta_encoder import MetaEncoder
-from model import FusionModel
+from model import FusionModel, make_model_config
 
 
 @torch.no_grad()
@@ -59,7 +59,7 @@ def evaluate(target: str, split: str, config: dict, meta_encoder: MetaEncoder):
         shuffle=False, num_workers=2, pin_memory=True,
     )
 
-    model = FusionModel(config).to(device)
+    model = FusionModel(make_model_config(config, target)).to(device)
     model.load_state_dict(torch.load(ckpt, map_location=device, weights_only=True))
 
     preds_norm, ids = _predict(model, loader, device)

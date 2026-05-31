@@ -265,6 +265,21 @@ class AnimeDataset(Dataset):
             for i in range(len(self.meta_df))
         }
 
+        # ── temporal sample weights（只有 train split 且有啟用時才計算）─────
+        tw_cfg   = config.get("training", {}).get("temporal_weight", {})
+        apply_to = tw_cfg.get("apply_to", None)   # None = 全部套用
+        use_tw   = (tw_cfg.get("enabled", False)
+                    and split == "train"
+                    and (apply_to is None or target in apply_to))
+        if use_tw:
+            alpha   = float(tw_cfg.get("alpha", 0.2))
+            max_yr  = pd.to_numeric(self.train_df["release_year"], errors="coerce").max()
+            yr_vals = pd.to_numeric(self.meta_df["release_year"], errors="coerce").fillna(max_yr).values
+            raw_w   = np.exp(-alpha * (max_yr - yr_vals)).astype(np.float32)
+            self.sample_weights = (raw_w / raw_w.mean())   # normalize：mean=1
+        else:
+            self.sample_weights = np.ones(len(self.meta_df), dtype=np.float32)
+
         # ── text embeddings ────────────────────────────────────────────────
         text_path = Path(cfg_data["text_emb_dir"]) / f"text_embeddings_{split}.parquet"
         self.text_map = _load_emb_parquet(str(text_path))
@@ -298,7 +313,9 @@ class AnimeDataset(Dataset):
             # retrieved text / image（來自 train set）
             text_train_path = Path(cfg_data["text_emb_dir"]) / "text_embeddings_train.parquet"
             img_rag_path    = Path(cfg_data["image_rag_emb_dir"]) / "image_embeddings_train.parquet"
-            self.rag_text_map  = _load_emb_parquet(str(text_train_path))
+            # Reuse text_map when split is train (same file, avoid double memory)
+            self.rag_text_map  = (self.text_map if split == "train"
+                                  else _load_emb_parquet(str(text_train_path)))
             self.rag_image_map = _load_emb_parquet(str(img_rag_path))
 
             # retrieved ids
@@ -342,6 +359,7 @@ class AnimeDataset(Dataset):
             "image_mask": torch.from_numpy(i_mask),  # [N] bool
             "meta_feat":  torch.from_numpy(meta),
             "target":     torch.tensor(target, dtype=torch.float32),
+            "weight":     torch.tensor(self.sample_weights[idx], dtype=torch.float32),
             "id":         anime_id,
         }
 

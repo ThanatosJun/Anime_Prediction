@@ -1,0 +1,251 @@
+# Fusion v2
+
+多模態融合預測模組 v2。結合 text embedding、image embedding（cover + banner + YOLO crop）、metadata 與 RAG Cross Attention，預測動畫的 `popularity`（人氣）與 `meanScore`（評分）。
+
+v1（src/fussion_branch）與 v2 核心差異：
+- **RAG**：GNN（graph propagation）→ **Cross Attention**（Q=meta, KV=retrieved items 三路投影）
+- **Image**：單張 cover → **三模態 Gated Projection**（cover + banner + YOLO crop）
+- **MetaEncoder**：66-dim（含 RAG scalar）→ **56-dim**（RAG 移出，改由 Cross Attention 輸入）
+- **Optimizer**：AdamW → **SAM + AdamW**（Sharpness-Aware Minimization）
+- **Loss**：HuberLoss → **HuberLoss（popularity）/ Log-Cosh（meanScore）**
+
+---
+
+## 目錄結構
+
+```
+src_2/
+│
+├── fussion_training/             # 核心模組（不直接執行）
+│   ├── meta_encoder.py           # MetaEncoder v2（56-dim）
+│   ├── cross_attention.py        # RAGCrossAttention（Q×KV Cross Attention）
+│   ├── dataset.py                # AnimeDataset（組合所有 embedding → tensor）
+│   └── model.py                  # FusionModel v2
+│
+├── RAG/                          # RAG pipeline（Qdrant hybrid search）
+│   ├── sparse_encoder.py
+│   ├── rag_builder.py
+│   ├── rag_query.py
+│   ├── run_build_embeddings.py
+│   ├── start_qdrant.sh
+│   ├── rag_config.yaml
+│   └── return/                   # gitignore
+│
+├── component_text/               # e5-base-v2 text embedding
+├── component_image/              # Swin-B fine-tuned + YOLO
+│
+├── embedding/                    # gitignore
+│   ├── text/                     # text_embeddings_{split}.parquet
+│   ├── image/                    # image_embeddings_{split}.parquet（yolo/cover/banner）
+│   └── image_rag/                # image_embeddings_train.parquet（RAG 知識庫）
+│
+├── data/
+│   └── dataset/                  # fusion_meta_clean_{split}_v2.csv
+│
+├── explain/                      # 可解釋性分析
+│   ├── rag_heatmap.py            # Cross Attention heatmap
+│   └── feature_attr.py           # Captum IG + SHAP
+│
+├── runs/                         # gitignore，實驗輸出
+│   └── {run_id}/{target}/
+│       ├── best_model.pt
+│       ├── target_scaler.json
+│       ├── history.json
+│       ├── final_metrics.json    # train / val / test metrics 合併
+│       ├── pred_{split}.csv
+│       └── explain/
+│
+├── train.py                      # 訓練主程式
+├── evaluate.py                   # 評估（merge 進 final_metrics.json）
+├── fussion_configs.yaml          # 訓練設定
+└── requirements.txt
+```
+
+---
+
+## 前置條件
+
+```bash
+conda activate animeprediction
+
+# PyTorch（CUDA 12.8 / RTX 5070 Ti）
+pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+
+# 其他套件
+pip install -r src_2/requirements.txt
+pip install dghs-imgutils==0.19.0 --no-deps   # numpy<2 metadata 衝突，--no-deps 繞過
+
+# Qdrant（Docker）
+bash src_2/RAG/start_qdrant.sh
+curl http://localhost:6333/healthz   # 確認啟動
+```
+
+詳細部署流程見 `docs_new/operator.md`。
+
+---
+
+## 模型架構
+
+### FusionModel v2
+
+```
+Image  [batch, 3, 1024] ─→ ImageProjection (Shared Linear + Content Gate) ─→ [batch, 128] ─┐
+Text   [batch, 768]     ─→ ProjectionBlock(768→128)                        ─→ [batch, 128] ─┤
+Meta   [batch, 56]      ─→ ProjectionBlock(56→128)                         ─→ [batch, 128] ─┤─ concat → MLP → [1]
+                           ProjectionBlock → Q [batch, 1, 128] ──────────────────────────────┐ │
+RAG retrieved（top-5）                                                                        │ │
+  [batch, 5, 10]   ─→ Linear(10→128)   ─┐                                                   │ │
+  [batch, 5, 768]  ─→ Linear(768→128)  ─┼─ KV [batch, 15, 128] ─→ Cross Attention ──────────┘ │
+  [batch, 5, 1024] ─→ Linear(1024→128) ─┘                                                     │
+                                                                                               │
+concat_dim: use_rag=True → 512（128×4）；use_rag=False → 384（128×3）                        │
+MLP backbone: concat_dim → 256 → 128 → 1 ─────────────────────────────────────────────────────┘
+```
+
+**設計重點：**
+- `ImageProjection`：三模態（cover/banner/yolo）共用 Linear，Gate 從原始 1024-dim 計算（content-based），缺失模態 gate 強制 0
+- `RAGCrossAttention`：Q = meta projection，KV = retrieved items 三路投影後 concat（layout: meta 0-4, text 5-9, image 10-14）
+- `train_separately=true`：popularity / meanScore 各自獨立模型，同一 script 循環訓練
+
+### 訓練設定
+
+| 項目 | 設定 |
+|------|------|
+| Loss（popularity） | HuberLoss（delta=1.0） |
+| Loss（meanScore） | Log-Cosh Loss |
+| Optimizer | SAM (rho=0.05, pure wrapper) + AdamW |
+| LR Schedule | ReduceLROnPlateau（factor=0.5, patience=3, min_lr=1e-6） |
+| Early Stopping | patience=5 |
+| AMP | autocast float16（gradient 仍 float32，不用 GradScaler） |
+| Batch Size | 256 |
+| DataLoader | num_workers=min(4, cpu_count()), persistent_workers=True |
+
+---
+
+## 評估指標
+
+| 指標 | 說明 | 適用 |
+|------|------|------|
+| `spearman_rho` | 排名相關係數（主要指標）| 兩個 target |
+| `log_R2` | log1p 空間 R²（匹配訓練目標，對 skewed 分佈穩定）| popularity |
+| `R2` | 原始 scale R²（診斷 distribution shift）| meanScore |
+| `MAE` | 原始 scale 平均絕對誤差 | 兩個 target |
+| `log_MAE` | log1p 空間 MAE（scale-free）| popularity |
+
+---
+
+## 特徵維度
+
+| 來源 | 維度 | 說明 |
+|------|------|------|
+| Text embedding | 768 | e5-base-v2，description |
+| Image embedding | 3 × 1024 | Swin-B：cover + banner + yolo（缺失 gate=0） |
+| MetaEncoder v2 | 56 | 見下表 |
+| RAG（Cross Attn KV） | 5 × (10 + 768 + 1024) | retrieved top-5 的 meta + text + image |
+
+### MetaEncoder v2 特徵明細（56-dim）
+
+| 類型 | 欄位 | 維度 |
+|------|------|------|
+| Robust 標準化（median/IQR）| release_year, episodes, duration, startDate_day, prequel_count, prequel_meanScore_mean | 6 |
+| log1p + 標準化 | prequel_popularity_mean | 1 |
+| Cyclical sin/cos | release_quarter（period=4）, startDate_month（period=12）| 4 |
+| One-hot | format（7）, source（7）, countryOfOrigin（4）| 18 |
+| Binary | isAdult, is_sequel, has_sequel | 3 |
+| Multi-hot | genres（19 類）| 19 |
+| Studio Target Encoding | mean_popularity, mean_score（標準化）| 2 |
+| is_new_studio | 所有 studio 在訓練集未見過 → 1 | 1 |
+| Voice Actor Target Encoding | mean_popularity, mean_score（標準化）| 2 |
+| **合計** | | **56** |
+
+> v1（66-dim）差異：移除 RAG scalar 10 dims（rag_popularity, rag_score, rag_release_year, rag_episodes, rag_found, studio_match, genre_overlap, format_match, rag_studio_te ×2）。這些資訊改由 Cross Attention 的 KV 輸入，讓模型自行學習如何整合。
+
+---
+
+## 訓練目標轉換
+
+| Target | 轉換 | 反轉 |
+|--------|------|------|
+| `popularity` | Winsorize(99%) → log1p → z-score | 反標準化 → clip(±5σ) → expm1 |
+| `meanScore` | Winsorize(99%) → z-score | 反標準化 |
+
+mean/std 僅從訓練集計算，再套用到 val / test。
+
+---
+
+## 實驗記錄
+
+config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
+
+### popularity（主要指標：log_MAE，越低越好）
+
+| Run | val log_MAE | test log_MAE | val Spearman | val log_R2 | 主要改動 |
+|-----|------------|-------------|-------------|-----------|---------|
+| 01a | 0.7839 | 0.9357 | 0.8851 | 0.8072 | Baseline v2：cover_banner_yolo / use_rag=true / CrossAttn 4 heads / SAM+AdamW / HuberLoss（無時間加權） |
+| **01** | **0.7886** | **0.9016** ↓ | **0.8879** | **0.8161** | + Temporal Weighting（alpha=0.2）：exp(-0.2×(max_yr-yr))，normalize mean=1 |
+| 02 | — | — | — | — | + TrendHead（Linear 1→1，delta+trend）；gate soft-average；LogCosh 數值穩定版 |
+
+### meanScore（主要指標：MAE，越低越好）
+
+| Run | val MAE | test MAE | val Spearman | val R2 | 主要改動 |
+|-----|--------|---------|-------------|-------|---------|
+| 01a | 6.7441 | 8.0435 | 0.6763 | 0.4611 | Baseline v2（無時間加權） |
+| **01** | 6.8857 | 8.3511 ↑ | 0.6691 | 0.4255 | + Temporal Weighting（alpha=0.2）：popularity ✅ 改善；meanScore ❌ 退步 |
+| 02 | — | — | — | — | + TrendHead（Linear 1→1，delta+trend）；gate soft-average；LogCosh 數值穩定版 |
+
+> **觀察**：時間加權對 popularity 有效（test log_MAE 0.9357→0.9016），但 meanScore 反而退步。推測原因：meanScore 的 shift 主要是 Label Shift（評分基準整體上移），加權讓模型少看舊資料後反而失去泛化能力；而 popularity 的 shift 更多是 Covariate Shift，加權確實有助於縮小 val/test gap。
+
+---
+
+## 已知限制
+
+### 1. meanScore 時序 Distribution Shift
+
+資料採時序切分（train → val → test），AniList 評分中位數隨時間系統性上升：
+
+| Split | meanScore 平均 | meanScore 中位數 |
+|-------|--------------|----------------|
+| train | 58.1 | 60.0 |
+| val | 61.6 | 63.0 |
+| test | 65.4 | 66.0 |
+
+2022 年後出現 **約 +7 分的跳升**，導致 test R² 偏低（0.13）。模型的預測中心值 ≈ 61，在 test set 系統性低估約 4.4 分。這是資料本身的時序特性，非模型 bug。
+
+### 2. popularity AMP float16 溢位
+
+`expm1(y)` 在 float16 下上限 65,504，normalized 空間 y ≈ 17.6 時直接 overflow → Infinity。
+**解法**：`denormalize_target()` 強制轉 float64，clip(±5σ) 後再執行 expm1。
+
+### 3. GPU 使用率相對 v1 偏低
+
+v1 在訓練時執行 TextGNN + ImageGNN forward pass（額外 GPU 運算）。v2 的 embedding 全部預先計算並存入 parquet，訓練時只跑 FusionModel（~965K params），GPU 負載較輕。
+
+### 4. RAG 全遮罩 NaN
+
+RAG 無命中時（retrieved_ids 為空），`rag_mask` 全 True → `MultiheadAttention` softmax 對全遮罩位置輸出 NaN。
+**解法**：`dataset.py` 強制 `rag_mask[0] = False`，讓 attention 退化為對零向量的 uniform attention。
+
+### 5. Cold-start（新 studio / 新聲優）
+
+MetaEncoder TE 對未見過的 studio / 聲優補訓練集全體均值；`is_new_studio` 旗標告知模型補值情況。
+
+---
+
+## 輸出檔案
+
+```
+src_2/runs/{run_id}/{target}/
+├── best_model.pt          ← 最佳 val loss checkpoint（state_dict）
+├── target_scaler.json     ← 正規化參數（center, scale, log_transform）
+├── history.json           ← 每 epoch train_loss / val_loss / val_mae / lr（含 run_id / notes）
+├── final_metrics.json     ← train / val / test 完整 metrics 合併（含 run_id / notes）
+├── pred_{split}.csv       ← id, pred, target（原始 scale）
+└── explain/
+    ├── rag/{id}_attn.png          ← Cross Attention heatmap
+    ├── feature/captum_modality.csv
+    ├── feature/captum_modality.png
+    ├── feature/shap_values.npy
+    └── feature/shap_summary.png
+
+src_2/fussion_training/meta_encoder.json   ← 訓練集 fit 的 MetaEncoder（自動生成）
+```
