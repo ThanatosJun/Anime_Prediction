@@ -1,9 +1,19 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Stage 對照版 config（Run11 = stage projection 但「無」per-stage LayerNorm）
+# 與 fussion_configs.yaml（pooler 版）差異僅 4 處，已標 ★STAGE★：
+#   data.image_emb_dir / model.image_dim / model.image_stage_projection / output.run_id
+# 用法：
+#   python src_2/component_image/run_swin_embedding.py --mode stage --splits train val test holdout_unknown
+#   python src_2/train.py     --config src_2/fussion_configs_stages.yaml
+#   python src_2/evaluate.py  --config src_2/fussion_configs_stages.yaml --split test
+# ═══════════════════════════════════════════════════════════════════════════════
+
 # ── 資料路徑 ──────────────────────────────────────────────────────────────────
 data:
   meta_dir:          src_2/data/dataset              # metadata CSV 目錄（fusion_meta_clean_{split}_v2.csv）
   meta_suffix:       _v2                             # CSV 檔名後綴
   text_emb_dir:      src_2/embedding/text            # e5-base-v2 文字 embedding（emb_000…767）
-  image_emb_dir:     src_2/embedding/image           # 主 image embedding；stage 實驗改 src_2/embedding/image_stage
+  image_emb_dir:     src_2/embedding/image_stage     # ★STAGE★ 主 image 用 stage（1920）；pooler 版為 src_2/embedding/image
   image_rag_emb_dir: src_2/embedding/image_rag       # RAG 知識庫圖片 embedding（cover-only，維持 pooler 1024）
   rag_return_dir:    src_2/RAG/return                # RAG 查詢結果（rag_features_{split}.parquet，含 retrieved_ids）
   meta_encoder_path: src_2/fussion_training/meta_encoder.json   # MetaEncoder fit 後參數（首次 train 自動生成）
@@ -35,14 +45,15 @@ seed: 42               # 固定隨機種子（weight init / shuffle / dropout）
 
 # ── 模型架構 ───────────────────────────────────────────────────────────────────
 model:
-  image_dim:     1024     # 主 image 每模態 dim：pooler=1024 / stage=1920（須與 image_emb_dir 一致）
+  image_dim:     1920     # ★STAGE★ 主 image 每模態 dim：stage=1920（pooler 版為 1024）
   rag_image_dim: 1024     # RAG retrieved 圖片 dim（image_rag 知識庫，維持 pooler 1024，可獨立於主 image）
   # ── Stage projection（僅 image_dim=stage(1920) 時可用）─────────────────────
   #   true → 4 個 stage[128,256,512,1024] 各自 Linear→image_project_dim，concat（4×256=1024）再進 gate
   #   false → image 向量直接進 gate（pooler 1024 或 raw stage concat 1920）
-  image_stage_projection: false
+  image_stage_projection: true    # ★STAGE★ 開啟 4-stage 投影（pooler 版為 false）
   image_stage_dims: [128, 256, 512, 1024]   # Swin 4 個 stage 維度；總和須等於 image_dim（stage=1920）
   image_project_dim:      256                # 每個 stage 投影到的維度（4×256 = 1024）
+  image_stage_norm:       false              # ★RUN11★ 對照組：投影前不加 LayerNorm（隔離 LN 變因）
   text_dim:    768        # e5-base-v2 文字 embedding dim（固定）
   meta_dim:    56         # MetaEncoder v2 輸出 dim（固定）
   proj_dim:    128        # 所有 modality 投影後的共用維度（image/text/meta/cross-attn 都→128）
@@ -62,7 +73,7 @@ training:
   weight_decay:    0.001  # L2 正則（全域共用）
   patience:        5      # 早停容忍 epoch 數（val_loss 連續無改善）
   device:          cuda   # cuda / cpu
-  mixed_precision: true   # AMP autocast（float16 forward，gradient 仍 float32；不用 GradScaler）
+  mixed_precision: false  # ★STAGE★ 關 AMP：stage 分支大，float16 梯度會溢位 NaN（無 GradScaler 救援），用 float32 穩定
   temporal_weight:        # 時間樣本加權（近期資料權重高），train only
     enabled:  true        #   true → w = exp(-alpha*(max_year-release_year))，normalize mean=1
     alpha:    0.2         #   0.2: 2018→1.0, 2015→0.55, 2010→0.20, 2000→0.07
@@ -77,5 +88,5 @@ training:
 # ── 輸出 ───────────────────────────────────────────────────────────────────────
 output:
   run_dir: src_2/runs     # 實驗根目錄（結果存於 runs/{run_id}/{target}/）
-  run_id:  "21"           # 實驗編號（每次新實驗換編號，避免覆蓋）
-  notes:   "Run21: +regularization(dropout=0.5,attn_drop=0.2,wd=1e-3); batch=512; TrendHead(pop+score); baseline=Run02; seed=42"   # 實驗描述（寫入所有輸出 JSON）
+  run_id:  "13"           # ★STAGE★ stage 實驗編號（pooler 版用別的編號，避免覆蓋）
+  notes:   "Run13: stage + projection WITHOUT per-stage LayerNorm（對照 Run12 有 LN）; AMP off; seed=42"   # 實驗描述

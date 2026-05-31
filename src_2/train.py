@@ -10,6 +10,7 @@ FusionModel v2 訓練主程式
 import argparse
 import json
 import math
+import random
 import sys
 from pathlib import Path
 
@@ -29,6 +30,15 @@ from tqdm import tqdm
 
 from dataset import AnimeDataset, denormalize_target
 from meta_encoder import MetaEncoder
+
+
+def set_seed(seed: int):
+    """固定所有隨機源（weight init / shuffle / dropout），讓實驗可重現、變因對齊。"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False   # 關閉非確定性 kernel 選擇
 from model import FusionModel, make_model_config
 
 
@@ -233,6 +243,8 @@ def _compute_final_metrics(target, run_dir, datasets, config, device, use_amp):
 def train_target(target: str, config: dict, meta_encoder: MetaEncoder):
     cfg_train = config["training"]
     cfg_out   = config["output"]
+    seed      = config.get("seed", 42)
+    set_seed(seed)   # 每個 target 從相同 seed 起跑，變因對齊、可重現
     device    = torch.device(cfg_train.get("device", "cuda") if torch.cuda.is_available() else "cpu")
 
     run_dir = Path(cfg_out["run_dir"]) / cfg_out["run_id"] / target
@@ -249,10 +261,11 @@ def train_target(target: str, config: dict, meta_encoder: MetaEncoder):
                             target_scaler=train_ds.target_scaler)
 
     num_workers = min(4, os.cpu_count() or 1)
+    g = torch.Generator().manual_seed(seed)   # 固定 shuffle 順序
     train_loader = DataLoader(
         train_ds, batch_size=cfg_train["batch_size"],
         shuffle=True, num_workers=num_workers, pin_memory=True,
-        persistent_workers=True, drop_last=False,
+        persistent_workers=True, drop_last=False, generator=g,
     )
     val_loader = DataLoader(
         val_ds, batch_size=cfg_train["batch_size"] * 2,

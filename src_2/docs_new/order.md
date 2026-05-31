@@ -38,12 +38,20 @@ python src_2/component_image/run_yolo_crop.py --splits train val test holdout_un
 ### Step 3：Fusion Image Embeddings（yolo + cover + banner）
 
 ```bash
+# pooler 模式（預設，每模態 1024）
 python src_2/component_image/run_swin_embedding.py --splits train val test holdout_unknown
+
+# stage 模式（每模態 1920 = 4 個 Swin stage concat，圖片重用只重抽特徵）
+python src_2/component_image/run_swin_embedding.py --mode stage --splits train val test holdout_unknown
 ```
 
-| 輸出 | 說明 | 狀態 |
-|------|------|------|
-| `src_2/embedding/image/image_embeddings_{split}.parquet` | id, yolo_0…1023, cover_0…1023, banner_0…1023, has_* | ✅ train / val / test / holdout |
+| 模式 | 輸出 | 每模態維度 |
+|------|------|:---:|
+| pooler（預設）| `src_2/embedding/image/image_embeddings_{split}.parquet` | 1024（pooler_output）|
+| stage | `src_2/embedding/image_stage/image_embeddings_{split}.parquet` | 1920（stage 0-3 concat：128+256+512+1024）|
+
+> `--mode` 覆蓋 `image_encoder_config.yaml` 的 `fusion_embed_mode`，並自動分目錄（pooler/stage 並存不互蓋）。stage 模式詳見 **Step 15**。
+> 欄位：id, yolo_*, cover_*, banner_*, has_*（維度隨模式變）✅ train / val / test / holdout
 
 ### Step 4：建立 Qdrant Collection
 
@@ -392,9 +400,57 @@ python src_2/inference.py --anime-id 21294 --split test --verify
 
 ---
 
+### Step 15：Stage Embedding 實驗（多尺度 image 特徵）
+
+把主 image 從 Swin pooler（1024）換成 4 個 stage concat（1920），並在 ImageProjection 內做 stage 投影。
+
+**機制**：
+- `run_swin_embedding.py --mode stage`：每模態抽 Swin 前 4 個 stage [128,256,512,1024] concat → 1920（第 5 個 stage 與第 4 個 cosine≈0.89 重複，捨棄）
+- `ImageProjection`（model.py）`image_stage_projection=true`：把 1920 切回 4 stage → 各自 Linear→`image_project_dim`(256) → concat（4×256=1024）→ gate/proj → 128
+- **解耦**：RAG image（`image_rag` / Qdrant / cross-attn rag_image）維持 pooler 1024 不動，避免 Qdrant rebuild + retrieved_ids 改變的 confounder
+
+**資料流**：
+```
+N 張 character → 各 stage 對 N 平均 → concat 1920（Swin）
+  → 與 cover/banner stack [batch,3,1920]（dataset）
+  → ImageProjection：切 4 stage → 投影 256 → concat 1024 → gate → [batch,128]
+```
+
+**config 切換（兩份並存，免手改）**：
+
+| | pooler（原始）| stage |
+|--|------|------|
+| config 檔 | `fussion_configs.yaml` | `fussion_configs_stages.yaml` |
+| `image_emb_dir` | `embedding/image` | `embedding/image_stage` |
+| `image_dim` | 1024 | 1920 |
+| `image_stage_projection` | false | true |
+| `run_id` | 03 | 10 |
+
+> 兩份只差這 4 處（+notes），其餘完全一致。stage 版那 4 行標了 `★STAGE★`。
+
+**執行**：
+```bash
+# 1. 生成 stage embedding（→ embedding/image_stage/，pooler 版 embedding/image/ 不動）
+python src_2/component_image/run_swin_embedding.py --mode stage --splits train val test holdout_unknown
+
+# 2. 用 stage config 訓練 + 評估（不用手改 config）
+python src_2/train.py    --config src_2/fussion_configs_stages.yaml
+python src_2/evaluate.py --config src_2/fussion_configs_stages.yaml --split test
+```
+
+對照基準（pooler test）：popularity Run07 log_MAE **0.8904**；meanScore Run02 MAE **7.2937**。
+
+- [ ] 生成 stage embedding（4 splits）
+- [ ] 訓練 Run10（stage + projection）
+- [ ] test 評估，對照 pooler 最佳
+
+> 註：image-process branch 雖定義了 `StageProjector` 但從未實際接上（只存 raw _s0~s3）；v2 才把投影落地進可訓練的 ImageProjection。已移除 image-process 遺留的 dead config（`projection`/`project_dim`）與 dead class（`StageProjector`）。
+
+---
+
 ## ⏳ 待完成
 
-（暫無；VLM 文字描述並接 text 分支為探索中方向，見 `component_image_text_description/`）
+（VLM 文字描述並接 text 分支為探索中方向，見 `component_image_text_description/`；Stage 實驗見 Step 15）
 
 ---
 
