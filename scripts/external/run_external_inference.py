@@ -61,26 +61,67 @@ def _regression_metrics(y_true: pd.Series, y_pred: pd.Series) -> dict:
         {"y_true": pd.to_numeric(y_true, errors="coerce"), "y_pred": pd.to_numeric(y_pred, errors="coerce")}
     ).dropna()
     if frame.empty:
-        return {"n": 0, "mae": None, "rmse": None, "spearman": None, "pearson": None}
+        return {
+            "n": 0,
+            "mae": None,
+            "rmse": None,
+            "r2": None,
+            "spearman": None,
+            "pearson": None,
+            "acc_within_10pt": None,
+        }
     err = frame["y_true"].to_numpy(dtype=float) - frame["y_pred"].to_numpy(dtype=float)
+    denom = float(np.sum((frame["y_true"].to_numpy(dtype=float) - frame["y_true"].mean()) ** 2))
     return {
         "n": int(len(frame)),
         "mae": round(float(np.mean(np.abs(err))), 4),
         "rmse": round(float(np.sqrt(np.mean(err**2))), 4),
+        "r2": round(float(1.0 - np.sum(err**2) / denom), 4) if denom > 0 else None,
         "spearman": round(float(_spearman(frame["y_true"], frame["y_pred"])), 4) if len(frame) >= 2 else None,
         "pearson": round(float(_pearson(frame["y_true"], frame["y_pred"])), 4) if len(frame) >= 2 else None,
+        "acc_within_10pt": round(float(np.mean(np.abs(err) < 10)), 4),
     }
 
 
-def _log_mae(y_true: pd.Series, y_pred: pd.Series) -> float | None:
+def _popularity_metrics(y_true: pd.Series, y_pred: pd.Series, rank: pd.Series | None = None) -> dict:
     frame = pd.DataFrame(
         {"y_true": pd.to_numeric(y_true, errors="coerce"), "y_pred": pd.to_numeric(y_pred, errors="coerce")}
     ).dropna()
     if frame.empty:
-        return None
+        return {
+            "n": 0,
+            "spearman_prediction_vs_mal_members": None,
+            "spearman_prediction_vs_negative_mal_rank": None,
+            "pearson_log_prediction_vs_log_mal_members": None,
+            "log_mae_prediction_vs_mal_members": None,
+            "log_r2_prediction_vs_mal_members": None,
+            "factor_acc_2x_prediction_vs_mal_members": None,
+            "raw_mae_prediction_vs_mal_members": None,
+            "scale_note": "Raw MAE is diagnostic only because AniList popularity predictions and MAL members use different count scales.",
+        }
     true_log = np.log1p(np.clip(frame["y_true"].to_numpy(dtype=float), 0, None))
     pred_log = np.log1p(np.clip(frame["y_pred"].to_numpy(dtype=float), 0, None))
-    return round(float(np.mean(np.abs(true_log - pred_log))), 4)
+    log_err = true_log - pred_log
+    denom = float(np.sum((true_log - np.mean(true_log)) ** 2))
+    negative_rank_spearman = None
+    if rank is not None:
+        negative_rank_spearman = round(float(_spearman(y_pred, -rank)), 4)
+    return {
+        "n": int(len(frame)),
+        "spearman_prediction_vs_mal_members": round(float(_spearman(y_pred, y_true)), 4) if len(frame) >= 2 else None,
+        "spearman_prediction_vs_negative_mal_rank": negative_rank_spearman,
+        "pearson_log_prediction_vs_log_mal_members": round(float(_pearson(pd.Series(pred_log), pd.Series(true_log))), 4)
+        if len(frame) >= 2
+        else None,
+        "log_mae_prediction_vs_mal_members": round(float(np.mean(np.abs(log_err))), 4),
+        "log_r2_prediction_vs_mal_members": round(float(1.0 - np.sum(log_err**2) / denom), 4) if denom > 0 else None,
+        "factor_acc_2x_prediction_vs_mal_members": round(float(np.mean(np.abs(log_err) < np.log(2))), 4),
+        "raw_mae_prediction_vs_mal_members": round(
+            float(np.mean(np.abs(frame["y_true"].to_numpy(dtype=float) - frame["y_pred"].to_numpy(dtype=float)))),
+            4,
+        ),
+        "scale_note": "Raw MAE is diagnostic only because AniList popularity predictions and MAL members use different count scales.",
+    }
 
 
 @torch.no_grad()
@@ -136,28 +177,11 @@ def main() -> None:
 
     metrics = {}
     if "prediction_popularity" in detail.columns:
-        metrics["popularity"] = {
-            "n": int(detail["prediction_popularity"].notna().sum()),
-            "spearman_prediction_vs_mal_members": round(
-                float(_spearman(detail["prediction_popularity"], detail["external_popularity_members"])), 4
-            ),
-            "spearman_prediction_vs_negative_mal_rank": round(
-                float(_spearman(detail["prediction_popularity"], -detail["external_popularity_rank"])), 4
-            ),
-            "pearson_log_prediction_vs_log_mal_members": round(
-                float(
-                    _pearson(
-                        np.log1p(np.clip(detail["prediction_popularity"], 0, None)),
-                        np.log1p(np.clip(detail["external_popularity_members"], 0, None)),
-                    )
-                ),
-                4,
-            ),
-            "log_mae_prediction_vs_mal_members": _log_mae(
-                detail["external_popularity_members"], detail["prediction_popularity"]
-            ),
-            "scale_note": "Raw MAE is omitted because AniList popularity predictions and MAL members use different count scales.",
-        }
+        metrics["popularity"] = _popularity_metrics(
+            detail["external_popularity_members"],
+            detail["prediction_popularity"],
+            detail["external_popularity_rank"] if "external_popularity_rank" in detail.columns else None,
+        )
     if "prediction_meanScore" in detail.columns:
         metrics["meanScore"] = _regression_metrics(detail["external_score_0_100"], detail["prediction_meanScore"])
 

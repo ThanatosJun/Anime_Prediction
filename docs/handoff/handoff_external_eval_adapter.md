@@ -1,10 +1,14 @@
 # 外部評估 Adapter 交接
 
-本文件定義模型架構穩定後，MAL-only 外部考卷如何接到推論流程。
+本文件定義 MAL-only 外部考卷如何接到目前 `src_2` 推論流程，並記錄
+第一版 run02 外部評估狀態。
 
 ## 1. 目標
 
 建立 MAL-only inference adapter，讓模型可以對不在內部 AniList 訓練資料中的 MAL anime 做預測，並與外部答案比對。
+
+目前已完成第一版 adapter 與 run02 外部推論。後續若模型 checkpoint 或
+架構更新，應重跑同一套 external split，而不是重新定義考卷。
 
 主考卷：
 
@@ -53,7 +57,7 @@ MAL-only exam rows 使用 `external_exam_id` 作為推論 row id。
 
 ## 3. 推論策略
 
-建議以 full multimodal adapter 為主，分三段落地。
+已以 full multimodal adapter 為主，分三段落地。
 
 ### A. Image asset materialization
 
@@ -63,7 +67,7 @@ MAL-only exam rows 使用 `external_exam_id` 作為推論 row id。
 
 1. 讀取 `external_cover_image_url`。
 2. 下載到 `external_cover_image_path`。
-3. 失敗列保留，但在 image embedding 中標為 `has_cover=0`。
+3. 失敗列輸出到 missing-local-image CSV，不納入正式 local-ready 評估。
 4. banner 目前沒有來源，固定 missing。
 
 可先使用：
@@ -102,7 +106,7 @@ external split 使用 `900000000 + mal_id` 作為 numeric surrogate id，避免�
 1. 將 MAL metadata 欄位直接餵給目前 metadata encoder。
 2. 用 `description` 產生 text embeddings。
 3. 用下載的 cover 產生 cover image embeddings。
-4. banner/yolo branch 以 zero vector + missing mask 處理，或由 cover 產生 YOLO crops。
+4. 第一版 banner/yolo branch 以 zero vector + missing mask 處理。
 5. RAG 以 `release_year` + `release_quarter` 做時間過濾。
 6. 對有 `resolved_anilist_id` 的 rows 做 self-exclusion；沒有則不做 self-exclusion。
 
@@ -111,14 +115,19 @@ external split 使用 `900000000 + mal_id` 作為 numeric surrogate id，避免�
 ```bash
 python scripts/external/build_external_embeddings.py \
   --splits mal2025_popularity_local_ready mal2025_dual_local_ready \
-  --modality both
+  --modality text
+python scripts/external/build_external_embeddings.py \
+  --splits mal2025_popularity_local_ready mal2025_dual_local_ready \
+  --modality image \
+  --image-model-path results/01/best
+python src_2/RAG/rag_builder.py
 python src_2/RAG/rag_query.py \
   --splits mal2025_popularity_local_ready mal2025_dual_local_ready
 ```
 
-目前本機已完成兩個 external split 的 text embeddings。image embeddings 仍需
-`src_2/component_image/model-image/best` 的 Swin 權重；沒有該目錄時，
-`build_external_embeddings.py --modality image` 會明確失敗並提示缺少模型。
+目前本機已完成兩個 external split 的 text embeddings、image embeddings
+與 RAG returns。若審查者的 Swin 權重路徑不同，請用
+`--image-model-path` 指定。
 
 ### C. Full multimodal inference
 
@@ -135,8 +144,14 @@ python src_2/RAG/rag_query.py \
 
 ```bash
 python scripts/external/run_external_inference.py \
+  --run-id 02 \
   --split mal2025_dual_local_ready \
   --output-prefix run02_mal2025_dual_local_ready
+python scripts/external/run_external_inference.py \
+  --run-id 02 \
+  --split mal2025_popularity_local_ready \
+  --targets popularity \
+  --output-prefix run02_mal2025_popularity_local_ready
 ```
 
 ## 4. 輸出契約
@@ -176,9 +191,31 @@ Score：
 
 不要用 raw MAE 比較 AniList popularity prediction 與 MAL members，兩者是不同平台的 count scale。
 
-## 6. 目前不做的事
+## 6. 第一版 run02 外部結果
+
+1. `mal2025_popularity_local_ready`，3,765 rows：
+   - popularity Spearman vs MAL `members`：0.4709。
+   - popularity log MAE vs MAL `members`：1.0120。
+   - popularity log R2 vs MAL `members`：0.2709。
+   - popularity factor_acc_2x vs MAL `members`：0.4656。
+   - popularity raw MAE diagnostic vs MAL `members`：3518.3324。
+   - popularity log Pearson vs MAL `members`：0.5482。
+2. `mal2025_dual_local_ready`，1,202 rows：
+   - popularity Spearman vs MAL `members`：0.5495。
+   - popularity log MAE vs MAL `members`：1.3910。
+   - popularity log R2 vs MAL `members`：-0.4610。
+   - popularity factor_acc_2x vs MAL `members`：0.3344。
+   - popularity raw MAE diagnostic vs MAL `members`：7750.9359。
+   - meanScore MAE vs MAL `score * 10`：7.5086。
+   - meanScore R2 vs MAL `score * 10`：-1.0659。
+   - meanScore acc_within_10pt vs MAL `score * 10`：0.7488。
+   - meanScore Spearman vs MAL `score * 10`：0.6079。
+
+完整報告見 `reports/external_evaluation_summary.md`。
+
+## 7. 目前不做的事
 
 1. 不用 title matching 建立正式對齊。
 2. 不把 Largest MAL User Dataset 併入主流程。
-3. 不在模型架構穩定前綁死 full multimodal inference code。
-4. 不覆蓋既有 `data/processed` train/val/test 檔案。
+3. 不覆蓋既有 `data/processed` train/val/test 檔案。
+4. 不把 generated CSV、prediction、embedding、image assets commit 進 git。

@@ -17,6 +17,7 @@
   - `pipeline/data_processing_for_paper.md`
 - **簡報與專案進度**
   - `reports/missing_value_status_latest.md`
+  - `../reports/external_evaluation_summary.md`
 - **外部資料轉換**
   - `pipeline/external_dataset_transform_flow.md`
   - `pipeline/external_schema_mapping_example.json`
