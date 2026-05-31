@@ -23,12 +23,17 @@ class ImageEmbedder:
         self.device    = torch.device(
             config['training']['device'] if torch.cuda.is_available() else 'cpu'
         )
-        self.model     = SwinModel.from_pretrained(model_path).to(self.device)
+        # 相對路徑轉為絕對路徑（從專案根目錄解析）
+        _path = Path(model_path)
+        if not _path.is_absolute() and not _path.exists():
+            _path = Path(__file__).resolve().parent.parent.parent / model_path
+        self.model     = SwinModel.from_pretrained(str(_path)).to(self.device)
         self.model.eval()
         self.resize    = ResizeWithPad(config['data']['image_size'])
         self.transform = get_transform_original(config['data']['image_size'])
-        self.output_path = config['output']['embedding_path']
+        self.output_path = config['inference']['embedding_path']
         self.use_stage = config['model'].get('stage', False)
+        self.embedding_dim = self.model.config.hidden_size
 
         yolo_config    = load_yolo_config()
         self.use_yolo  = yolo_config.get('yolo', {}).get('use', False)

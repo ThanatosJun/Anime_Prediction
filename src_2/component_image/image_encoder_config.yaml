@@ -33,7 +33,7 @@ inference:
 
 # ── YOLO Detection ────────────────────────────────────────────────────────────
 yolo_detection:
-  detect_mode: face              # person | face | both
+  detect_mode: both              # person | face | both
   yolo:
     use: true
 

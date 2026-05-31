@@ -1,0 +1,65 @@
+# ── 資料路徑 ──────────────────────────────────────────────────────────────────
+data:
+  meta_dir:          src_2/data/dataset
+  meta_suffix:       _v2
+  text_emb_dir:      src_2/embedding/text
+  image_emb_dir:     src_2/embedding/image
+  image_rag_emb_dir: src_2/embedding/image_rag
+  rag_return_dir:    src_2/RAG/return
+  meta_encoder_path: src_2/fussion_training/meta_encoder.json
+
+# ── Image 輸入模式 ─────────────────────────────────────────────────────────────
+#   cover                → cover only             (1024-dim)
+#   cover_banner         → cover + banner         (2048-dim)
+#   cover_banner_yolo    → cover + banner + yolo  (3072-dim)
+#
+#   注意：目前 yolo embedding 是 both（face+person）combined。
+#   若需要 yolo_face / yolo_person 分開，需重新執行：
+#     run_yolo_crop.py --detect-mode face / person
+#     run_swin_embedding.py
+image_mode: cover_banner_yolo    # cover | cover_banner | cover_banner_yolo
+
+# ── RAG Cross Attention ────────────────────────────────────────────────────────
+use_rag: true          # false → 不使用 Cross Attention（純 MLP）
+top_k_retrieved: 5     # retrieved 動畫數量
+
+# ── 訓練目標 ───────────────────────────────────────────────────────────────────
+targets:
+  - popularity
+  - meanScore
+
+train_separately: true    # true  → 各 target 訓練獨立模型
+                          # false → 多目標同時訓練（multi-head）
+
+# ── 模型架構 ───────────────────────────────────────────────────────────────────
+model:
+  image_dim:   1024       # Swin-B embedding dim（每個模態）
+  text_dim:    768        # e5-base-v2 embedding dim
+  meta_dim:    56         # MetaEncoder v2 output dim
+  proj_dim:    128        # 所有 modality projection 共用維度
+  attn_heads:  4
+  attn_dropout: 0.1
+  hidden_dims: [256, 128]
+  dropout:     0.3
+
+# ── 訓練超參數 ─────────────────────────────────────────────────────────────────
+training:
+  batch_size:      256
+  epochs:          30
+  lr:              0.001
+  weight_decay:    0.0001
+  patience:        5
+  device:          cuda
+  mixed_precision: true
+  popularity:
+    log_transform: true
+    winsor_pct:    99
+  meanScore:
+    log_transform: false
+    winsor_pct:    99
+
+# ── 輸出 ───────────────────────────────────────────────────────────────────────
+output:
+  run_dir: src_2/runs
+  run_id:  "01"
+  notes:   "Run01: FusionModel v2; SAM+AdamW; image=cover_banner_yolo; use_rag=true; CrossAttn 4heads; HuberLoss(pop)/LogCosh(score)"
