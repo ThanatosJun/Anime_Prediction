@@ -41,6 +41,9 @@ model:
   attn_dropout: 0.1
   hidden_dims: [256, 128]
   dropout:     0.3
+  trend_head:
+    enabled:  true
+    apply_to: [popularity, meanScore]
 
 # ── 訓練超參數 ─────────────────────────────────────────────────────────────────
 training:
@@ -51,6 +54,10 @@ training:
   patience:        5
   device:          cuda
   mixed_precision: true
+  temporal_weight:
+    enabled:  true               # true → exp(-alpha*(max_year-release_year))，train only
+    alpha:    0.2                # 0.2: 2018→1.0, 2015→0.55, 2010→0.20, 2000→0.07
+    apply_to: [popularity]       # 只對這些 target 套用（meanScore 不適合）
   popularity:
     log_transform: true
     winsor_pct:    99
@@ -61,5 +68,5 @@ training:
 # ── 輸出 ───────────────────────────────────────────────────────────────────────
 output:
   run_dir: src_2/runs
-  run_id:  "01"
-  notes:   "Run01: FusionModel v2; SAM+AdamW; image=cover_banner_yolo; use_rag=true; CrossAttn 4heads; HuberLoss(pop)/LogCosh(score)"
+  run_id:  "02"
+  notes:   "Run02: +TrendHead(pop+score); gate soft-avg; LogCosh stable; val_mae denorm; baseline=Run01"

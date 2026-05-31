@@ -9,6 +9,7 @@ FusionModel v2 訓練主程式
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -28,14 +29,24 @@ from tqdm import tqdm
 
 from dataset import AnimeDataset, denormalize_target
 from meta_encoder import MetaEncoder
-from model import FusionModel
+from model import FusionModel, make_model_config
 
 
 # ── Loss functions ────────────────────────────────────────────────────────────
 
 class LogCoshLoss(nn.Module):
+    _LOG2 = math.log(2)
+
+    def __init__(self, reduction: str = "mean"):
+        super().__init__()
+        self.reduction = reduction
+
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        return torch.mean(torch.log(torch.cosh(pred - target + 1e-12)))
+        # Numerically stable: log(cosh(x)) = |x| + log1p(exp(-2|x|)) - log(2)
+        # Avoids cosh overflow for large |diff| unlike the naive formulation.
+        diff = pred - target
+        loss = diff.abs() + torch.log1p(torch.exp(-2.0 * diff.abs())) - self._LOG2
+        return loss.mean() if self.reduction == "mean" else loss
 
 
 # ── SAM Optimizer ─────────────────────────────────────────────────────────────
@@ -96,13 +107,14 @@ class SAM:
 
 # ── Training helpers ──────────────────────────────────────────────────────────
 
-def _get_criterion(target: str):
+def _get_criterion(target: str, reduction: str = "mean"):
     if target == "meanScore":
-        return LogCoshLoss()
-    return nn.HuberLoss(delta=1.0)
+        return LogCoshLoss(reduction=reduction)
+    return nn.HuberLoss(delta=1.0, reduction=reduction)
 
 
-def _train_epoch(model, loader, criterion, optimizer, device, epoch, epochs, use_amp):
+def _train_epoch(model, loader, criterion_none, optimizer, device, epoch, epochs, use_amp):
+    """criterion_none: reduction='none'，由此函式自行加權後取 mean。"""
     model.train()
     total_loss = 0.0
     pbar = tqdm(loader, desc=f"Epoch {epoch:3d}/{epochs}", leave=False, ncols=90)
@@ -110,17 +122,18 @@ def _train_epoch(model, loader, criterion, optimizer, device, epoch, epochs, use
         batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v
                  for k, v in batch.items()}
         y = batch["target"]
+        w = batch.get("weight", torch.ones_like(y))   # [batch]
 
         # SAM first step
         with autocast("cuda", enabled=use_amp):
             pred = model(batch)
-            loss = criterion(pred, y)
+            loss = (criterion_none(pred, y) * w).mean()
         loss.backward()
         optimizer.first_step(zero_grad=True)
 
         # SAM second step
         with autocast("cuda", enabled=use_amp):
-            loss2 = criterion(model(batch), y)
+            loss2 = (criterion_none(model(batch), y) * w).mean()
         loss2.backward()
         optimizer.second_step(zero_grad=True)
 
@@ -131,7 +144,8 @@ def _train_epoch(model, loader, criterion, optimizer, device, epoch, epochs, use
 
 
 @torch.no_grad()
-def _eval_epoch(model, loader, criterion, device, use_amp: bool = False):
+def _eval_epoch(model, loader, criterion, device, use_amp: bool = False,
+                target_scaler: dict = None):
     model.eval()
     total_loss = 0.0
     preds_all, targets_all = [], []
@@ -148,14 +162,19 @@ def _eval_epoch(model, loader, criterion, device, use_amp: bool = False):
 
     preds   = np.concatenate(preds_all)
     targets = np.concatenate(targets_all)
-    mae     = float(np.mean(np.abs(preds - targets)))
+    if target_scaler is not None:
+        po = denormalize_target(preds,   target_scaler)
+        to = denormalize_target(targets, target_scaler)
+        mae = float(np.mean(np.abs(po - to)))
+    else:
+        mae = float(np.mean(np.abs(preds - targets)))
     return total_loss / len(loader.dataset), mae
 
 
 @torch.no_grad()
 def _compute_final_metrics(target, run_dir, datasets, config, device, use_amp):
     """訓練結束後，載入 best checkpoint，計算 train/val 全量 metrics。"""
-    model = FusionModel(config).to(device)
+    model = FusionModel(make_model_config(config, target)).to(device)
     model.load_state_dict(torch.load(run_dir / "best_model.pt",
                                      map_location=device, weights_only=True))
     model.eval()
@@ -239,9 +258,10 @@ def train_target(target: str, config: dict, meta_encoder: MetaEncoder):
     )
 
     # ── model ─────────────────────────────────────────────────────────────
-    use_amp  = cfg_train.get("mixed_precision", True) and torch.cuda.is_available()
-    model    = FusionModel(config).to(device)
-    criterion = _get_criterion(target)
+    use_amp = cfg_train.get("mixed_precision", True) and torch.cuda.is_available()
+    model   = FusionModel(make_model_config(config, target)).to(device)
+    criterion      = _get_criterion(target, reduction="mean")   # eval
+    criterion_none = _get_criterion(target, reduction="none")   # train（加權用）
     base_opt  = torch.optim.AdamW(
         model.parameters(),
         lr=cfg_train["lr"],
@@ -262,8 +282,9 @@ def train_target(target: str, config: dict, meta_encoder: MetaEncoder):
     history    = []
 
     for epoch in range(1, cfg_train["epochs"] + 1):
-        train_loss        = _train_epoch(model, train_loader, criterion, optimizer, device, epoch, cfg_train["epochs"], use_amp)
-        val_loss, val_mae = _eval_epoch(model, val_loader, criterion, device, use_amp)
+        train_loss        = _train_epoch(model, train_loader, criterion_none, optimizer, device, epoch, cfg_train["epochs"], use_amp)
+        val_loss, val_mae = _eval_epoch(model, val_loader, criterion, device, use_amp,
+                                        target_scaler=train_ds.target_scaler)
         scheduler.step(val_loss)
         current_lr = base_opt.param_groups[0]["lr"]
 

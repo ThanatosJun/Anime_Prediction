@@ -13,6 +13,7 @@ FusionModel v2
   MLP backbone: concat_dim → 256 → 128 → 1
 """
 
+import copy
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -49,7 +50,8 @@ class ImageProjection(nn.Module):
       1. Shared Linear(1024→128) + LN + GELU + Dropout → [batch, 3, 128]
       2. Gate = sigmoid(Linear(1024→1)) per modality   → [batch, 3, 1]
       3. gate=0 when mask=True（缺失模態不貢獻）
-      4. Weighted sum → [batch, 128]
+      4. Normalize gates by sum of valid gates → consistent scale regardless of missing modalities
+      5. Weighted average → [batch, 128]
     """
 
     def __init__(self, in_dim: int = 1024, out_dim: int = 128, dropout: float = 0.1):
@@ -72,8 +74,9 @@ class ImageProjection(nn.Module):
         # 缺失模態的 gate 強制為 0
         gate = gate.masked_fill(image_mask.unsqueeze(-1), 0.0)
 
-        # weighted sum
-        out = (proj * gate).sum(dim=1)                  # [batch, 128]
+        # normalize by sum of valid gates → consistent output scale
+        gate_sum = gate.sum(dim=1, keepdim=True).clamp(min=1e-8)  # [batch, 1, 1]
+        out = (proj * (gate / gate_sum)).sum(dim=1)     # [batch, 128]
         return out
 
 
@@ -135,6 +138,13 @@ class FusionModel(nn.Module):
         # ── MLP backbone ──────────────────────────────────────────────────
         self.backbone = MLPBackbone(concat_dim, hidden_dims, dropout)
 
+        # ── Temporal Trend Head（optional）────────────────────────────────
+        # backbone 輸出 Δ（殘差），trend_head 輸出年度基準
+        # Final = Δ + trend，讓模型學習時序漂移
+        self.use_trend_head = cfg_m.get("trend_head", {}).get("_active", False)
+        if self.use_trend_head:
+            self.trend_head = nn.Linear(1, 1)   # release_year（normalized）→ trend
+
     def forward(self, batch: dict, return_attn: bool = False):
         image_feat = self.image_proj(batch["image_emb"], batch["image_mask"])
         text_feat  = self.text_proj(batch["text_emb"])
@@ -157,5 +167,28 @@ class FusionModel(nn.Module):
             fused = torch.cat([image_feat, text_feat, meta_feat], dim=1)
             attn_weights = None
 
-        out = self.backbone(fused)
+        delta = self.backbone(fused)   # 殘差（anime-specific 偏差）
+
+        if self.use_trend_head:
+            # meta_feat[:, 0] = release_year（MetaEncoder 第一個特徵，已標準化）
+            year  = batch["meta_feat"][:, 0:1]              # [batch, 1]
+            trend = self.trend_head(year).squeeze(-1)        # [batch]
+            out   = delta + trend
+        else:
+            out = delta
+
         return (out, attn_weights) if return_attn else out
+
+
+# ── Config helper ─────────────────────────────────────────────────────────────
+
+def make_model_config(config: dict, target: str) -> dict:
+    """
+    Return a per-target deep copy of config with trend_head._active correctly set.
+    Use this everywhere a FusionModel is constructed to ensure consistent architecture.
+    """
+    mc = copy.deepcopy(config)
+    th = mc["model"].get("trend_head", {})
+    th["_active"] = th.get("enabled", False) and target in th.get("apply_to", [])
+    mc["model"]["trend_head"] = th
+    return mc
