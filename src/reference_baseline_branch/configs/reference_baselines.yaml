@@ -5,24 +5,25 @@
 # literature baselines do not get mixed together.
 
 data:
-  meta_dir: data/fussion/post2000
+  meta_dir: data/fussion
+  meta_suffix: "_v2"
   image_dir: data/image
   raw_anilist_path: data/raw/anilist_anime_data_complete.csv
   text_emb_dir: src/fussion_branch/embedding/text
-  gpt2_text_emb_dir: .exp/baseline/text_features/gpt2
-  c1_character_emb_dir: .exp/baseline/c1_character_features
-  c1_character_image_dir: .exp/baseline/c1_character_images
+  gpt2_text_emb_dir: .exp/baseline/text_features/gpt2_v2
+  c1_character_emb_dir: .exp/baseline/c1_character_features_v2
+  c1_character_image_dir: .exp/baseline/c1_character_images_v2
   image_emb_dir: src/fussion_branch/embedding/image
-  resnet50_image_emb_dir: .exp/baseline/image_features/resnet50
-  rag_features_root: .exp/baseline/rag_features
-  skapp_full_dataset_dir: .exp/baseline/skapp_full/dataset
+  resnet50_image_emb_dir: .exp/baseline/image_features/resnet50_v2
+  rag_features_root: .exp/baseline/rag_features_v2_highres
+  skapp_full_dataset_dir: .exp/baseline/skapp_full/dataset_v2
   splits: ["train", "val", "test"]
   id_col: id
 
 output:
   results_dir: .exp/baseline/results
-  run_id: "01"
-  notes: "Foundation baselines plus Armenta-style fusion scaffold"
+  run_id: "v2_highres_01"
+  notes: "Reference baselines aligned to fusion_meta_clean_*_v2 with refreshed high-resolution image embeddings"
 
 targets:
   popularity:
@@ -208,45 +209,45 @@ feature_sets:
     text_embedding: true
     image_embedding: true
     rag: true
-    rag_features_dir: .exp/baseline/rag_features/none
+    rag_features_dir: .exp/baseline/rag_features_v2_highres/none
   metadata_text_image_rag_sparse:
     metadata: true
     text_embedding: true
     image_embedding: true
     rag: true
-    rag_features_dir: .exp/baseline/rag_features/sparse
+    rag_features_dir: .exp/baseline/rag_features_v2_highres/sparse
   metadata_text_image_rag_dense:
     metadata: true
     text_embedding: true
     image_embedding: true
     rag: true
-    rag_features_dir: .exp/baseline/rag_features/dense
+    rag_features_dir: .exp/baseline/rag_features_v2_highres/dense
   metadata_text_image_rag_hybrid:
     metadata: true
     text_embedding: true
     image_embedding: true
     rag: true
-    rag_features_dir: .exp/baseline/rag_features/hybrid
+    rag_features_dir: .exp/baseline/rag_features_v2_highres/hybrid
   metadata_text_image_rag_selective:
     metadata: true
     text_embedding: true
     image_embedding: true
     rag: true
-    rag_features_dir: .exp/baseline/rag_features/selective
+    rag_features_dir: .exp/baseline/rag_features_v2_highres/selective
   metadata_text_image_rag_skapp_proxy:
     metadata: true
     text_embedding: true
     image_embedding: true
     rag: true
     rag_config: rag_skapp_proxy
-    rag_features_dir: .exp/baseline/rag_features/skapp_proxy
+    rag_features_dir: .exp/baseline/rag_features_v2_highres/skapp_proxy
   metadata_text_image_rag_skapp_graph_proxy:
     metadata: true
     text_embedding: true
     image_embedding: true
     rag: true
     rag_config: rag_skapp_graph_proxy
-    rag_features_dir: .exp/baseline/rag_features/skapp_graph_proxy
+    rag_features_dir: .exp/baseline/rag_features_v2_highres/skapp_graph_proxy
 
 baselines:
   - id: F0-Mean
@@ -813,7 +814,7 @@ baselines:
       patience: 10
       validation_fraction: 0.15
       random_state: 42
-      device: cpu
+      device: cuda
       torch_num_threads: 1
       verbose: false
     reference: Xu et al. 2025 SKAPP

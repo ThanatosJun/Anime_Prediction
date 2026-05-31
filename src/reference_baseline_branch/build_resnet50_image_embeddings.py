@@ -60,7 +60,8 @@ def main() -> None:
     model, transform = _load_model(args.weights, device)
 
     for split in splits:
-        meta_path = Path(data_cfg["meta_dir"]) / f"fusion_meta_clean_{split}.csv"
+        meta_suffix = data_cfg.get("meta_suffix", "")
+        meta_path = Path(data_cfg["meta_dir"]) / f"fusion_meta_clean_{split}{meta_suffix}.csv"
         df = pd.read_csv(meta_path, usecols=[data_cfg.get("id_col", "id")])
         if args.limit is not None:
             df = df.head(args.limit)

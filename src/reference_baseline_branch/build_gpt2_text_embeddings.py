@@ -67,7 +67,8 @@ def main() -> None:
         )
 
     for split in splits:
-        meta_path = Path(data_cfg["meta_dir"]) / f"fusion_meta_clean_{split}.csv"
+        meta_suffix = data_cfg.get("meta_suffix", "")
+        meta_path = Path(data_cfg["meta_dir"]) / f"fusion_meta_clean_{split}{meta_suffix}.csv"
         df = pd.read_csv(meta_path, usecols=[data_cfg.get("id_col", "id"), "title_romaji", "description"])
         if args.limit is not None:
             df = df.head(args.limit)

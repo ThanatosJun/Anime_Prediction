@@ -269,8 +269,9 @@ class BaselineFeatureStore:
 
     def load_metadata(self) -> None:
         meta_dir = Path(self.data_cfg["meta_dir"])
+        meta_suffix = self.data_cfg.get("meta_suffix", "")
         for split in self.data_cfg.get("splits", ["train", "val", "test"]):
-            path = meta_dir / f"fusion_meta_clean_{split}.csv"
+            path = meta_dir / f"fusion_meta_clean_{split}{meta_suffix}.csv"
             self.meta[split] = pd.read_csv(path)
 
     def build(

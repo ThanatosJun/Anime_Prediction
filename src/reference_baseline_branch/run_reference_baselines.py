@@ -124,7 +124,8 @@ def _run_one(
         return _with_empty_metrics(base_row)
 
     try:
-        model = make_model(baseline["model"], baseline.get("params", {}))
+        model_params = _resolve_model_params(baseline.get("params", {}), feature_names)
+        model = make_model(baseline["model"], model_params)
     except ImportError as exc:
         base_row.update({"status": "skipped", "notes": str(exc)})
         return _with_empty_metrics(base_row)
@@ -174,6 +175,54 @@ def _predict(model, model_name: str, data: SplitFeatures) -> np.ndarray:
     if model_name == "mean":
         return model.predict_n(len(data.y_raw))
     return model.predict(data.x)
+
+
+def _resolve_model_params(params: dict, feature_names: List[str]) -> dict:
+    resolved = dict(params)
+    counts = _feature_group_counts(feature_names)
+    if "metadata_dim" in resolved:
+        resolved["metadata_dim"] = counts["metadata"]
+    if "rag_dim" in resolved:
+        resolved["rag_dim"] = counts["rag"]
+
+    uses_gpt2 = int(resolved.get("text_dim", 0)) == counts["gpt2_text"] and counts["gpt2_text"] > 0
+    if "text_dim" in resolved:
+        resolved["text_dim"] = counts["gpt2_text"] if uses_gpt2 else counts["text"]
+
+    if "image_dim" in resolved:
+        if "swin_image_dim" in resolved and "resnet_image_dim" in resolved:
+            resolved["swin_image_dim"] = counts["image"]
+            resolved["resnet_image_dim"] = counts["resnet50_image"]
+            resolved["image_dim"] = counts["image"] + counts["resnet50_image"]
+        elif counts["resnet50_image"] and not counts["image"]:
+            resolved["image_dim"] = counts["resnet50_image"]
+        elif counts["image"] and not counts["resnet50_image"]:
+            resolved["image_dim"] = counts["image"]
+        elif counts["image"] or counts["resnet50_image"]:
+            resolved["image_dim"] = counts["image"] + counts["resnet50_image"]
+
+    if "character_text_dim" in resolved and counts["c1_character"] >= int(resolved.get("portrait_dim", 0)):
+        portrait_dim = int(resolved.get("portrait_dim", 0))
+        resolved["character_text_dim"] = counts["c1_character"] - portrait_dim
+    if "synopsis_dim" in resolved and counts["gpt2_text"]:
+        resolved["synopsis_dim"] = counts["gpt2_text"]
+    return resolved
+
+
+def _feature_group_counts(feature_names: List[str]) -> dict:
+    groups = {
+        "metadata": "meta:",
+        "rag": "rag:",
+        "text": "text:",
+        "gpt2_text": "gpt2_text:",
+        "image": "image:",
+        "resnet50_image": "resnet50_image:",
+        "c1_character": "c1_character:",
+    }
+    return {
+        name: sum(str(feature).startswith(prefix) for feature in feature_names)
+        for name, prefix in groups.items()
+    }
 
 
 def _with_empty_metrics(row: Dict[str, Any]) -> Dict[str, Any]:

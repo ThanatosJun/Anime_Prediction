@@ -10,6 +10,8 @@ from typing import Dict, Iterable, List, Sequence
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import yaml
 from sklearn.ensemble import GradientBoostingRegressor
 
@@ -104,10 +106,58 @@ class OfflineRagFeatureBuilder:
         split_names = list(splits) if splits is not None else list(self.meta)
         for split in split_names:
             df = self.meta[split]
-            rows = [self._row_for_query(row, split, mode) for _, row in df.iterrows()]
             out_path = out_dir / f"rag_features_{split}.parquet"
-            pd.DataFrame(rows).to_parquet(out_path, index=False)
-            print(f"  [{split}] {len(rows)} rows -> {out_path}")
+            if mode == "skapp_graph_proxy":
+                self._write_wide_rows(df, split, mode, out_path)
+            else:
+                rows = [self._row_for_query(row, split, mode) for _, row in df.iterrows()]
+                pd.DataFrame(rows).to_parquet(out_path, index=False)
+            print(f"  [{split}] {len(df)} rows -> {out_path}")
+
+    def _write_wide_rows(
+        self,
+        df: pd.DataFrame,
+        split: str,
+        mode: str,
+        out_path: Path,
+        chunk_size: int = 128,
+    ) -> None:
+        writer: pq.ParquetWriter | None = None
+        columns: List[str] | None = None
+        if out_path.exists():
+            out_path.unlink()
+        try:
+            for start in range(0, len(df), chunk_size):
+                batch = df.iloc[start : start + chunk_size]
+                rows = [self._row_for_query(row, split, mode) for _, row in batch.iterrows()]
+                table_df = pd.DataFrame(rows)
+                if columns is None:
+                    columns = list(table_df.columns)
+                else:
+                    table_df = table_df.reindex(columns=columns)
+                table_df = self._compact_wide_frame(table_df)
+                table = pa.Table.from_pandas(table_df, preserve_index=False)
+                if writer is None:
+                    writer = pq.ParquetWriter(out_path, table.schema, compression="snappy")
+                else:
+                    table = table.cast(writer.schema)
+                writer.write_table(table)
+        finally:
+            if writer is not None:
+                writer.close()
+
+    def _compact_wide_frame(self, df: pd.DataFrame) -> pd.DataFrame:
+        string_cols = {"rag_title_romaji", "rag_genres", "rag_format", "rag_studios"}
+        for col in df.columns:
+            if col == self.id_col:
+                df[col] = df[col].astype(np.int64)
+            elif col == "rag_found":
+                df[col] = df[col].astype(bool)
+            elif col in string_cols:
+                df[col] = df[col].astype("string")
+            else:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0).astype(np.float32)
+        return df
 
     def _row_for_query(self, row: pd.Series, split: str, mode: str) -> dict:
         anime_id = int(row[self.id_col])
@@ -528,8 +578,9 @@ class OfflineRagFeatureBuilder:
 
     def _load_meta(self) -> Dict[str, pd.DataFrame]:
         meta_dir = Path(self.data_cfg["meta_dir"])
+        meta_suffix = self.data_cfg.get("meta_suffix", "")
         return {
-            split: pd.read_csv(meta_dir / f"fusion_meta_clean_{split}.csv")
+            split: pd.read_csv(meta_dir / f"fusion_meta_clean_{split}{meta_suffix}.csv")
             for split in self.data_cfg.get("splits", ["train", "val", "test"])
         }
 
