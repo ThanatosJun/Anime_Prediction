@@ -193,9 +193,25 @@ python scripts/external/download_external_images.py \
   --exam-csv data/external_transformed/mal2025_image_mal_only_popularity_exam.csv \
   --sleep 0
 python scripts/external/prepare_external_local_ready_exams.py
+python scripts/external/prepare_external_model_inputs.py
 ```
 
 正式 full multimodal 評估應讀取 `*_local_ready.csv`，因為少數 MAL 圖片 URL 可能回傳 404。
+
+產生 external split features 與 predictions：
+
+```bash
+python scripts/external/build_external_embeddings.py \
+  --splits mal2025_popularity_local_ready mal2025_dual_local_ready \
+  --modality both
+python src_2/RAG/rag_query.py \
+  --splits mal2025_popularity_local_ready mal2025_dual_local_ready
+python scripts/external/run_external_inference.py \
+  --split mal2025_dual_local_ready \
+  --output-prefix run02_mal2025_dual_local_ready
+```
+
+`prepare_external_model_inputs.py` 會用 `900000000 + mal_id` 建立 numeric surrogate id，並輸出 id map sidecar，避免外部 MAL row 和內部 AniList row 撞號。
 
 若要將既有 prediction 檔與 MAL aligned labels 比對：
 

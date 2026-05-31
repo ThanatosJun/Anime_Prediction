@@ -71,6 +71,7 @@ src_2/model-image/best/model.safetensors
 src_2/model-image/checkpoint/epoch_15.pt
 src_2/component_image/model-image/
 src_2/component_image_text_description/model-torii/
+src_2/data/dataset/fusion_meta_clean_mal2025_*_v2.csv
 src_2/RAG/qdrant_storage/
 src_2/RAG/return/
 src_2/embedding/

@@ -78,6 +78,21 @@ python scripts/external/prepare_external_local_ready_exams.py
 下載 popularity exam 會同時涵蓋 dual-target exam 的圖片。後續 adapter 應讀取
 `*_local_ready.csv`，避免 404 圖片列混入正式 full multimodal 評估。
 
+接著產生 `src_2` 可讀的 external split：
+
+```bash
+python scripts/external/prepare_external_model_inputs.py
+```
+
+這會輸出：
+
+1. `src_2/data/dataset/fusion_meta_clean_mal2025_popularity_local_ready_v2.csv`
+2. `src_2/data/dataset/fusion_meta_clean_mal2025_dual_local_ready_v2.csv`
+3. `data/external_transformed/mal2025_popularity_local_ready_id_map.csv`
+4. `data/external_transformed/mal2025_dual_local_ready_id_map.csv`
+
+external split 使用 `900000000 + mal_id` 作為 numeric surrogate id，避免與 AniList ID 撞號。
+
 ### B. External feature generation
 
 用途：產生目前模型需要的 metadata/text/image/RAG inputs。
@@ -91,6 +106,20 @@ python scripts/external/prepare_external_local_ready_exams.py
 5. RAG 以 `release_year` + `release_quarter` 做時間過濾。
 6. 對有 `resolved_anilist_id` 的 rows 做 self-exclusion；沒有則不做 self-exclusion。
 
+可使用：
+
+```bash
+python scripts/external/build_external_embeddings.py \
+  --splits mal2025_popularity_local_ready mal2025_dual_local_ready \
+  --modality both
+python src_2/RAG/rag_query.py \
+  --splits mal2025_popularity_local_ready mal2025_dual_local_ready
+```
+
+目前本機已完成兩個 external split 的 text embeddings。image embeddings 仍需
+`src_2/component_image/model-image/best` 的 Swin 權重；沒有該目錄時，
+`build_external_embeddings.py --modality image` 會明確失敗並提示缺少模型。
+
 ### C. Full multimodal inference
 
 用途：用現有模型對 MAL-only rows 產生 prediction，並和外部答案比較。
@@ -101,6 +130,14 @@ python scripts/external/prepare_external_local_ready_exams.py
 2. 保留 `mal_id` 與 `resolved_anilist_id`。
 3. 分別輸出 popularity 與 meanScore prediction。
 4. 保留 inference profile，例如 `cover_only_missing_banner_yolo`。
+
+可使用：
+
+```bash
+python scripts/external/run_external_inference.py \
+  --split mal2025_dual_local_ready \
+  --output-prefix run02_mal2025_dual_local_ready
+```
 
 ## 4. 輸出契約
 

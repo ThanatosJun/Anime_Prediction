@@ -127,10 +127,36 @@ python scripts/external/download_external_images.py \
   --exam-csv data/external_transformed/mal2025_image_mal_only_popularity_exam.csv \
   --sleep 0
 python scripts/external/prepare_external_local_ready_exams.py
+python scripts/external/prepare_external_model_inputs.py
 ```
 
 The popularity image exam contains the dual-target rows, so downloading the
 popularity exam first also prepares the dual-target exam images.
+
+After model-input CSVs are prepared, generate features and inference outputs:
+
+```bash
+python scripts/external/build_external_embeddings.py \
+  --splits mal2025_popularity_local_ready mal2025_dual_local_ready \
+  --modality both
+python src_2/RAG/rag_query.py \
+  --splits mal2025_popularity_local_ready mal2025_dual_local_ready
+python scripts/external/run_external_inference.py \
+  --split mal2025_dual_local_ready \
+  --output-prefix run02_mal2025_dual_local_ready
+```
+
+Feature generation requires the same local model assets used by `src_2`
+training, including the text encoder, Swin image encoder, trained
+`meta_encoder.json`, and run checkpoints.
+
+Current local status:
+
+- `prepare_external_model_inputs.py` has produced both external split metadata
+  CSVs.
+- Text embeddings have been generated for both external splits.
+- Image embedding generation is blocked until
+  `src_2/component_image/model-image/best` is available locally.
 
 ## Evaluation helper
 
