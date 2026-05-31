@@ -21,12 +21,36 @@ _HERE = Path(__file__).resolve().parent
 _ROOT = _HERE.parent.parent
 sys.path.insert(0, str(_HERE))
 
+
+def _preload_nvrtc_builtins():
+    """
+    torch 2.11+cu130 生成時會 JIT 編譯 kernel，需 libnvrtc-builtins.so.13.0，
+    但該檔在 nvidia/cu13/lib/ 不在動態連結搜尋路徑 → nvrtc 找不到而報錯。
+    這裡用 ctypes RTLD_GLOBAL 預載，之後 nvrtc dlopen 時可直接重用，
+    免去手動設 LD_LIBRARY_PATH。
+    """
+    import ctypes, glob, site
+    candidates = []
+    for base in site.getsitepackages() + [site.getusersitepackages()]:
+        candidates += glob.glob(f"{base}/nvidia/cu13/lib/libnvrtc-builtins.so.13*")
+    for lib in sorted(candidates):
+        try:
+            ctypes.CDLL(lib, mode=ctypes.RTLD_GLOBAL)
+            return
+        except OSError:
+            continue
+
+
+_preload_nvrtc_builtins()
+
 import pandas as pd
 from tqdm import tqdm
 
+from config import load_config
 from describer import ToriiGateDescriber
 
-HF_MODEL_DIR = _HERE / "model-torii-hf"
+HF_MODEL_DIR  = _HERE / "model-torii-hf"
+TORII_CONFIG  = _HERE / "torii_config.yaml"   # 絕對路徑，避免 cwd 依賴
 
 # split → 圖片目錄（對齊 run_swin_embedding.py）
 _SPLIT_IMAGE_DIR = {
@@ -66,7 +90,8 @@ def main():
     img_dir = _ROOT / "src_2" / "data" / "image" / _SPLIT_IMAGE_DIR[args.split]
 
     print(f"Loading ToriiGate from {HF_MODEL_DIR} ...")
-    describer = ToriiGateDescriber(model_path=str(HF_MODEL_DIR))
+    cfg = load_config(str(TORII_CONFIG))   # 取 dtype/min_pixels 等；model_path 由下方覆寫成 HF 目錄
+    describer = ToriiGateDescriber(model_path=str(HF_MODEL_DIR), config=cfg)
 
     rows = []
     for row in tqdm(sample.itertuples(index=False), total=len(sample), desc="describe", ncols=90):

@@ -9,6 +9,15 @@ v1（src/fussion_branch）與 v2 核心差異：
 - **Optimizer**：AdamW → **SAM + AdamW**（Sharpness-Aware Minimization）
 - **Loss**：HuberLoss → **HuberLoss（popularity）/ Log-Cosh（meanScore）**
 
+## 目前最佳結果（test set）
+
+| Target | 最佳 Run | 主指標 | 準確率 | Spearman | 設定 |
+|--------|---------|--------|--------|----------|------|
+| **popularity** | Run07 | log_MAE **0.8904** | facc_2x **0.4856** | 0.8498 | dropout=0.3, wd=1e-3, batch=512, 完整四分支 |
+| **meanScore** | Run02 | MAE **7.2937**（R2 0.246）| within_10pt **0.7360** | 0.5478 | TrendHead, gate soft-avg, dropout=0.3 |
+
+> meanScore 的 test 最佳是 Run02 而非 hp_search 的 Run08——distribution shift 導致「val 最佳 ≠ test 最佳」（詳見[已知限制](#已知限制)）。
+
 ---
 
 ## 目錄結構
@@ -60,6 +69,11 @@ src_2/
 │
 ├── train.py                      # 訓練主程式
 ├── evaluate.py                   # 評估（merge 進 final_metrics.json）
+├── inference.py                  # 推論 Pipeline（新動畫 → popularity/meanScore）
+├── hp_search.py                  # 超參數搜尋（Run04~09）
+├── ablation.py                   # RAG / image 消融
+├── ablation_multimodal.py        # 多模態分支消融（重訓版）
+├── backfill_metrics.py           # 補算舊 run 缺的指標欄位（不重訓）
 ├── fussion_configs.yaml          # 訓練設定
 └── requirements.txt
 ```
@@ -135,6 +149,34 @@ MLP backbone: concat_dim → 256 → 128 → 1 ───────────
 | `MAE` | 原始 scale 平均絕對誤差 | 兩個 target |
 | `log_MAE` | log1p 空間 MAE（scale-free，越小越好，0=完美，naive≈2.0）| popularity |
 | `factor_acc_2x` | 預測值落在真實值 [0.5×, 2×] 內的比例（0~1，越大越好）| popularity |
+| `acc_within_10pt` | 預測誤差 < 10 分的比例（0~1，越大越好；0–100 分用加法尺度才合理，facc_2x 對分數無意義）| meanScore |
+
+> **準確率指標的尺度差異**：popularity 跨越多個數量級 → 用乘法尺度（`factor_acc_2x`，2× 內）；meanScore 是 0–100 線性分數 → 用加法尺度（`acc_within_10pt`，±10 分內）。對 meanScore 套 facc_2x 會得到 ~0.997（幾乎全部都在 2× 內），無鑑別力。
+
+---
+
+## 推論 Pipeline（`inference.py`）
+
+給定一部新動畫（封面圖 + metadata + 描述），即時走完 YOLO → Swin → e5 → RAG → FusionModel，輸出 popularity / meanScore。
+
+```bash
+bash src_2/RAG/start_qdrant.sh        # 先啟動 Qdrant（RAG 需要）
+
+# 新動畫推論（metadata 用單列 CSV，欄位同訓練 schema）
+python src_2/inference.py --cover c.jpg --banner b.jpg --meta new.csv --description "..."
+
+# 驗證模式：用既有 test 動畫，對照 pred_test.csv
+python src_2/inference.py --anime-id 21294 --split test --verify
+```
+
+| 項目 | 說明 |
+|------|------|
+| 最佳 checkpoint | popularity → Run07；meanScore → Run02（架構相同，僅超參不同） |
+| RAG modality | 預設 `rag_use_image=False`（image_rag 僅 train，val/test 檢索為 sparse+text，對齊驗證指標） |
+| 模組隔離 | 各 component 同名 `config.py`/`model.py` 用 `importlib` 隔離載入 |
+| 驗證 | cover/banner embedding 逐位元一致；yolo 因預存 crops 經 JPEG round-trip 微差（pipeline 直接裁切，更乾淨） |
+
+> ⚠️ 超參數限制：`dropout` / `weight_decay` / `lr` / `batch_size` 為**全域**，兩個 target 共用同一組；per-target 各自最佳超參需在 config 加覆寫機制（目前由 hp_search 以 `--target` 分開跑繞過）。
 
 ---
 
@@ -205,25 +247,25 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 
 ### meanScore（主要指標：MAE，越低越好）
 
-| Run | val MAE | test MAE | val Spearman | val R2 | 主要改動 |
-|-----|--------|---------|-------------|-------|---------|
-| 01a | 6.7441 | 8.0435 | 0.6763 | 0.4611 | Baseline v2（無時間加權） |
-| 01 | 6.8115 | 8.5722 | 0.6617 | 0.4143 | + Temporal Weighting（alpha=0.2）：popularity ✅；meanScore test ❌ R2=-0.006 |
-| **02** | **6.7604** | **7.2937** ↓ | **0.6570** | **0.4180** | + TrendHead（pop+score）；gate soft-average；test R2 大幅回升（-0.006→0.246） |
+| Run | val MAE | test MAE | test within_10pt | val Spearman | val R2 | 主要改動 |
+|-----|--------|---------|-----------------|-------------|-------|---------|
+| 01a | 6.7441 | 8.0435 | — | 0.6763 | 0.4611 | Baseline v2（無時間加權） |
+| 01 | 6.8115 | 8.5722 | 0.6498 | 0.6617 | 0.4143 | + Temporal Weighting（alpha=0.2）：popularity ✅；meanScore test ❌ R2=-0.006 |
+| **02** | **6.7604** | **7.2937** ↓ | **0.7360** | **0.6570** | **0.4180** | + TrendHead（pop+score）；gate soft-average；test R2 大幅回升（-0.006→0.246） |
 
 > **觀察**：時間加權對 popularity 有效（test log_MAE 0.9357→0.9016），但 meanScore 反而退步。推測原因：meanScore 的 shift 主要是 Label Shift（評分基準整體上移），加權讓模型少看舊資料後反而失去泛化能力；而 popularity 的 shift 更多是 Covariate Shift，加權確實有助於縮小 val/test gap。
 
 #### hp_search（Run03~09：固定 TrendHead + batch=512，搜尋 dropout / weight_decay）
 
-| Run | dropout | weight_decay | val MAE | test MAE | test Spearman | test R2 | val MAE |
-|-----|---------|-------------|---------|----------|--------------|---------|---------|
-| 03 | 0.5 | 1e-3 | 6.9678 | 9.5681 | 0.5322 | -0.1761 | 6.9678 |
-| 04 | 0.3 | 1e-4 | 6.7269 | **7.6675** | 0.5402 | 0.1835 | 6.7269 |
-| 05 | 0.4 | 5e-4 | 6.7952 | 7.8831 | 0.5533 | 0.1565 | 6.7952 |
-| 06 | 0.5 | 1e-4 | 6.9003 | 8.5068 | 0.5383 | 0.0180 | 6.9003 |
-| 07 | 0.3 | 1e-3 | 6.7499 | 8.1776 | 0.5397 | 0.0984 | 6.7499 |
-| **08** ⭐ | **0.5** | **5e-4** | **6.6715** | 7.5847 | 0.5485 | **0.1911** | 6.6715 |
-| 09 | 0.5 | 1e-3 | 6.9463 | 9.0994 | 0.5346 | -0.0707 | 6.9463 |
+| Run | dropout | weight_decay | val MAE | test MAE | test within_10pt | test Spearman | test R2 |
+|-----|---------|-------------|---------|----------|-----------------|--------------|---------|
+| 03 | 0.5 | 1e-3 | 6.9678 | 9.5681 | 0.5750 | 0.5322 | -0.1761 |
+| 04 | 0.3 | 1e-4 | 6.7269 | **7.6675** | **0.7107** | 0.5402 | 0.1835 |
+| 05 | 0.4 | 5e-4 | 6.7952 | 7.8831 | 0.6936 | 0.5533 | 0.1565 |
+| 06 | 0.5 | 1e-4 | 6.9003 | 8.5068 | 0.6547 | 0.5383 | 0.0180 |
+| 07 | 0.3 | 1e-3 | 6.7499 | 8.1776 | 0.6744 | 0.5397 | 0.0984 |
+| **08** ⭐ | **0.5** | **5e-4** | **6.6715** | 7.5847 | 0.7136 | 0.5485 | **0.1911** |
+| 09 | 0.5 | 1e-3 | 6.9463 | 9.0994 | 0.6093 | 0.5346 | -0.0707 |
 
 > **meanScore val 最佳：Run08**（val MAE 6.6715），test MAE 7.5847、test R2 0.1911 也是 hp_search 中最佳。但**對照更早的 Run02（test MAE 7.2937, R2 0.246）仍勝出**——val 最佳不保證 test 最佳，distribution shift 主導 meanScore 的 test 表現。hp_search 內部 test MAE 跨度極大（7.58~9.57），且 test R2 數個為負，再次顯示 meanScore 在 test 區段泛化困難。
 

@@ -218,9 +218,10 @@ def _compute_final_metrics(target, run_dir, datasets, config, device, use_amp):
             }
         else:
             m = {
-                "spearman_rho": round(spearman, 4),
-                "R2":           round(1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0, 4),
-                "MAE":          round(mae, 4),
+                "spearman_rho":    round(spearman, 4),
+                "R2":              round(1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0, 4),
+                "MAE":             round(mae, 4),
+                "acc_within_10pt": round(float(np.mean(np.abs(po - to) < 10)), 4),
             }
         results[split_name] = m
 
