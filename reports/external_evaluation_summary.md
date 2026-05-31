@@ -52,14 +52,24 @@ adapter 會把外部資料轉成目前 `src_2` 模型可讀的輸入契約：
 | Exam | Metric | Value |
 |---|---|---:|
 | popularity-only，3,765 rows | Spearman(prediction, MAL `members`) | 0.4709 |
+| popularity-only，3,765 rows | log MAE(prediction, MAL `members`) | 1.0120 |
+| popularity-only，3,765 rows | log R2(prediction, MAL `members`) | 0.2709 |
+| popularity-only，3,765 rows | factor_acc_2x(prediction, MAL `members`) | 0.4656 |
+| popularity-only，3,765 rows | raw MAE diagnostic(prediction, MAL `members`) | 3518.3324 |
 | popularity-only，3,765 rows | Pearson(log prediction, log MAL `members`) | 0.5482 |
 | dual-target，1,202 rows | Spearman(popularity prediction, MAL `members`) | 0.5495 |
+| dual-target，1,202 rows | log MAE(popularity prediction, MAL `members`) | 1.3910 |
+| dual-target，1,202 rows | log R2(popularity prediction, MAL `members`) | -0.4610 |
+| dual-target，1,202 rows | factor_acc_2x(popularity prediction, MAL `members`) | 0.3344 |
+| dual-target，1,202 rows | raw MAE diagnostic(popularity prediction, MAL `members`) | 7750.9359 |
 | dual-target，1,202 rows | MAE(meanScore prediction, MAL `score * 10`) | 7.5086 |
+| dual-target，1,202 rows | R2(meanScore prediction, MAL `score * 10`) | -1.0659 |
+| dual-target，1,202 rows | acc_within_10pt(meanScore prediction, MAL `score * 10`) | 0.7488 |
 | dual-target，1,202 rows | Spearman(meanScore prediction, MAL `score * 10`) | 0.6079 |
 
-這裡刻意不回報 raw popularity MAE，因為 AniList popularity 與 MAL members
-屬於不同平台的累積 count scale。外部比較較適合使用 ranking 指標與 log-scale
-相關性。
+腳本也會輸出 raw popularity MAE，但只作診斷用途，因為 AniList popularity
+與 MAL members 屬於不同平台的累積 count scale。外部比較較適合使用 ranking
+指標與 log-scale 指標。
 
 ## 解讀
 

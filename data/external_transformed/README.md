@@ -178,11 +178,21 @@ Latest run02 external metrics:
 - `mal2025_popularity_local_ready`:
   - 3,765 MAL-only image-ready rows.
   - popularity Spearman vs MAL `members`: 0.4709.
+  - popularity log MAE vs MAL `members`: 1.0120.
+  - popularity log R2 vs MAL `members`: 0.2709.
+  - popularity factor_acc_2x vs MAL `members`: 0.4656.
+  - popularity raw MAE diagnostic vs MAL `members`: 3518.3324.
   - popularity log Pearson vs MAL `members`: 0.5482.
 - `mal2025_dual_local_ready`:
   - 1,202 MAL-only image-ready rows with both `members` and `score`.
   - popularity Spearman vs MAL `members`: 0.5495.
+  - popularity log MAE vs MAL `members`: 1.3910.
+  - popularity log R2 vs MAL `members`: -0.4610.
+  - popularity factor_acc_2x vs MAL `members`: 0.3344.
+  - popularity raw MAE diagnostic vs MAL `members`: 7750.9359.
   - score MAE vs MAL `score * 10`: 7.5086.
+  - score R2 vs MAL `score * 10`: -1.0659.
+  - score acc_within_10pt vs MAL `score * 10`: 0.7488.
   - score Spearman vs MAL `score * 10`: 0.6079.
 
 ## Evaluation helper
