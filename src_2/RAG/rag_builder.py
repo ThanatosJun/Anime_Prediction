@@ -62,7 +62,7 @@ def build_collection():
     ) if image_emb_dir else {}
     print(f"Image embeddings: {len(image_emb_map)} entries" if image_emb_map else "Image embeddings not found → image vector disabled")
 
-    client = QdrantClient(host=cfg["qdrant"]["host"], port=cfg["qdrant"]["port"])
+    client = QdrantClient(host=cfg["qdrant"]["host"], port=cfg["qdrant"]["port"], timeout=120)
     if client.collection_exists(collection_name):
         client.delete_collection(collection_name)
 

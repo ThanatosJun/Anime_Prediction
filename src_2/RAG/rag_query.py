@@ -169,7 +169,7 @@ def query_all_splits(splits=("train", "val", "test")):
     prefetch_k      = cfg["query"]["prefetch_k"]
 
     encoder = SparseEncoder.load(cfg["paths"]["encoder_path"])
-    client  = QdrantClient(host=cfg["qdrant"]["host"], port=cfg["qdrant"]["port"])
+    client  = QdrantClient(host=cfg["qdrant"]["host"], port=cfg["qdrant"]["port"], timeout=120)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     train_df            = pd.read_csv(meta_dir / f"fusion_meta_clean_train{meta_suffix}.csv")

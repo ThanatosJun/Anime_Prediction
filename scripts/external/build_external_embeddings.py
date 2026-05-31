@@ -34,6 +34,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--splits", nargs="+", default=DEFAULT_SPLITS)
     parser.add_argument("--modality", choices=["text", "image", "both"], default="both")
     parser.add_argument("--batch-size", type=int, default=32, help="Image batch size.")
+    parser.add_argument(
+        "--image-model-path",
+        default=None,
+        help="Optional Swin model directory. Defaults to src_2/component_image/image_encoder_config.yaml.",
+    )
     return parser.parse_args()
 
 
@@ -46,7 +51,7 @@ def _load_text_embedder():
     return TextEmbedder()
 
 
-def _load_image_components():
+def _load_image_components(image_model_path: str | None = None):
     image_dir = ROOT / "src_2" / "component_image"
     if str(image_dir) not in sys.path:
         sys.path.insert(0, str(image_dir))
@@ -68,7 +73,7 @@ def _load_image_components():
     cfg_spec.loader.exec_module(cfg_mod)
 
     cfg = cfg_mod.load_config(str(image_dir / "image_encoder_config.yaml"))
-    model_path = Path(cfg["inference"]["model_path"])
+    model_path = Path(image_model_path) if image_model_path else Path(cfg["inference"]["model_path"])
     if not model_path.is_absolute() and not model_path.exists():
         model_path = ROOT / model_path
     if not model_path.exists():
@@ -114,9 +119,9 @@ def _zero_image() -> list[float]:
     return [0.0] * EMB_DIM_IMAGE
 
 
-def build_image_embeddings(split: str, batch_size: int) -> tuple[Path, Path]:
+def build_image_embeddings(split: str, batch_size: int, image_model_path: str | None = None) -> tuple[Path, Path]:
     id_map = pd.read_csv(_id_map_path(split))
-    model_mod, proc_mod, model, resize, transform, device = _load_image_components()
+    model_mod, proc_mod, model, resize, transform, device = _load_image_components(image_model_path)
 
     cover_cols = [f"cover_{i}" for i in range(EMB_DIM_IMAGE)]
     banner_cols = [f"banner_{i}" for i in range(EMB_DIM_IMAGE)]
@@ -189,7 +194,7 @@ def main() -> None:
             out = build_text_embeddings(split)
             print(f"[text/{split}] -> {out.relative_to(ROOT)}")
         if args.modality in ("image", "both"):
-            image_out, rag_out = build_image_embeddings(split, args.batch_size)
+            image_out, rag_out = build_image_embeddings(split, args.batch_size, args.image_model_path)
             print(f"[image/{split}] -> {image_out.relative_to(ROOT)}")
             print(f"[image-rag/{split}] -> {rag_out.relative_to(ROOT)}")
 

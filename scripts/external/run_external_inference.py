@@ -37,6 +37,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--split", required=True, help="External split name, e.g. mal2025_dual_local_ready.")
     parser.add_argument("--id-map", default=None, help="Sidecar id map CSV. Defaults to data/external_transformed/<split>_id_map.csv.")
     parser.add_argument("--targets", nargs="+", default=DEFAULT_TARGETS, choices=DEFAULT_TARGETS)
+    parser.add_argument("--run-id", default=None, help="Override output.run_id from the config, e.g. 02.")
     parser.add_argument("--output-prefix", default=None)
     return parser.parse_args()
 
@@ -116,6 +117,8 @@ def main() -> None:
     args = _parse_args()
     config_path = ROOT / args.config if not Path(args.config).is_absolute() else Path(args.config)
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    if args.run_id:
+        config["output"]["run_id"] = args.run_id
 
     meta_encoder_path = Path(config["data"]["meta_encoder_path"])
     if not meta_encoder_path.is_absolute():

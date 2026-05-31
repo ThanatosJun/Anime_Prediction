@@ -138,25 +138,52 @@ After model-input CSVs are prepared, generate features and inference outputs:
 ```bash
 python scripts/external/build_external_embeddings.py \
   --splits mal2025_popularity_local_ready mal2025_dual_local_ready \
-  --modality both
+  --modality text
+python scripts/external/build_external_embeddings.py \
+  --splits mal2025_popularity_local_ready mal2025_dual_local_ready \
+  --modality image \
+  --image-model-path results/01/best
+python src_2/RAG/rag_builder.py
 python src_2/RAG/rag_query.py \
   --splits mal2025_popularity_local_ready mal2025_dual_local_ready
 python scripts/external/run_external_inference.py \
+  --run-id 02 \
   --split mal2025_dual_local_ready \
   --output-prefix run02_mal2025_dual_local_ready
+python scripts/external/run_external_inference.py \
+  --run-id 02 \
+  --split mal2025_popularity_local_ready \
+  --targets popularity \
+  --output-prefix run02_mal2025_popularity_local_ready
 ```
 
 Feature generation requires the same local model assets used by `src_2`
 training, including the text encoder, Swin image encoder, trained
-`meta_encoder.json`, and run checkpoints.
+`meta_encoder.json`, run checkpoints, and a running Qdrant service for RAG
+feature retrieval.
 
 Current local status:
 
 - `prepare_external_model_inputs.py` has produced both external split metadata
   CSVs.
 - Text embeddings have been generated for both external splits.
-- Image embedding generation is blocked until
-  `src_2/component_image/model-image/best` is available locally.
+- Image embeddings have been generated for both external splits using
+  `results/01/best` as the image model path.
+- RAG features have been generated for both external splits after rebuilding
+  the local `anime_rag_v2` Qdrant collection.
+- Run02 external inference has been generated for both exams.
+
+Latest run02 external metrics:
+
+- `mal2025_popularity_local_ready`:
+  - 3,765 MAL-only image-ready rows.
+  - popularity Spearman vs MAL `members`: 0.4709.
+  - popularity log Pearson vs MAL `members`: 0.5482.
+- `mal2025_dual_local_ready`:
+  - 1,202 MAL-only image-ready rows with both `members` and `score`.
+  - popularity Spearman vs MAL `members`: 0.5495.
+  - score MAE vs MAL `score * 10`: 7.5086.
+  - score Spearman vs MAL `score * 10`: 0.6079.
 
 ## Evaluation helper
 
