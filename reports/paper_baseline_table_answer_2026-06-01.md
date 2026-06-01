@@ -1,22 +1,30 @@
-# Baseline Table Answer 2026-06-01
+# Baseline 主表問題回覆 2026-06-01
 
-This note answers the paper-writing questions about baseline sample counts, main-table row selection, C2 claim boundary, and C3/Exp2 separation.
+本文件回覆文件整理 agent 提出的 baseline 表格、樣本數、主表選擇、C2 claim boundary、C3 與 Exp2 邊界，以及正式論文應引用哪些結果檔等問題。
 
-## A. Sample Count And Common Subset
+## A. 樣本數與 Common Subset
 
-The `n=3,087` rows are the full V2 test split from `data/fussion/fusion_meta_clean_test_v2.csv`.
+### 1. 為什麼同時出現 `n=3,087` 和 `n=2,808`？
 
-The `n=2,808` rows are the strict multimodal common subset:
+`n=3,087` 是 V2 test split 的完整樣本數，來源為：
+
+```text
+data/fussion/fusion_meta_clean_test_v2.csv
+```
+
+`n=2,808` 是 multimodal baseline 的 strict common subset。其產生規則為：
 
 ```text
 metadata ids ∩ project text embedding ids ∩ project image embedding ids
 ```
 
-For RAG rows, the pipeline additionally intersects RAG feature ids, but the current RAG feature parquet files have full test coverage, so they do not reduce the test set further.
+`F1-RF-Meta` 可以在完整 test set `3,087` 上跑，因為它只需要 metadata，不需要 text/image embedding。
 
-Coverage on the V2 test split:
+`F2/C1/C2/C3` 多數只剩 `2,808`，因為它們使用 project text embedding 與 project image embedding；pipeline 會先對所需 artifact 的 id 做交集。
 
-| artifact | test rows | missing from metadata test ids |
+實際覆蓋狀況如下：
+
+| artifact | test rows | metadata test ids 中缺少的筆數 |
 |---|---:|---:|
 | metadata | 3,087 | 0 |
 | project text embedding | 2,808 | 279 |
@@ -25,149 +33,363 @@ Coverage on the V2 test split:
 | GPT-2 text embedding | 3,087 | 0 |
 | ResNet-50 image embedding | 3,087 | 0 |
 
-Therefore the 279 excluded rows are caused by missing project text embeddings, not missing image artifacts, high-resolution image artifacts, or RAG features.
+所以被排除的 `279` 筆是因為缺 project text embedding，不是因為缺圖片、缺 high-resolution image artifact、缺 RAG feature、缺 GPT-2 artifact 或缺 ResNet-50 artifact。
 
-The selected high-resolution multimodal rows share the exact same 2,808 test IDs for both `popularity` and `meanScore`: `F2-XGB-Concat`, `C1-Armenta-ProjectInputProxy`, `C2-ProjectInputCrossAttention`, `C2-ProjectInputRecurrentFusion`, `C3-RAG-Selective-XGB`, and `C3-ProjectInputSKAPPProxy-XGB`.
+### 2. `2,808` subset 的產生規則是什麼？
 
-This is pipeline-guaranteed, not accidental. `BaselineFeatureStore._resolve_ids()` intersects split IDs with every required embedding/RAG artifact in the configured feature set before building the feature matrix.
+對使用 project text/image embedding 的 multimodal rows 而言，subset rule 是：
 
-`F1-RF-Meta` can run on 3,087 rows because it only requires metadata. It has now also been recomputed on the 2,808 common subset for fair main-table comparison.
+```text
+metadata ids ∩ project text embedding ids ∩ project image embedding ids
+```
 
-## B. Main-Table Selection Rule
+對 RAG rows 而言，pipeline 會再額外要求 RAG feature parquet：
 
-The main paper should not include every baseline row. The main table should include representative rows that answer distinct comparison questions:
+```text
+metadata ids ∩ project text embedding ids ∩ project image embedding ids ∩ RAG feature ids
+```
 
-| baseline | main-table role | reason |
-|---|---|---|
-| `F1-RF-Meta` | metadata-only strong baseline | Tests whether multimodal methods improve beyond strong structured metadata. |
-| `F2-XGB-Concat` | simple multimodal fusion | Tests whether deep/reference fusion improves beyond early concatenation. |
-| `C1-Armenta-ProjectInputProxy` | C1 representative | Same 2,808 common subset and high-res project-input setting; best for fair table comparison. |
-| `C2-ProjectInputRecurrentFusion` | primary C2 representative | Keeps the C2-inspired cross-modal plus recurrent-fusion idea most completely. |
-| `C2-ProjectInputCrossAttention` | optional secondary C2 row | Useful if table space allows, because it isolates the cross-attention component and is stronger on meanScore. |
-| `C3-RAG-Selective-XGB` | selective retrieval baseline | Represents the selective retrieval strategy. |
-| `C3-ProjectInputSKAPPProxy-XGB` | SKAPP-inspired performance row | Represents the strongest project-input SKAPP-style aggregate proxy, especially for meanScore. |
+但目前 RAG feature 在 test split 有完整 `3,087` 覆蓋，因此 RAG 並沒有再減少樣本數。真正讓 test set 從 `3,087` 變成 `2,808` 的原因是 project text embedding 只有 `2,808` 筆。
 
-Recommended placement:
+highres 與非 highres selected rows 的 test IDs 相同。highres 更新的是 image embedding 的特徵值與維度，不是 common-subset 篩選規則。
 
-- Main table: selected rows above, with `C2-ProjectInputCrossAttention` optional depending on table space.
-- Appendix: all baseline rows, including `F0`, `F1-GB`, text-only, image-only, CTNN-Lite, reconstruction variants, graph proxy, and source-exact diagnostics.
-- Development/diagnostic paragraph or appendix table: `C3-SourceExact-Staged-K64`.
+### 3. `F2/C1/C2/C3` 的 `2,808` 是否保證是同一批 IDs？
 
-## C. C1/C2/C3 Version Choice
+是。已檢查以下 rows 在 `popularity` 與 `meanScore` 的 test IDs 完全一致：
 
-### C1
+- `F2-XGB-Concat`
+- `C1-Armenta-ProjectInputProxy`
+- `C2-ProjectInputCrossAttention`
+- `C2-ProjectInputRecurrentFusion`
+- `C3-RAG-Selective-XGB`
+- `C3-ProjectInputSKAPPProxy-XGB`
 
-Use `C1-Armenta-ProjectInputProxy` in the main table.
+這不是剛好一致，而是 pipeline 設計保證。`BaselineFeatureStore._resolve_ids()` 會根據該 baseline 的 `feature_set`，將 split ids 與所有必要的 embedding/RAG artifact ids 做 intersection，然後才建立 feature matrix。
 
-Reason: it is on the same 2,808 high-res project-input common subset as F2/C2/C3, so it is the fairest row for main-table comparison. It should be described as a project-input proxy / literature-adapted reference, not exact reproduction.
+### 4. 能否補算 `F1-RF-Meta` 在 `2,808` common subset 上的 metrics？
 
-Keep `C1-Armenta-ProjectInputReconstruction`, `C1-Armenta-ProjectInputProxy-ResNet50`, and `C1-Armenta-Figure2Reconstruction` in appendix or development notes. They are useful for completeness discussion, but not the cleanest main-table row.
+可以，已補算。
 
-### C2
+| target | n_test | Spearman | log_MAE | log_R2 | factor_acc_2x | MAE | R2 | acc_within_10pt |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| popularity | 2,808 | 0.8507 | 0.8923 | 0.7602 | 0.4900 | 9334.9103 | 0.5798 | - |
+| meanScore | 2,808 | 0.5634 | - | - | - | 8.0085 | 0.0791 | 0.6756 |
 
-Primary main-table row: `C2-ProjectInputRecurrentFusion`.
+正式主表應優先使用這個 `2,808` common-subset 版本，而不是直接拿 `F1 n=3,087` 跟 multimodal rows 的 `n=2,808` 比。
 
-Reason: it is the most complete project-input C2-inspired fusion row among the high-res common-subset variants, retaining cross-modal attention plus recurrent fusion.
+### 5. 是否有完整 common-subset table？
 
-Optional secondary row: `C2-ProjectInputCrossAttention`.
-
-Reason: it isolates cross-modal attention and performs better on meanScore, so it is useful if the paper can afford one extra C2 row.
-
-Keep `C2-ProjectInputCTNNReconstruction` and `C2-ProjectInputCTNNDualVisualReconstruction` in appendix or future-work discussion unless a fresh high-res/common-subset version is selected later.
-
-### C3
-
-Use two C3 rows if table space allows:
-
-- `C3-RAG-Selective-XGB`: selective retrieval strategy reference.
-- `C3-ProjectInputSKAPPProxy-XGB`: SKAPP-inspired aggregate proxy and current strongest C3 meanScore row.
-
-Do not use `C3-SourceExact-Staged-K64` as a main-table performance row. It belongs in diagnostic discussion or appendix because both targets show boundary saturation.
-
-## D. C2 Claim Boundary
-
-C2 is acceptable in the main paper only as a literature-adapted reference baseline.
-
-Recommended naming:
-
-- `C2-adapted`
-- `C2 project-input proxy`
-- `C2-inspired cross-modal/recurrent fusion`
-
-Avoid:
-
-- `C2 reproduction`
-- `exact C2 reproduction`
-- claims that this is the original paper's model performance on anime data
-
-What C2 preserves:
-
-- multimodal text-image fusion motivation
-- cross-modal interaction between textual and visual representations
-- recurrent/sequence-style fusion idea in `C2-ProjectInputRecurrentFusion`
-- unified regression evaluation on `popularity` and `meanScore`
-
-What C2 does not preserve:
-
-- original movie box-office task
-- original movie reviews/posters data distribution
-- original target and split
-- exact original encoders and training environment
-- exact source-code reproduction unless a later branch produces and verifies one
-
-Allowed claim:
-
-> We implement a C2-inspired, literature-adapted cross-modal fusion baseline on the same anime pre-release project inputs.
-
-Not allowed:
-
-> We fully reproduce the original box-office revenue prediction model, or measure the original model's true performance on our task.
-
-## E. C3 And Exp2 Boundary
-
-Exp1 C3 rows are reference baselines. They compare external retrieval-augmented baseline families against other baseline families.
-
-Exp2 should be reserved for the proposed framework's RAG component ablation, such as proposed No-RAG, metadata-only RAG, text-only RAG, and hybrid RAG.
-
-Therefore, `none/sparse/dense/hybrid/selective` under C3 should not be written as the final Exp2 unless the experiment is explicitly about C3 reference-family ablation. In the current paper structure, they are baseline-family rows for Exp1 and appendix analysis.
-
-`C3-SourceExact-Staged-K64` should be positioned as source-faithful diagnostic. It has both targets now, but both are unstable:
-
-- `popularity`: `log_R2=-2.1272`, `factor_acc_2x=0.0901`, raw `R2=-15.0432`
-- `meanScore`: `MAE=19.8518`, `acc_within_10pt=0.3061`, `R2=-4.2271`
-
-Likely failure causes:
-
-- `top_k=64` is an urgent reduced setting, not SKAPP's `top_k=500`.
-- Target scaling/clipping is brittle under anime target distribution.
-- The staged SKAPP/RRCP loss and prediction-space assumptions do not transfer cleanly.
-- Original SKAPP task/data distribution differs from anime `popularity` and `meanScore`.
-
-## F. Metrics And Authoritative Files
-
-Main-table metrics:
-
-- `popularity`: `Spearman_rho`, `log_MAE`, `log_R2`, `factor_acc_2x`
-- `meanScore`: `Spearman_rho`, `MAE`, `R2`, `acc_within_10pt`
-
-All selected rows can be recomputed from `test_predictions.csv`.
-
-For `popularity`, raw `MAE` and raw `R2` should be appendix/supporting metrics because popularity is long-tailed and raw-scale metrics are dominated by extreme hits. Main text should prioritize log-space metrics and Spearman.
-
-The interpretation `log_MAE ≈ 0.89` means a typical multiplicative error of approximately `exp(0.89) ≈ 2.43x`. This is acceptable as an intuitive explanation, but it should be phrased as an approximate geometric-scale interpretation, not exact per-sample multiplicative error.
-
-Authoritative paper table file generated for main-table drafting:
+有，已產出：
 
 ```text
 reports/paper_baseline_main_table_2026-06-01.csv
 ```
 
-Supporting aggregate file:
+目前包含：
+
+- `F1-RF-Meta`
+- `F2-XGB-Concat`
+- `C1-Armenta-ProjectInputProxy`
+- `C2-ProjectInputCrossAttention`
+- `C2-ProjectInputRecurrentFusion`
+- `C3-RAG-Selective-XGB`
+- `C3-ProjectInputSKAPPProxy-XGB`
+
+並且同時包含 `popularity` 與 `meanScore`。
+
+## B. 主表 Baseline Selection Rule
+
+### 6. 主表 baseline selection rule 是什麼？
+
+主表不建議把所有 baseline 全部塞進去。主表應放「能回答不同比較問題」的代表性 rows：
+
+| baseline | 主表角色 | 選擇理由 |
+|---|---|---|
+| `F1-RF-Meta` | metadata-only strong baseline | 檢查多模態方法是否真的超越強 metadata-only baseline。 |
+| `F2-XGB-Concat` | simple multimodal fusion | 檢查 deep/reference fusion 是否超越簡單 early concat。 |
+| `C1-Armenta-ProjectInputProxy` | C1 代表 row | 代表 anime multimodal MLP literature-adapted reference。 |
+| `C2-ProjectInputRecurrentFusion` | C2 primary row | 最完整保留 C2-inspired cross-modal + recurrent fusion 思想。 |
+| `C2-ProjectInputCrossAttention` | C2 optional secondary row | 若表格空間允許，可用來隔離 cross-attention component；meanScore 表現也較好。 |
+| `C3-RAG-Selective-XGB` | selective retrieval reference | 代表 selective retrieval 策略。 |
+| `C3-ProjectInputSKAPPProxy-XGB` | SKAPP-inspired performance row | 代表目前較穩定的 SKAPP-style project-input proxy，meanScore 最強。 |
+
+### 7. `C1` 要選哪個版本？
+
+主表建議選：
+
+```text
+C1-Armenta-ProjectInputProxy
+```
+
+理由：
+
+- 與 F2/C2/C3 selected rows 使用同一批 `2,808` common subset。
+- 使用 highres project-input 設定，主表可比性最好。
+- 它是「借用 C1 原論文 MLP 融合思想，映射到本專案輸入」的最乾淨版本。
+
+其他 C1 版本建議放 appendix 或開發紀錄：
+
+- `C1-Armenta-ProjectInputReconstruction`
+- `C1-Armenta-ProjectInputProxy-ResNet50`
+- `C1-Armenta-Figure2Reconstruction`
+
+它們對完整度討論有價值，但不是主表中最公平、最易解釋的代表 row。
+
+### 8. `C2` 要選哪個版本？
+
+主表 primary row 建議選：
+
+```text
+C2-ProjectInputRecurrentFusion
+```
+
+理由是它比單純 cross-attention 更完整，保留了 C2-inspired 的 cross-modal attention 與 recurrent fusion 概念。
+
+可選 secondary row：
+
+```text
+C2-ProjectInputCrossAttention
+```
+
+理由是它能隔離 cross-attention component，且在 meanScore 上表現較好。如果主表空間有限，只放 `C2-ProjectInputRecurrentFusion`；如果要呈現 C2 內部差異，可以兩個都放。
+
+`C2-ProjectInputCTNNReconstruction` 與 `C2-ProjectInputCTNNDualVisualReconstruction` 建議放 appendix 或 future work，除非後續再產出高解析/common-subset 主表版本。
+
+### 9. `C3` 要選哪個版本？
+
+若主表空間允許，建議放兩個 C3 rows：
+
+```text
+C3-RAG-Selective-XGB
+C3-ProjectInputSKAPPProxy-XGB
+```
+
+兩者角色不同：
+
+- `C3-RAG-Selective-XGB`：代表 selective retrieval 策略。
+- `C3-ProjectInputSKAPPProxy-XGB`：代表 SKAPP-inspired retrieved aggregate proxy，也是目前 meanScore 最強的 C3 row。
+
+不建議把 `C3-SourceExact-Staged-K64` 放主表。它應放 diagnostic paragraph 或 appendix diagnostic table，因為兩個 target 都出現 boundary saturation。
+
+### 10. 是否需要完整表放 appendix？
+
+是，建議：
+
+- 主文：只放 representative rows。
+- Appendix：放 all baseline rows。
+- Diagnostic appendix 或段落：放 `C3-SourceExact-Staged-K64`。
+
+這樣主文不會被大量版本淹沒，也能保留完整實驗透明度。
+
+## C. C2 與原論文不一致問題
+
+### 11. C2 沒有使用原論文模型，是否可接受？
+
+可以接受，但命名必須非常小心。正式文件應使用：
+
+- `C2-inspired`
+- `C2-adapted`
+- `C2 project-input proxy`
+- `literature-adapted cross-modal fusion baseline`
+
+避免使用：
+
+- `C2 reproduction`
+- `exact C2 reproduction`
+- `original C2 model`
+
+### 12. C2 哪些地方跟原論文不同？
+
+保留的核心思想：
+
+- multimodal text-image fusion
+- cross-modal interaction between textual and visual representations
+- `C2-ProjectInputRecurrentFusion` 中保留 recurrent/sequence-style fusion 概念
+- 在統一 anime 任務中做 regression evaluation
+
+沒有保留或不完全一致的部分：
+
+- 原論文是電影票房任務，本研究是 anime pre-release popularity/meanScore prediction。
+- 原論文資料來源偏 movie reviews/posters，本研究使用 AniList description、cover/banner、metadata。
+- 原論文 target、split、資料分布與本研究不同。
+- 原論文 encoder、fusion module 與 training environment 未完全 source-exact 重現。
+- 目前主表 C2 是 project-input adapted baseline，不是原始碼 exact reproduction。
+
+### 13. C2 的 claim boundary 是什麼？
+
+可以宣稱：
+
+> We implement a C2-inspired, literature-adapted cross-modal fusion baseline on the same anime pre-release project inputs.
+
+不可宣稱：
+
+> We fully reproduce the original box-office revenue prediction model.
+
+也不可宣稱：
+
+> This is the original paper model's true performance on our anime task.
+
+### 14. 如果 C2 沒有 exact reproduction，主文是否還應放 C2？
+
+可以放，但必須標成 literature-adapted reference / project-input proxy。
+
+目前沒有可作主表的 exact C2 reproduction。更 source-faithful 的 CTNN / dual-visual 版本可放 appendix 或 future work，除非後續再完成更嚴格的 highres/common-subset reproduction。
+
+## D. C3 與 Exp2 RAG 邊界
+
+### 15. Exp1 的 C3 和 Exp2 的 RAG 消融怎麼切？
+
+Exp1 中的 C3 是 reference baseline family，用來跟 F1/F2/C1/C2 等 baseline 比較。
+
+Exp2 應該保留給 proposed framework 的 RAG component ablation，例如：
+
+- Proposed No-RAG
+- Proposed metadata-only RAG
+- Proposed text-only RAG
+- Proposed hybrid RAG
+
+因此目前 C3 的 `none/sparse/dense/hybrid/selective` 不應直接寫成正式 Exp2，除非明確說那是「C3 reference-family ablation」。在目前論文架構下，它們更適合放在 Exp1 baseline family 或 appendix analysis。
+
+### 16. `C3-SourceExact-Staged-K64` 怎麼放？
+
+`C3-SourceExact-Staged-K64` 已有 `popularity` 與 `meanScore`，但結果很差且出現 boundary saturation。
+
+建議：
+
+- 不放主表。
+- 放 diagnostic paragraph。
+- 可放 appendix diagnostic table。
+
+目前結果：
+
+| target | key diagnostic result |
+|---|---|
+| popularity | `log_R2=-2.1272`, `factor_acc_2x=0.0901`, raw `R2=-15.0432` |
+| meanScore | `MAE=19.8518`, `acc_within_10pt=0.3061`, `R2=-4.2271` |
+
+### 17. `C3-SourceExact-Staged-K64` 為什麼失敗？
+
+目前看起來不是單純分數差，而是 prediction collapse / clipping boundary saturation。
+
+可能原因：
+
+- `top_k=64` 是 urgent reduced setting，不是 SKAPP 原始設定的 `top_k=500`。
+- target scaling / clipping 對 anime target distribution 不穩。
+- staged SKAPP/RRCP loss 與 prediction-space 假設不直接適配 anime popularity/meanScore。
+- SKAPP 原始任務與資料分布和 anime pre-release prediction 差異很大。
+
+正式文件可寫成：source-faithful SKAPP pipeline 的直接遷移目前不穩定，後續需要 top_k、target calibration、loss design 與 domain mapping 的重新調整。
+
+## E. 指標與表格呈現
+
+### 18. 主表要用哪些 metrics？
+
+建議主表使用：
+
+`popularity`：
+
+- `Spearman_rho`
+- `log_MAE`
+- `log_R2`
+- `factor_acc_2x`
+
+`meanScore`：
+
+- `Spearman_rho`
+- `MAE`
+- `R2`
+- `acc_within_10pt`
+
+這些 selected rows 都能從 `test_predictions.csv` 穩定重算。
+
+### 19. 是否要保留 raw MAE / raw R2？
+
+`popularity` 的 raw MAE / raw R2 建議放 appendix 或 supporting table。主文應以 log-space metrics 與 Spearman 為主，因為 popularity 是長尾分布，raw-scale 指標容易被少數極高人氣作品主導。
+
+`meanScore` 則可直接使用 raw MAE / R2，因為它本身是 0 到 100 的線性尺度。
+
+### 20. `log_MAE ≈ 0.89` 的直覺解釋是否合理？
+
+合理，但要小心措辭。
+
+可以寫：
+
+> `log_MAE ≈ 0.89` corresponds to an approximate multiplicative error scale of `exp(0.89) ≈ 2.43x`.
+
+中文可寫：
+
+> `log_MAE ≈ 0.89` 可直覺理解為約 `exp(0.89) ≈ 2.43x` 的幾何尺度偏差。
+
+但不要寫成「每一筆樣本都誤差 2.43 倍」，它只是 log-space 平均誤差的近似直覺解釋。
+
+## F. 文件與可重現性
+
+### 21. 哪些結果檔是 authoritative？
+
+正式論文主表應引用：
+
+```text
+reports/paper_baseline_main_table_2026-06-01.csv
+```
+
+完整支援結果可引用：
 
 ```text
 reports/reference_baseline_metrics_extended_2026-06-01.csv
 ```
 
-The older files `reports/reference_baseline_v2_results.csv` and `reports/reference_baseline_v2_highres_results.csv` remain run-level source summaries, but the paper table should use the new main-table CSV to avoid mixing full-test and common-subset rows by hand.
+其他檔案定位：
 
-High-res results should be used for the main multimodal table where available. In this run, high-res changes the image feature dimensionality and values, but not the selected 2,808 multimodal test IDs. The common-subset reduction is caused by project text embedding coverage, not high-res image coverage.
+- `reports/reference_baseline_v2_results.csv`：V2 run-level source summary。
+- `reports/reference_baseline_v2_highres_results.csv`：highres run-level source summary。
+- `.exp/baseline/results/*/baseline_results.csv`：各 run 的原始輸出。
+
+正式論文主表不建議從多個 run-level CSV 手工拼，應使用 `paper_baseline_main_table_2026-06-01.csv`，避免混到 full-test 與 common-subset rows。
+
+### 22. highres results 和 v2 results 怎麼區分？
+
+主表 multimodal rows 建議使用 highres results。
+
+highres 主要更新 image embedding artifact，改變 image feature values / dimensions。它沒有改變 selected rows 的 `2,808` test IDs。
+
+這次 `2,808` subset 的原因不是 highres，而是 project text embedding 只有 `2,808` 筆 test coverage。
+
+### 23. 是否能產生正式的 `paper_baseline_main_table.csv`？
+
+已產生：
+
+```text
+reports/paper_baseline_main_table_2026-06-01.csv
+```
+
+欄位包含：
+
+- `baseline_id`
+- `target`
+- `common_subset`
+- `subset_rule`
+- `n_test`
+- `role`
+- `main_table_role`
+- `reproduction_level`
+- `claim_allowed`
+- `Spearman_rho`
+- `log_MAE`
+- `log_R2`
+- `factor_acc_2x`
+- `MAE`
+- `R2`
+- `acc_within_10pt`
+- `RMSE`
+- `Pearson_r`
+- `run_dir`
+
+這份檔案應作為正式主表整理的入口。
+
+## 最重要的三點結論
+
+1. `3,087` 是完整 V2 test split；`2,808` 是 multimodal common subset。被排除的 `279` 筆是缺 project text embedding。`F1-RF-Meta` 已補算 `2,808` common-subset metrics。
+
+2. 主表建議放代表性 rows：`F1-RF-Meta`、`F2-XGB-Concat`、`C1-Armenta-ProjectInputProxy`、`C2-ProjectInputRecurrentFusion`、可選 `C2-ProjectInputCrossAttention`、`C3-RAG-Selective-XGB`、`C3-ProjectInputSKAPPProxy-XGB`。完整表放 appendix。
+
+3. C2 不是 exact reproduction，正式文件應稱為 `C2-inspired` / `C2-adapted` / `C2 project-input proxy`，不可宣稱完整復現原論文。
