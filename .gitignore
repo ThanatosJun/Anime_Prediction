@@ -11,8 +11,12 @@ skills/
 datasets/
 .idea/
 data/archive_local/
+data/external_assets/
+data/external_transformed/*.csv
+data/external_transformed/*_metrics.json
 data/raw/anilist_anime_data_complete.csv
 data/raw/anilist_anime_data_complete.pkl
+outtestdataset/
 
 # Local environment (not tracked)
 requirements.txt
@@ -54,9 +58,29 @@ data/image
 qdrant_db/
 results/
 .exp/
+.cache/
+baseline_refer/
+src/fussion_branch/model/
 src/fussion_branch/RAG/return/
 src/fussion_branch/embedding/
 data/fussion/fusion_meta_test.csv
 data/fussion/fusion_meta_train.csv
 data/fussion/fusion_meta_val.csv
 Problem.md
+src_2/data/image
+src_2/model-image/best/config.json
+src_2/model-image/best/model.safetensors
+src_2/model-image/checkpoint/epoch_15.pt
+src_2/component_image/model-image/
+src_2/component_image_text_description/model-torii/
+src_2/data/dataset/fusion_meta_clean_mal2025_*_v2.csv
+src_2/RAG/qdrant_storage/
+src_2/RAG/return/
+src_2/embedding/
+src_2/data/image/crops/
+src_2/runs/
+src_2/fussion_training/meta_encoder.json
+src_2/component_image_text_description/model-torii-hf
+src_2/docs_new/ApaperGuild.md
+src_2/docs_new/ApaperWrite.md
+src_2/docs_new/image

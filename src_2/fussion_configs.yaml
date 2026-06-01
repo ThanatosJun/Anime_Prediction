@@ -1,0 +1,88 @@
+# ── 資料路徑 ──────────────────────────────────────────────────────────────────
+data:
+  meta_dir:          src_2/data/dataset              # metadata CSV 目錄（fusion_meta_clean_{split}_v2.csv）
+  meta_suffix:       _v2                             # CSV 檔名後綴
+  text_emb_dir:      src_2/embedding/text            # e5-base-v2 文字 embedding（emb_000…767）
+  image_emb_dir:     src_2/embedding/image           # 主 image embedding；stage 實驗改 src_2/embedding/image_stage
+  image_rag_emb_dir: src_2/embedding/image_rag       # RAG 知識庫圖片 embedding（cover-only，維持 pooler 1024）
+  rag_return_dir:    src_2/RAG/return                # RAG 查詢結果（rag_features_{split}.parquet，含 retrieved_ids）
+  meta_encoder_path: src_2/fussion_training/meta_encoder.json   # MetaEncoder fit 後參數（首次 train 自動生成）
+
+# ── Image 輸入模式 ─────────────────────────────────────────────────────────────
+#   cover                → cover only             (1024-dim)
+#   cover_banner         → cover + banner         (2048-dim)
+#   cover_banner_yolo    → cover + banner + yolo  (3072-dim)
+#
+#   注意：目前 yolo embedding 是 both（face+person）combined。
+#   若需要 yolo_face / yolo_person 分開，需重新執行：
+#     run_yolo_crop.py --detect-mode face / person
+#     run_swin_embedding.py
+image_mode: cover_banner_yolo    # cover | cover_banner | cover_banner_yolo
+
+# ── RAG Cross Attention ────────────────────────────────────────────────────────
+use_rag: true          # true → 啟用 Cross Attention（meta 為 Q，retrieved items 為 KV）；false → 純 MLP
+top_k_retrieved: 5     # 每部動畫檢索的相似動畫數量（KV = 5×3 模態 = 15）
+
+# ── 訓練目標 ───────────────────────────────────────────────────────────────────
+targets:               # 要訓練的目標欄位（各自獨立模型）
+  - popularity         #   人氣（log1p + z-score，HuberLoss）
+  - meanScore          #   評分 0–100（z-score，Log-Cosh Loss）
+
+train_separately: true    # true  → 各 target 訓練獨立模型（同一 script 循環）
+                          # false → 多目標同時訓練（multi-head，尚未實作）
+
+seed: 42               # 固定隨機種子（weight init / shuffle / dropout），實驗可重現、變因對齊
+
+# ── 模型架構 ───────────────────────────────────────────────────────────────────
+model:
+  image_dim:     1024     # 主 image 每模態 dim：pooler=1024 / stage=1920（須與 image_emb_dir 一致）
+  rag_image_dim: 1024     # RAG retrieved 圖片 dim（image_rag 知識庫，維持 pooler 1024，可獨立於主 image）
+  # ── Stage projection（僅 image_dim=stage(1920) 時可用）─────────────────────
+  #   true → 4 個 stage[128,256,512,1024] 各自 Linear→image_project_dim，concat（4×256=1024）再進 gate
+  #   false → image 向量直接進 gate（pooler 1024 或 raw stage concat 1920）
+  image_stage_projection: false
+  image_stage_dims: [128, 256, 512, 1024]   # Swin 4 個 stage 維度；總和須等於 image_dim（stage=1920）
+  image_project_dim:      256                # 每個 stage 投影到的維度（4×256 = 1024）
+  text_dim:    768        # e5-base-v2 文字 embedding dim（固定）
+  meta_dim:    56         # MetaEncoder v2 輸出 dim（固定）
+  proj_dim:    128        # 所有 modality 投影後的共用維度（image/text/meta/cross-attn 都→128）
+  attn_heads:  4          # Cross Attention 的 head 數
+  attn_dropout: 0.2       # projection block 與 attention 的 dropout
+  hidden_dims: [256, 128] # MLP backbone 隱藏層：concat → 256 → 128 → 1
+  dropout:     0.5        # MLP backbone dropout（全域共用，兩 target 同值）
+  trend_head:             # 時序漂移補償頭：最終預測 = MLP 殘差 Δ + Linear(release_year)→trend
+    enabled:  true        #   true → 啟用
+    apply_to: [popularity, meanScore]   #   套用的 target（per-target 控制）
+
+# ── 訓練超參數 ─────────────────────────────────────────────────────────────────
+training:
+  batch_size:      512    # batch 大小（eval 時 ×2）
+  epochs:          30     # 最大 epoch（早停會提前結束）
+  lr:              0.001  # AdamW 學習率（全域共用）
+  weight_decay:    0.001  # L2 正則（全域共用）
+  patience:        5      # 早停容忍 epoch 數（val_loss 連續無改善）
+  device:          cuda   # cuda / cpu
+  mixed_precision: true   # AMP autocast（float16 forward，gradient 仍 float32；不用 GradScaler）
+  temporal_weight:        # 時間樣本加權（近期資料權重高），train only
+    enabled:  true        #   true → w = exp(-alpha*(max_year-release_year))，normalize mean=1
+    alpha:    0.2         #   0.2: 2018→1.0, 2015→0.55, 2010→0.20, 2000→0.07
+    apply_to: [popularity]   #   只對這些 target 套用（meanScore 不適合）
+  popularity:             # ── popularity 目標轉換 + per-target 超參覆寫 ──
+    log_transform: true   #   log1p（人氣右偏，log 空間訓練）
+    winsor_pct:    99     #   Winsorize 上限百分位（截極端值）
+    overrides:            #   seed=42 最佳：低 dropout（pop 偏好）→ log_MAE 0.882
+      dropout: 0.3        #     覆寫全域 0.5 → 0.3
+  meanScore:              # ── meanScore 目標轉換 + per-target 超參覆寫 ──
+    log_transform: false  #   不 log（0–100 線性分數）
+    winsor_pct:    99     #   Winsorize 上限百分位
+    overrides:            #   seed=42 最佳（= Run02 設定）→ MAE 7.59
+      dropout:      0.3      #   覆寫全域 0.5 → 0.3
+      attn_dropout: 0.1      #   覆寫全域 0.2 → 0.1（meanScore 對此敏感，關鍵）
+      weight_decay: 0.0001   #   覆寫全域 0.001 → 0.0001（明確小數，避免 YAML 解析成字串）
+      batch_size:   256      #   覆寫全域 512 → 256
+
+# ── 輸出 ───────────────────────────────────────────────────────────────────────
+output:
+  run_dir: src_2/runs     # 實驗根目錄（結果存於 runs/{run_id}/{target}/）
+  run_id:  "22"           # 實驗編號（每次新實驗換編號，避免覆蓋）
+  notes:   "Run22: per-target HP override（pop dr=0.3 / score dr=0.3,wd=1e-4,batch=256）; seed=42"

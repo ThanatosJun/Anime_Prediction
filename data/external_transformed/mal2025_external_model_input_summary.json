@@ -1,0 +1,31 @@
+{
+  "generated_at_utc": "2026-05-31T07:20:02.493430+00:00",
+  "outputs": [
+    {
+      "split_name": "mal2025_popularity_local_ready",
+      "exam_csv": "data/external_transformed/mal2025_image_mal_only_popularity_exam_local_ready.csv",
+      "model_input_csv": "src_2/data/dataset/fusion_meta_clean_mal2025_popularity_local_ready_v2.csv",
+      "id_map_csv": "data/external_transformed/mal2025_popularity_local_ready_id_map.csv",
+      "rows": 3765,
+      "surrogate_id_base": 900000000,
+      "min_id": 900000576,
+      "max_id": 900062894
+    },
+    {
+      "split_name": "mal2025_dual_local_ready",
+      "exam_csv": "data/external_transformed/mal2025_image_mal_only_dual_target_exam_local_ready.csv",
+      "model_input_csv": "src_2/data/dataset/fusion_meta_clean_mal2025_dual_local_ready_v2.csv",
+      "id_map_csv": "data/external_transformed/mal2025_dual_local_ready_id_map.csv",
+      "rows": 1202,
+      "surrogate_id_base": 900000000,
+      "min_id": 900000576,
+      "max_id": 900062593
+    }
+  ],
+  "next_steps": [
+    "Generate text embeddings for each split into src_2/embedding/text/text_embeddings_<split>.parquet.",
+    "Generate image embeddings for each split into src_2/embedding/image/image_embeddings_<split>.parquet.",
+    "Generate RAG returns for each split into src_2/RAG/return/rag_features_<split>.parquet.",
+    "Run an external inference helper that preserves id_map labels for MAL metrics."
+  ]
+}

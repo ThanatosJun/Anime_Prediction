@@ -1,0 +1,100 @@
+{
+  "generated_at_utc": "2026-05-31T05:03:49.632327+00:00",
+  "inputs": {
+    "aodb_csv": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/outtestdataset/Anime Offline Database/anime_database.csv",
+    "mal_july_anime_csv": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/outtestdataset/MyAnimeList Anime & Manga Dataset (July 2025)/anime_entries.csv",
+    "mal2025_image_anime_csv": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/outtestdataset/MyAnimeList 2025/mal_anime.csv",
+    "processed_csv": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/processed/anilist_anime_data_processed_v1.csv",
+    "multimodal_csv": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/processed/anilist_anime_multimodal_input_v1.csv",
+    "holdout_csv": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/processed/anilist_anime_multimodal_input_holdout_unknown.csv"
+  },
+  "outputs": {
+    "aodb_id_crosswalk": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/external_transformed/aodb_id_crosswalk.csv",
+    "aodb_holdout_unknown_recovered_rows": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/external_transformed/aodb_holdout_unknown_recovered_rows.csv",
+    "future_multimodal_with_aodb_recovery": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/external_transformed/anilist_anime_multimodal_input_v1_aodb_recovered_future.csv",
+    "mal_july2025_external_eval_contract": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/external_transformed/mal_july2025_external_eval_contract.csv",
+    "mal_july2025_mal_only_dual_target_exam": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/external_transformed/mal_july2025_mal_only_dual_target_exam.csv",
+    "mal_july2025_mal_only_popularity_exam": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/external_transformed/mal_july2025_mal_only_popularity_exam.csv",
+    "mal2025_image_external_eval_contract": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/external_transformed/mal2025_image_external_eval_contract.csv",
+    "mal2025_image_mal_only_dual_target_exam": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/external_transformed/mal2025_image_mal_only_dual_target_exam.csv",
+    "mal2025_image_mal_only_popularity_exam": "C:/Users/g1014308/Documents/GitHub/Learning/Anime_Prediction - medium to extra/data/external_transformed/mal2025_image_mal_only_popularity_exam.csv"
+  },
+  "crosswalk": {
+    "rows": 40515,
+    "unique_anilist_ids": 20352,
+    "unique_mal_ids": 29932,
+    "rows_with_valid_quarter": 34171,
+    "rows_with_season_year": 39056
+  },
+  "holdout_recovery": {
+    "holdout_rows": 943,
+    "recovered_rows": 789,
+    "remaining_holdout_unknown_rows": 154,
+    "recovered_split_counts": {
+      "train": 789
+    },
+    "official_quarter_ranges_preserved": {
+      "test": {
+        "min": 20222,
+        "max": 20261,
+        "count": 3087
+      },
+      "train": {
+        "min": 19402,
+        "max": 20183,
+        "count": 13376
+      },
+      "val": {
+        "min": 20184,
+        "max": 20221,
+        "count": 2918
+      }
+    }
+  },
+  "external_eval": {
+    "source_rows": 28635,
+    "rows_with_mal_id": 28635,
+    "rows_mapped_to_internal_anilist_id": 19090,
+    "rows_with_external_members": 28635,
+    "rows_with_external_score_0_100": 18673,
+    "external_eval_ready_rows": 15590,
+    "external_eval_ready_by_internal_split": {
+      "train": 11437,
+      "val": 2209,
+      "test": 1944
+    },
+    "label_mapping": {
+      "external_popularity_members": "MAL members; count-like, higher means more popular.",
+      "external_score_0_100": "MAL score * 10; score-like, roughly aligned to AniList 0-100 scale.",
+      "external_popularity_rank": "MAL popularity rank; lower means more popular; keep for rank metrics only."
+    },
+    "mal_only_exams": {
+      "mal_only_rows": 9545,
+      "dual_target_rows": 2510,
+      "popularity_only_rows": 9545,
+      "mal_only_with_release_year_quarter": 7035,
+      "dual_with_release_year_quarter": 2482,
+      "mal_only_with_aodb_anilist_id": 1008,
+      "dual_with_aodb_anilist_id": 455,
+      "mal_only_text_metadata_inference_candidates": 7033,
+      "dual_text_metadata_inference_candidates": 2482,
+      "current_full_multimodal_ready_rows": 0
+    }
+  },
+  "mal2025_image_external_eval": {
+    "source_rows": 19931,
+    "rows_with_mal_id": 19931,
+    "rows_with_cover_image_url": 19544,
+    "rows_with_text_description": 19875,
+    "rows_with_release_year_quarter": 19671,
+    "rows_with_external_members": 19549,
+    "rows_with_external_score_0_100": 15239,
+    "rows_mapped_to_internal_anilist_id": 15792,
+    "image_ready_rows": 19283,
+    "aligned_internal_image_ready_rows": 15485,
+    "mal_only_rows_by_id": 4139,
+    "mal_only_image_ready_popularity_rows": 3798,
+    "mal_only_image_ready_dual_target_rows": 1209,
+    "image_asset_note": "Only cover image URLs are available; banner and YOLO crops must be treated as missing/generated assets."
+  }
+}

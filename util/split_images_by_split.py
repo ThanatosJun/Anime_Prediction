@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 SRC_DIR = Path("data/image")
-IMAGE_TYPES = ["coverImage_medium", "bannerImage"]
+IMAGE_TYPES = ["coverImage_extraLarge", "bannerImage"]
 
 SPLITS = {
     "train": {
@@ -51,7 +51,7 @@ def main():
                 if src.exists():
                     shutil.move(str(src), dst / src.name)
                     found += 1
-                elif img_type == "coverImage_medium":
+                elif img_type == "coverImage_extraLarge":
                     no_cover += 1
                 else:
                     no_banner += 1

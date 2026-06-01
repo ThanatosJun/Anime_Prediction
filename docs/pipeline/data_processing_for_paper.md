@@ -196,12 +196,16 @@
   - `data/eda/rq_eda_summary.*`
   - `data/eda/holdout_unknown_diagnostic.*`
   - `data/eda/column_lineage_summary.*`
+- 外部評估證據輸出：
+  - `data/external_transformed/README.md`
+  - `docs/pipeline/external_evaluation_method.md`
+  - `reports/external/external_evaluation_summary.md`
 
 ## 7) 目前限制與論文註記
 
 - 目前切分仍含 temporal 欄位缺失造成的 `unknown` bucket。
 - 相對熱度標籤可降低 snapshot bias，但無法完全消除生命週期效應。
-- 目前 pipeline 聚焦 tabular 前處理；多模態 embedding 管線屬下一階段。
+- 主資料 pipeline 與外部 MAL-only evaluation adapter 已可重現；最終數字仍應在模型定版後重跑。
 - 論文建議同時回報：
   - normalization 前（raw）指標行為
   - target engineering 後（quarter-normalized）指標行為
@@ -228,8 +232,11 @@
   - 加入前作表現代理（`prequel_popularity_mean`、`prequel_meanScore_mean`）
 - [pending] studio 能量特徵：
   - 以時間安全視窗推導 studio 歷史強度
-- [pending] 多模態 embedding bridge：
-  - 增加 image/text/video 資產下載與 embedding 萃取階段
+- [completed] 外部 MAL-only evaluation bridge：
+  - 以 MAL/AniList crosswalk 排除內部已知 rows，不用 title matching。
+  - 產生 MAL-only local-ready metadata、text/image embeddings、RAG returns 與 run02 外部指標。
+- [pending] 影片/更完整圖片資產 bridge：
+  - 目前外部 MAL-only 第一版使用 cover image；banner/YOLO 仍以 missing modality 處理。
 - [pending] 時變 tag 熱度：
   - 建立 genre/tag 市場週期的時間趨勢訊號
 

@@ -16,17 +16,35 @@ import os
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import torch
 from torch.amp import autocast
 from torch.utils.data import DataLoader
 
 from src.fussion_branch.fussion_training.dataset import FusionDataset
+from src.fussion_branch.fussion_training.gnn import TextGNN, ImageGNN
 from src.fussion_branch.fussion_training.meta_encoder import MetaEncoder
 from src.fussion_branch.fussion_training.model import FusionMLP
 from src.fussion_branch.utilities.config import load_config
 from src.fussion_branch.utilities.evaluate import compute_metrics, denormalize
 from src.fussion_branch.utilities.summarize_experiments import collect
+
+
+def _forward(batch, model, text_gnn, img_gnn, device):
+    text       = batch["text_emb"].to(device)
+    cover      = batch["cover_emb"].to(device)
+    char       = batch["char_emb"].to(device)
+    meta       = batch["meta_feat"].to(device)
+    r_txt      = batch["ret_text"].to(device)
+    r_chr      = batch["ret_char"].to(device)
+    mask       = batch["ret_mask"].to(device)
+    year_gaps  = batch["ret_year_gaps"].to(device)
+    enh_text = text_gnn(text, r_txt, mask, year_gaps=year_gaps) if text_gnn is not None else text
+    enh_char = img_gnn(char, r_chr, mask, year_gaps=year_gaps) if img_gnn is not None else char
+    if model._cfg["image_dim"] == cover.shape[-1]:
+        image = cover
+    else:
+        image = torch.cat([enh_char, cover], dim=-1)
+    return model(enh_text, image, meta)
 
 
 def evaluate_target(config: dict, target_col: str):
@@ -48,28 +66,63 @@ def evaluate_target(config: dict, target_col: str):
         if not Path(p).exists():
             raise FileNotFoundError(f"Missing required file: {p}\nRun training first.")
 
-    model   = FusionMLP.load(str(model_config_path), str(checkpoint_path), map_location=device)
-    model   = model.to(device).eval()
-    encoder = MetaEncoder.load(encoder_path)
-
+    with open(model_config_path) as f:
+        model_cfg = json.load(f)
     with open(scaler_path) as f:
         scaler = json.load(f)
 
+    # ── reconstruct models from saved config ──────────────────────────────────
+    gnn_num_layers    = model_cfg.get("gnn_num_layers", 1)
+    gnn_dropout       = model_cfg.get("gnn_dropout", 0.1)
+    gnn_time_temp     = model_cfg.get("gnn_time_temp", 10.0)
+    gnn_text_enabled  = model_cfg.get("gnn_text_enabled",  True)
+    gnn_image_enabled = model_cfg.get("gnn_image_enabled", True)
+    top_k_ids         = model_cfg.get("top_k_ids", 5)
+
+    mlp_keys = {"text_dim", "image_dim", "meta_dim", "text_proj", "image_proj",
+                "meta_proj", "hidden_dims", "dropout"}
+    mlp_cfg  = {k: v for k, v in model_cfg.items() if k in mlp_keys}
+
+    model    = FusionMLP(**mlp_cfg).to(device)
+    text_gnn = TextGNN(num_layers=gnn_num_layers, dropout=gnn_dropout, time_temp=gnn_time_temp).to(device) \
+               if gnn_text_enabled else None
+    img_gnn  = ImageGNN(num_layers=gnn_num_layers, dropout=gnn_dropout, time_temp=gnn_time_temp).to(device) \
+               if gnn_image_enabled else None
+
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=True)
+    if isinstance(ckpt, dict) and "fusion_mlp" in ckpt:
+        model.load_state_dict(ckpt["fusion_mlp"])
+        if text_gnn is not None and "text_gnn" in ckpt:
+            text_gnn.load_state_dict(ckpt["text_gnn"])
+        if img_gnn is not None and "image_gnn" in ckpt:
+            img_gnn.load_state_dict(ckpt["image_gnn"])
+    else:
+        model.load_state_dict(ckpt)
+
+    model.eval()
+    if text_gnn is not None: text_gnn.eval()
+    if img_gnn is not None:  img_gnn.eval()
+    encoder = MetaEncoder.load(encoder_path)
+
     # ── test dataset ──────────────────────────────────────────────────────────
     image_emb_dir = cfg_data.get("image_emb_dir", "src/fussion_branch/embedding/image")
+    char_emb_dir  = cfg_data.get("char_emb_dir", None)
     log_transform = config["targets"][target_col]["log_transform"]
 
     test_ds = FusionDataset(
         split="test",
         encoder=encoder,
         meta_dir=cfg_data["fusion_meta_dir"],
+        meta_suffix=cfg_data.get("meta_suffix", ""),
         text_emb_dir=cfg_data["text_emb_dir"],
         rag_dir=cfg_data["rag_features_dir"],
         image_emb_dir=image_emb_dir,
+        char_emb_dir=char_emb_dir,
         target_col=target_col,
         log_transform_target=log_transform,
-        target_mean=scaler["mean"],
-        target_std=scaler["std"],
+        target_mean=scaler.get("center", scaler.get("mean", 0.0)),
+        target_std=scaler.get("scale",  scaler.get("std",  1.0)),
+        top_k_ids=top_k_ids,
     )
 
     num_workers = min(4, os.cpu_count() or 1)
@@ -77,17 +130,14 @@ def evaluate_target(config: dict, target_col: str):
                              num_workers=num_workers, pin_memory=True)
 
     # ── evaluate ──────────────────────────────────────────────────────────────
-    meta_train = pd.read_csv(f"{cfg_data['fusion_meta_dir']}/fusion_meta_clean_train.csv")
-
     y_true_list, y_pred_list = [], []
     with torch.no_grad():
         for batch in test_loader:
-            x = batch["features"].to(device)
             if use_amp:
                 with autocast("cuda"):
-                    pred = model(x)
+                    pred = _forward(batch, model, text_gnn, img_gnn, device)
             else:
-                pred = model(x)
+                pred = _forward(batch, model, text_gnn, img_gnn, device)
             y_true_list.append(batch["target"].numpy())
             y_pred_list.append(pred.cpu().numpy())
 
@@ -143,7 +193,6 @@ def main():
     print("="*60)
     print(json.dumps(all_metrics, indent=2))
 
-    from pathlib import Path
     out_csv = Path(".exp/fussion/experiments_summary.csv")
     collect().to_csv(out_csv, index=False)
     print(f"\n[summary] updated → {out_csv}")

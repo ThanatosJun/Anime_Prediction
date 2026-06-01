@@ -1,0 +1,134 @@
+"""
+建立 Qdrant RAG collection（使用 training set）
+
+用法：
+  python rag_builder.py
+"""
+
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import yaml
+from qdrant_client import QdrantClient, models
+from qdrant_client.models import Distance, VectorParams
+from tqdm import tqdm
+
+from sparse_encoder import SparseEncoder, parse_genres, parse_studios, parse_voice_actors, parse_source
+
+_CONFIG_PATH = Path(__file__).resolve().parent / "rag_config.yaml"
+
+
+def _load_config() -> dict:
+    with open(_CONFIG_PATH) as f:
+        return yaml.safe_load(f)
+
+
+def _load_emb_map(parquet_path: str, col_prefix: str) -> dict:
+    p = Path(parquet_path)
+    if not p.exists():
+        return {}
+    df   = pd.read_parquet(p)
+    cols = [c for c in df.columns if c.startswith(col_prefix)]
+    return dict(zip(df["id"].astype(int), df[cols].values.astype(np.float32)))
+
+
+def build_collection():
+    cfg = _load_config()
+    collection_name = cfg["qdrant"]["collection_name"]
+    encoder_path    = cfg["paths"]["encoder_path"]
+    meta_dir        = cfg["paths"]["meta_dir"]
+    meta_suffix     = cfg["paths"].get("meta_suffix", "")
+    train_csv       = f"{meta_dir}/fusion_meta_clean_train{meta_suffix}.csv"
+    text_emb_dir    = cfg["paths"]["text_emb_dir"]
+    image_emb_dir   = cfg["paths"].get("image_emb_dir", "")
+    text_emb_dim    = cfg["embedding"]["text_emb_dim"]    # 768
+    image_emb_dim   = cfg["embedding"].get("image_emb_dim", 1024)
+    batch_size      = cfg["indexing"]["batch_size"]
+
+    df = pd.read_csv(train_csv)
+
+    encoder = SparseEncoder().fit(df)
+    encoder.save(encoder_path)
+    print(f"Sparse vocab size: {encoder.dim}  (saved → {encoder_path})")
+
+    text_emb_map = _load_emb_map(
+        str(Path(text_emb_dir) / "text_embeddings_train.parquet"), "emb_"
+    )
+    print(f"Text embeddings: {len(text_emb_map)} entries" if text_emb_map else "Text embeddings not found → sparse-only")
+
+    image_emb_map = _load_emb_map(
+        str(Path(image_emb_dir) / "image_embeddings_train.parquet"), "img_"
+    ) if image_emb_dir else {}
+    print(f"Image embeddings: {len(image_emb_map)} entries" if image_emb_map else "Image embeddings not found → image vector disabled")
+
+    client = QdrantClient(host=cfg["qdrant"]["host"], port=cfg["qdrant"]["port"], timeout=120)
+    if client.collection_exists(collection_name):
+        client.delete_collection(collection_name)
+
+    vectors_config: dict = {}
+    if text_emb_map:
+        vectors_config["text"]  = VectorParams(size=text_emb_dim,  distance=Distance.COSINE)
+    if image_emb_map:
+        vectors_config["image"] = VectorParams(size=image_emb_dim, distance=Distance.COSINE)
+
+    client.create_collection(
+        collection_name=collection_name,
+        vectors_config=vectors_config,
+        sparse_vectors_config={"genre_studio": models.SparseVectorParams()},
+    )
+
+    for field, schema in [
+        ("release_year",    models.PayloadSchemaType.INTEGER),
+        ("release_quarter", models.PayloadSchemaType.INTEGER),
+    ]:
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name=field,
+            field_schema=schema,
+        )
+
+    points = []
+    skipped = 0
+    for _, row in tqdm(df.iterrows(), total=len(df), desc="Indexing training set"):
+        genres       = parse_genres(row["genres"])
+        studios      = parse_studios(row["studios"])
+        voice_actors = parse_voice_actors(row["voice_actor_names"])
+        source       = parse_source(row["source"])
+        indices, values = encoder.encode(genres, studios, voice_actors, source)
+
+        if not indices:
+            skipped += 1
+            continue
+
+        payload = row.to_dict()
+        payload["genres_parsed"]       = genres
+        payload["studios_parsed"]      = studios
+        payload["voice_actors_parsed"] = voice_actors
+
+        anime_id = int(row["id"])
+        vector = {"genre_studio": models.SparseVector(indices=indices, values=values)}
+        if text_emb_map  and anime_id in text_emb_map:
+            vector["text"]  = text_emb_map[anime_id].tolist()
+        if image_emb_map and anime_id in image_emb_map:
+            vector["image"] = image_emb_map[anime_id].tolist()
+
+        points.append(models.PointStruct(id=anime_id, vector=vector, payload=payload))
+
+        if len(points) >= batch_size:
+            client.upsert(collection_name=collection_name, points=points)
+            points.clear()
+
+    if points:
+        client.upsert(collection_name=collection_name, points=points)
+
+    count = client.count(collection_name).count
+    modalities = ["sparse(genre/studio/voice/source)"]
+    if text_emb_map:  modalities.append(f"dense-text({text_emb_dim})")
+    if image_emb_map: modalities.append(f"dense-image({image_emb_dim})")
+    print(f"Collection '{collection_name}': {count} points  (skipped={skipped})")
+    print(f"  Retrieval mode: {' + '.join(modalities)}")
+
+
+if __name__ == "__main__":
+    build_collection()

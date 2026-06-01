@@ -32,7 +32,7 @@
 
 - 產出建議：
   - `artifacts/text_embeddings_{split}.parquet`
-  - `reports/text_branch_metrics.json`
+  - `reports/text_branch/text_branch_metrics.json`
 - 指標：
   - `MAE`, `RMSE`, `Spearman`（兩個 target 都要回報）
 - 最少要有：

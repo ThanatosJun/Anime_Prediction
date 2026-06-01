@@ -195,7 +195,7 @@ def main() -> None:
     output_cfg = config.get("output", {})
 
     artifact_dir = Path(output_cfg.get("artifact_dir", "artifacts"))
-    report_dir = Path(output_cfg.get("report_dir", "reports"))
+    report_dir = Path(output_cfg.get("report_dir", "reports/text_branch"))
     artifact_dir.mkdir(parents=True, exist_ok=True)
     report_dir.mkdir(parents=True, exist_ok=True)
 

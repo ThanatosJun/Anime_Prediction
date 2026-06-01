@@ -90,7 +90,7 @@ Embeddings are saved as:
 
 Metrics are saved as:
 - Format: `.json`
-- Location: `reports/text_branch_metrics.json`
+- Location: `reports/text_branch/text_branch_metrics.json`
 - Includes: MAE, RMSE, Spearman correlation for both targets
 
 ## Next Steps

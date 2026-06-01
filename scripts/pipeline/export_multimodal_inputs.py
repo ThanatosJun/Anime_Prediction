@@ -15,6 +15,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,12 +33,15 @@ MULTIMODAL_CSV = PROCESSED_DIR / "anilist_anime_multimodal_input_v1.csv"
 MULTIMODAL_SPLIT_TEMPLATE = "anilist_anime_multimodal_input_{split}.csv"
 MULTIMODAL_SUMMARY_JSON = EDA_DIR / "multimodal_input_summary.json"
 MULTIMODAL_SUMMARY_MD = EDA_DIR / "multimodal_input_summary.md"
+ID_ALIGNMENT_REPORT_JSON = EDA_DIR / "multimodal_id_alignment_report.json"
 
 RAW_MODALITY_COLUMNS = [
     "id",
     "title_romaji",
     "title_english",
     "description",
+    "coverImage_extraLarge",
+    "coverImage_large",
     "coverImage_medium",
     "bannerImage",
     "trailer_id",
@@ -55,6 +59,10 @@ PROCESSED_TARGET_COLUMNS = [
     "popularity_quarter_pct",
     "popularity_quarter_bucket",
 ]
+
+
+def _allow_id_drift() -> bool:
+    return os.getenv("MULTIMODAL_ALLOW_ID_DRIFT", "0").strip().lower() in {"1", "true", "yes", "y"}
 
 
 def _load_raw() -> pd.DataFrame:
@@ -78,7 +86,11 @@ def _safe_col_select(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
 
 def _with_availability_flags(df: pd.DataFrame) -> pd.DataFrame:
     df["has_text_description"] = df["description"].notna() if "description" in df.columns else False
-    df["has_cover_image"] = df["coverImage_medium"].notna() if "coverImage_medium" in df.columns else False
+    cover_cols = [c for c in ("coverImage_extraLarge", "coverImage_large", "coverImage_medium") if c in df.columns]
+    if cover_cols:
+        df["has_cover_image"] = df[cover_cols].notna().any(axis=1)
+    else:
+        df["has_cover_image"] = False
     df["has_banner_image"] = df["bannerImage"].notna() if "bannerImage" in df.columns else False
     df["has_trailer"] = df["trailer_id"].notna() if "trailer_id" in df.columns else False
     return df
@@ -88,6 +100,27 @@ def _availability_ratio(df: pd.DataFrame, column: str) -> float | None:
     if column not in df.columns:
         return None
     return float(df[column].mean())
+
+
+def _validate_id_alignment(raw_df: pd.DataFrame, processed_df: pd.DataFrame) -> dict:
+    raw_ids = set(pd.to_numeric(raw_df["id"], errors="coerce").dropna().astype(int).tolist())
+    processed_ids = set(pd.to_numeric(processed_df["id"], errors="coerce").dropna().astype(int).tolist())
+
+    processed_not_in_raw = sorted(processed_ids - raw_ids)
+    raw_not_in_processed = sorted(raw_ids - processed_ids)
+    report = {
+        "checked_at_utc": datetime.now(timezone.utc).isoformat(),
+        "raw_id_count": len(raw_ids),
+        "processed_id_count": len(processed_ids),
+        "processed_not_in_raw_count": len(processed_not_in_raw),
+        "raw_not_in_processed_count": len(raw_not_in_processed),
+        "processed_not_in_raw_sample": processed_not_in_raw[:20],
+        "raw_not_in_processed_sample": raw_not_in_processed[:20],
+    }
+
+    EDA_DIR.mkdir(parents=True, exist_ok=True)
+    ID_ALIGNMENT_REPORT_JSON.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return report
 
 
 def _build_summary(df: pd.DataFrame) -> dict:
@@ -162,6 +195,17 @@ def _write_summary(summary: dict) -> None:
 def main() -> None:
     raw_df = _load_raw()
     processed_df = _load_processed()
+    id_alignment = _validate_id_alignment(raw_df, processed_df)
+    allow_id_drift = _allow_id_drift()
+
+    if id_alignment["processed_not_in_raw_count"] > 0 and not allow_id_drift:
+        raise ValueError(
+            "ID alignment check failed: processed contains IDs missing from raw. "
+            f"processed_not_in_raw={id_alignment['processed_not_in_raw_count']}, "
+            f"sample={id_alignment['processed_not_in_raw_sample']}. "
+            f"See {ID_ALIGNMENT_REPORT_JSON}. "
+            "If this drift is intentional, set MULTIMODAL_ALLOW_ID_DRIFT=1 to bypass."
+        )
 
     raw_subset = _safe_col_select(raw_df, RAW_MODALITY_COLUMNS)
     processed_subset = _safe_col_select(processed_df, PROCESSED_TARGET_COLUMNS)

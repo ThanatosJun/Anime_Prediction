@@ -2,7 +2,7 @@
 data:
   csv_path: data/processed/anilist_anime_multimodal_input_v1.csv
   image_columns:
-    - coverImage_medium
+    - coverImage_extraLarge
     - bannerImage
   fetch_ratio: 1            # 抓取比例，1.0 = 全量；debug 時可調低
   split:

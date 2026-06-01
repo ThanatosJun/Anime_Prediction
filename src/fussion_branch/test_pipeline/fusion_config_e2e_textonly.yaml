@@ -1,0 +1,51 @@
+# ── Data ──────────────────────────────────────────────────────────────────────
+data:
+  fusion_meta_dir:   data/fussion
+  rag_features_dir:  src/fussion_branch/RAG/return
+  image_emb_dir:     null   # disabled — text-only experiment
+  meta_encoder_path: .exp/fussion/meta_encoder.json
+
+# ── Text Encoder (E2E fine-tune) ───────────────────────────────────────────────
+text_encoder:
+  model_name:    "sentence-transformers/all-MiniLM-L6-v2"
+  freeze_layers: 4
+  max_length:    128
+  backbone_lr:   1.0e-5
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model:
+  text_proj:   128
+  image_proj:   64   # ignored when no_image=true
+  meta_proj:    64
+  hidden_dims: [256, 128, 64]
+  dropout:     0.4
+  no_image:    true  # remove image branch entirely
+
+# ── Training ──────────────────────────────────────────────────────────────────
+training:
+  batch_size:               64
+  epochs:                   100
+  learning_rate:            5.0e-4
+  weight_decay:             1.0e-2
+  warmup_epochs:            5
+  early_stopping_patience:  20
+  grad_clip:                1.0
+  mixed_precision:          true
+  device:                   cuda
+
+# ── Targets ───────────────────────────────────────────────────────────────────
+active_targets: ["popularity"]
+
+targets:
+  popularity:
+    log_transform:  true
+    winsor_pct:     99
+  meanScore:
+    log_transform:  false
+    winsor_pct:     null
+
+# ── Output ────────────────────────────────────────────────────────────────────
+output:
+  results_dir: .exp/fussion/results_e2e
+  run_id:      "03"
+  notes:       "text-only E2E fine-tune; no_image=true; freeze_layers=4; backbone_lr=1e-5"
