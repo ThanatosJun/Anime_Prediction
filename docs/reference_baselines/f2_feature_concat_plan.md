@@ -182,7 +182,7 @@ Runner output:
 Tracked status update:
 
 ```text
-reports/reference_baseline_status.md
+reports/baselines/reference_baseline_status.md
 ```
 
 ## 12. Relationship To C1
@@ -210,7 +210,7 @@ python -m src.reference_baseline_branch.run_reference_baselines --baseline F2-XG
 python -m src.reference_baseline_branch.run_reference_baselines --baseline F2-XGB-Concat --target meanScore
 ```
 
-5. Update `reports/reference_baseline_status.md`.
+5. Update `reports/baselines/reference_baseline_status.md`.
 
 ## 14. Artifact Check
 

@@ -20,7 +20,7 @@
 更完整的 C3/SKAPP「可主張範圍」已記錄於：
 
 ```text
-reports/reference_baseline_paper_alignment_audit.md
+reports/baselines/reference_baseline_paper_alignment_audit.md
 ```
 
 本文件中的 `none/sparse/dense/hybrid/selective` 只回答「檢索特徵是否帶來增益」，不是 SKAPP 復現。若要把 C3 往更接近 SKAPP 推進，至少還需要：

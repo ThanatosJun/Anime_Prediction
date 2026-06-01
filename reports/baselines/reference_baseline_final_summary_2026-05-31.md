@@ -39,7 +39,7 @@
 
 ## 2. 目前最佳結果
 
-以下使用 `reports/reference_baseline_v2_highres_results.csv`。注意：high-res rows 多數使用 project text/image embedding 的 available-case subset，`n_test = 2808`；image-only 是 `n_test = 3087`。正式論文若要嚴格比較，應另產同一批 test ids 的 common-subset table。
+以下使用 `reports/baselines/reference_baseline_v2_highres_results.csv`。注意：high-res rows 多數使用 project text/image embedding 的 available-case subset，`n_test = 2808`；image-only 是 `n_test = 3087`。正式論文若要嚴格比較，應另產同一批 test ids 的 common-subset table。
 
 ### Popularity 最佳結果
 

@@ -56,11 +56,11 @@
 
 目前可讀結果表：
 
-- `reports/reference_baseline_v2_results.md`
-- `reports/reference_baseline_v2_results.csv`
-- `reports/reference_baseline_v2_vs_previous.csv`
-- `reports/v2_input_effect_comparison.md`
-- `reports/reference_baseline_paper_table_decision_2026-05-30.md`：論文主表/附錄採用決策，以這份為目前定稿依據
+- `reports/baselines/reference_baseline_v2_results.md`
+- `reports/baselines/reference_baseline_v2_results.csv`
+- `reports/baselines/reference_baseline_v2_vs_previous.csv`
+- `reports/experiments/v2_input_effect_comparison.md`
+- `reports/baselines/reference_baseline_paper_table_decision_2026-05-30.md`：論文主表/附錄採用決策，以這份為目前定稿依據
 
 ### 目前 V2 baseline 主要結果
 
@@ -194,7 +194,7 @@
 
 ### 短期：先把正式週會表格定稿
 
-- 用 `reports/reference_baseline_v2_results.md` 作為本週 reference baseline 結果表。
+- 用 `reports/baselines/reference_baseline_v2_results.md` 作為本週 reference baseline 結果表。
 - 會議中明確說明：
   - 目前 V2 baseline 是 V2 metadata/split 對齊結果
   - 目前尚未使用 `src_2` 重新產生 image embedding

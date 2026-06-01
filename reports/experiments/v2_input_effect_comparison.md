@@ -34,7 +34,7 @@ V2 目前不是單純「新版 image embedding」。在 baseline 端，V2 的實
 
 ## Baseline 與之前輸入相比
 
-完整逐列比較在 `reports/reference_baseline_v2_vs_previous.csv`。
+完整逐列比較在 `reports/baselines/reference_baseline_v2_vs_previous.csv`。
 
 主要觀察：
 

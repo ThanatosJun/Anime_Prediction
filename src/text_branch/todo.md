@@ -49,7 +49,7 @@ C:/Users/User/anaconda3/python.exe -m pip install sentence-transformers pandas n
   - `MAE`
   - `RMSE`
   - `Spearman`
-- [x] Save report: `reports/text_branch_metrics.json`
+- [x] Save report: `reports/text_branch/text_branch_metrics.json`
 
 ### 5) Reproducibility Checklist
 - [x] Save model metadata (`model_name`, `embedding_dim`)
@@ -67,7 +67,7 @@ C:/Users/User/anaconda3/python.exe -m pip install sentence-transformers pandas n
 ## What To Do Next (Now)
 - [x] Run full embeddings (remove `--sample-size`) for train/val/test
 - [x] Re-run `baseline_model.py` on full artifacts
-- [x] Add package-version metadata to `reports/text_branch_metrics.json`
+- [x] Add package-version metadata to `reports/text_branch/text_branch_metrics.json`
 - [ ] Add MLP comparison run (optional)
 
 ## Latest Run Snapshot
@@ -75,10 +75,10 @@ C:/Users/User/anaconda3/python.exe -m pip install sentence-transformers pandas n
   - train encoded: 12783/13376 (95.57%)
   - val encoded: 2637/2918 (90.37%)
   - test encoded: 2808/3087 (90.96%)
-- Baseline metrics generated: `reports/text_branch_metrics.json`
+- Baseline metrics generated: `reports/text_branch/text_branch_metrics.json`
   - popularity: val (MAE 20462.82, RMSE 42125.67, Spearman 0.5509), test (MAE 17946.53, RMSE 34055.32, Spearman 0.5408)
   - meanScore: val (MAE 9.81, RMSE 11.93, Spearman 0.2886), test (MAE 10.94, RMSE 13.12, Spearman 0.2152)
-- Findings summary document added: `reports/text_branch_experiment_findings.md`
+- Findings summary document added: `reports/text_branch/text_branch_experiment_findings.md`
 
 ## Notes
 - Local CPU runtime for embeddings is workable on your setup (roughly a few minutes for train+val+test with MiniLM).

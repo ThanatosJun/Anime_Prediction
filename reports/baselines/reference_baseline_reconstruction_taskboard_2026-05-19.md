@@ -8,7 +8,7 @@
 
 Status: pending for next agent
 
-1. 先讀 `reports/reference_baseline_handoff_2026-05-19.md`。
+1. 先讀 `reports/baselines/reference_baseline_handoff_2026-05-19.md`。
 2. 跑 `git status --short`，確認目前未提交檔案。
 3. 不要 revert unrelated dirty files。
 4. 不要 commit `.exp/`、`baseline_refer/`、`data/fetch_log.csv`。
@@ -27,10 +27,10 @@ Primary files:
 src/reference_baseline_branch/run_c3_skapp_full.py
 src/reference_baseline_branch/build_c3_rag_features.py
 src/reference_baseline_branch/configs/reference_baselines.yaml
-reports/reference_baseline_results.csv
-reports/reference_baseline_runs.md
-reports/reference_baseline_status.md
-reports/reference_baseline_paper_alignment_audit.md
+reports/baselines/reference_baseline_results.csv
+reports/baselines/reference_baseline_runs.md
+reports/baselines/reference_baseline_status.md
+reports/baselines/reference_baseline_paper_alignment_audit.md
 baseline_refer/skapp-main/src/
 ```
 
@@ -294,18 +294,18 @@ Important tracked docs:
 ```text
 docs/baseline_reference_implementation_plan.md
 docs/baseline_directory_planning.md
-reports/reference_baseline_handoff_2026-05-19.md
-reports/reference_baseline_reconstruction_taskboard_2026-05-19.md
-reports/reference_baseline_reproduction_commands_2026-05-19.md
-reports/reference_baseline_paper_alignment_audit.md
-reports/reference_baseline_status.md
-reports/reference_baseline_runs.md
-reports/reference_baseline_results.csv
+reports/baselines/reference_baseline_handoff_2026-05-19.md
+reports/baselines/reference_baseline_reconstruction_taskboard_2026-05-19.md
+reports/baselines/reference_baseline_reproduction_commands_2026-05-19.md
+reports/baselines/reference_baseline_paper_alignment_audit.md
+reports/baselines/reference_baseline_status.md
+reports/baselines/reference_baseline_runs.md
+reports/baselines/reference_baseline_results.csv
 ```
 
 Documentation rules:
 
-1. Keep `reference_baseline_results.csv` as compact metrics table.
+1. Keep `reports/baselines/reference_baseline_results.csv` as compact metrics table.
 2. Keep `reference_baseline_runs.md` as run/artifact index and snapshots.
 3. Keep `reference_baseline_paper_alignment_audit.md` as claim boundary and
    paper-to-project mapping.

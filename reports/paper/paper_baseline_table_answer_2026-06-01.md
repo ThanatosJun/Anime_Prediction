@@ -97,7 +97,7 @@ highres 與非 highres selected rows 的 test IDs 相同；highres 改的是 ima
 有，已產出：
 
 ```text
-reports/paper_baseline_main_table_2026-06-01.csv
+reports/paper/paper_baseline_main_table_2026-06-01.csv
 ```
 
 但它是 `n=2,808` complete-case reference baseline table。若要與 FusionModel v2 Run22 的 `n=3,087` full-test result 同表比較，這份還不是最終主表。
@@ -315,13 +315,13 @@ Selected rows 都可從 `test_predictions.csv` 重算。
 目前 reference complete-case table：
 
 ```text
-reports/paper_baseline_main_table_2026-06-01.csv
+reports/paper/paper_baseline_main_table_2026-06-01.csv
 ```
 
 完整支援結果：
 
 ```text
-reports/reference_baseline_metrics_extended_2026-06-01.csv
+reports/baselines/reference_baseline_metrics_extended_2026-06-01.csv
 ```
 
 但若要和 Run22 full-test result 放同一張表，需新增：
@@ -347,7 +347,7 @@ highres 更新 image embedding artifact 的特徵值/維度，但沒有改變 se
 已產生 reference complete-case 版本：
 
 ```text
-reports/paper_baseline_main_table_2026-06-01.csv
+reports/paper/paper_baseline_main_table_2026-06-01.csv
 ```
 
 但它應定位為 reference baseline complete-case table。若要與 Run22 full-test result 直接比較，仍需補 full-test imputed baseline table 或拆表呈現。

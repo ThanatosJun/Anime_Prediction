@@ -220,6 +220,6 @@ Retrieval augmentation 可依檢索依據分成 metadata-based retrieval 與 sem
 - `docs/pipeline/data_processing_for_paper.md`
 - `docs/pipeline/external_evaluation_method.md`
 - `docs/paper_baseline_sections_draft.md`
-- `reports/external_evaluation_summary.md`
-- `reports/reference_baseline_metrics_extended_2026-06-01.md`
-- `reports/c3_source_exact_k64_diagnostic_2026-06-01.md`
+- `reports/external/external_evaluation_summary.md`
+- `reports/baselines/reference_baseline_metrics_extended_2026-06-01.md`
+- `reports/diagnostics/c3_source_exact_k64_diagnostic_2026-06-01.md`

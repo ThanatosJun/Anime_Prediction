@@ -29,7 +29,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train text-only baseline regressors.")
     parser.add_argument("--artifact-dir", type=Path, default=Path("artifacts"))
-    parser.add_argument("--report-dir", type=Path, default=Path("reports"))
+    parser.add_argument("--report-dir", type=Path, default=Path("reports/text_branch"))
     parser.add_argument("--embedding-prefix", type=str, default="text_embeddings")
     parser.add_argument("--id-column", type=str, default="id")
     parser.add_argument(

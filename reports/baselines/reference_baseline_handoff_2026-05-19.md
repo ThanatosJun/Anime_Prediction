@@ -3,12 +3,12 @@
 本文件交接給下一個 agent，用於延續 C1 / C2 / C3 reference baseline 的
 完整復現工作。請先讀完本文件，再看：
 
-- `reports/reference_baseline_reconstruction_taskboard_2026-05-19.md`
-- `reports/reference_baseline_reproduction_commands_2026-05-19.md`
-- `reports/reference_baseline_paper_alignment_audit.md`
-- `reports/reference_baseline_status.md`
-- `reports/reference_baseline_runs.md`
-- `reports/reference_baseline_results.csv`
+- `reports/baselines/reference_baseline_reconstruction_taskboard_2026-05-19.md`
+- `reports/baselines/reference_baseline_reproduction_commands_2026-05-19.md`
+- `reports/baselines/reference_baseline_paper_alignment_audit.md`
+- `reports/baselines/reference_baseline_status.md`
+- `reports/baselines/reference_baseline_runs.md`
+- `reports/baselines/reference_baseline_results.csv`
 
 ## Current Branch And Git State
 
@@ -35,10 +35,10 @@ agent 的改動。
 
 ```text
 .gitignore
-reports/reference_baseline_paper_alignment_audit.md
-reports/reference_baseline_results.csv
-reports/reference_baseline_runs.md
-reports/reference_baseline_status.md
+reports/baselines/reference_baseline_paper_alignment_audit.md
+reports/baselines/reference_baseline_results.csv
+reports/baselines/reference_baseline_runs.md
+reports/baselines/reference_baseline_status.md
 src/experiment_common/features.py
 src/reference_baseline_branch/build_c3_rag_features.py
 src/reference_baseline_branch/configs/reference_baselines.yaml
@@ -396,7 +396,7 @@ Important C3 generated artifacts:
 ```bash
 python -m py_compile src/experiment_common/features.py src/reference_baseline_branch/build_c3_rag_features.py src/reference_baseline_branch/sklearn_models.py src/reference_baseline_branch/run_c3_skapp_full.py
 python -c "import yaml; yaml.safe_load(open('src/reference_baseline_branch/configs/reference_baselines.yaml', encoding='utf-8')); print('yaml ok')"
-git diff --check -- src/reference_baseline_branch/build_c3_rag_features.py src/reference_baseline_branch/run_c3_skapp_full.py src/reference_baseline_branch/configs/reference_baselines.yaml reports/reference_baseline_results.csv reports/reference_baseline_runs.md reports/reference_baseline_status.md reports/reference_baseline_paper_alignment_audit.md
+git diff --check -- src/reference_baseline_branch/build_c3_rag_features.py src/reference_baseline_branch/run_c3_skapp_full.py src/reference_baseline_branch/configs/reference_baselines.yaml reports/baselines/reference_baseline_results.csv reports/baselines/reference_baseline_runs.md reports/baselines/reference_baseline_status.md reports/baselines/reference_baseline_paper_alignment_audit.md
 ```
 
 PowerShell profile 會噴 `Microsoft.WinGet.CommandNotFound` 的訊息，這是環境

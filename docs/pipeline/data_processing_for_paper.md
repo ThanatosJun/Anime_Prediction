@@ -199,7 +199,7 @@
 - 外部評估證據輸出：
   - `data/external_transformed/README.md`
   - `docs/pipeline/external_evaluation_method.md`
-  - `reports/external_evaluation_summary.md`
+  - `reports/external/external_evaluation_summary.md`
 
 ## 7) 目前限制與論文註記
 

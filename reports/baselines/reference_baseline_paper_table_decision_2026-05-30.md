@@ -81,14 +81,14 @@
 
 建議提交：
 
-- `reports/reference_baseline_v2_results.csv`
-- `reports/reference_baseline_v2_results.md`
-- `reports/reference_baseline_v2_vs_previous.csv`
-- `reports/reference_baseline_v2_vs_previous_comparison.csv`
-- `reports/reference_baseline_v2_vs_previous_comparison.md`
-- `reports/reference_baseline_weekly_update_2026-05-26.md`
-- `reports/v2_input_effect_comparison.md`
-- `reports/reference_baseline_paper_table_decision_2026-05-30.md`
+- `reports/baselines/reference_baseline_v2_results.csv`
+- `reports/baselines/reference_baseline_v2_results.md`
+- `reports/baselines/reference_baseline_v2_vs_previous.csv`
+- `reports/baselines/reference_baseline_v2_vs_previous_comparison.csv`
+- `reports/baselines/reference_baseline_v2_vs_previous_comparison.md`
+- `reports/baselines/reference_baseline_weekly_update_2026-05-26.md`
+- `reports/experiments/v2_input_effect_comparison.md`
+- `reports/baselines/reference_baseline_paper_table_decision_2026-05-30.md`
 
 不建議提交：
 

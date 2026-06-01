@@ -18,7 +18,7 @@
 論文復現限制已統一記錄於：
 
 ```text
-reports/reference_baseline_paper_alignment_audit.md
+reports/baselines/reference_baseline_paper_alignment_audit.md
 ```
 
 該 audit 覆蓋 C1、C2、C3 的復現限制。簡單說：C1 主線採 project-input reconstruction，Figure 2 character route 只作旁支；C2 主線採 project-input CTNN reconstruction，dual-visual row 只作 ResNet50+ViT-like 對齊診斷；C3 主線保留 project historical-anime retrieval，再補 learned contribution scoring 與 graph/attention fusion。任何換掉本專案主輸入契約的版本都不能列為主線 baseline。
@@ -79,12 +79,12 @@ src/ablation_branch/
 已追蹤的結果摘要：
 
 ```text
-reports/reference_baseline_results.csv
-reports/reference_baseline_runs.md
-reports/reference_baseline_paper_alignment_audit.md
+reports/baselines/reference_baseline_results.csv
+reports/baselines/reference_baseline_runs.md
+reports/baselines/reference_baseline_paper_alignment_audit.md
 ```
 
-`reports/reference_baseline_paper_alignment_audit.md` 應視為 claim boundary 的 source of truth，用來判斷某個 baseline 應該描述成 reproduction、adaptation、proxy adaptation，或只是 inspiration-only。
+`reports/baselines/reference_baseline_paper_alignment_audit.md` 應視為 claim boundary 的 source of truth，用來判斷某個 baseline 應該描述成 reproduction、adaptation、proxy adaptation，或只是 inspiration-only。
 
 最新 F2 feature-concat run：
 
@@ -751,7 +751,7 @@ RRCP/CXMI-style weighting。第一版 performance 很差，因此目前代表「
 已可執行」，不是可報告的最佳性能 row。
 
 2026-05-20 診斷：負 R2 不是因為 tensor 檔案壞掉或 target 欄位讀錯。
-完整分析見 `reports/c3_skappfull_negative_r2_diagnosis_2026-05-20.md`。
+完整分析見 `reports/diagnostics/c3_skappfull_negative_r2_diagnosis_2026-05-20.md`。
 目前判斷如下：
 
 ```text

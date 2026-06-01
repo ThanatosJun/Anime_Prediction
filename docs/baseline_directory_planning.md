@@ -139,7 +139,7 @@ Project ablations 放在 RQ 或 analysis 段落，例如：
 
 因此結果表建議拆成三張：
 
-1. `reference_baseline_results.csv`
+1. `reports/baselines/reference_baseline_results.csv`
 2. `ablation_results.csv`
 3. `main_model_results.csv`
 

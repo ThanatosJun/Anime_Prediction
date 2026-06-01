@@ -4,8 +4,8 @@ Generate target correlation heatmaps for processed dataset columns.
 Outputs:
 - reports/figures/corr_popularity_heatmap.png
 - reports/figures/corr_meanscore_heatmap.png
-- reports/target_correlation_summary.json
-- reports/target_correlation_summary.md
+- reports/eda/target_correlation_summary.json
+- reports/eda/target_correlation_summary.md
 """
 
 from __future__ import annotations
@@ -22,8 +22,8 @@ FIG_DIR = REPORTS_DIR / "figures"
 
 OUT_POP_HEATMAP = FIG_DIR / "corr_popularity_heatmap.png"
 OUT_SCORE_HEATMAP = FIG_DIR / "corr_meanscore_heatmap.png"
-OUT_SUMMARY_JSON = REPORTS_DIR / "target_correlation_summary.json"
-OUT_SUMMARY_MD = REPORTS_DIR / "target_correlation_summary.md"
+OUT_SUMMARY_JSON = EDA_DIR / "target_correlation_summary.json"
+OUT_SUMMARY_MD = EDA_DIR / "target_correlation_summary.md"
 
 EXCLUDE_FROM_FEATURES = {
     "id",
@@ -104,7 +104,7 @@ def _write_summary(pop_corr: pd.Series, score_corr: pd.Series, matrix: pd.DataFr
             "meanScore": {k: float(v) for k, v in score_corr.items()},
         },
     }
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    EDA_DIR.mkdir(parents=True, exist_ok=True)
     OUT_SUMMARY_JSON.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
     lines = [

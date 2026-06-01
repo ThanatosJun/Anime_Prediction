@@ -4,28 +4,28 @@ Updated: 2026-05-14
 
 本文件是 reference baseline 的閱讀入口與 run ledger。Raw `.exp/`
 outputs 是本機實驗產物，不提交；可報告的數字統一整理到
-`reports/reference_baseline_results.csv`。
+`reports/baselines/reference_baseline_results.csv`。
 
 ## 文件用途與閱讀順序
 
 | 文件 | 必須存在的理由 | 何時閱讀 |
 |---|---|---|
-| `reports/reference_baseline_runs.md` | Reference baseline 入口；整理已跑哪些 route、每個 run 的來源、目前結論。 | 組員第一次接手或要快速同步時先看。 |
-| `reports/reference_baseline_results.csv` | 可攜帶的數字結果表；取代 ignored `.exp/` raw outputs。 | 要畫表、比較 R2/MAE/Spearman、寫實驗結果時看。 |
-| `reports/reference_baseline_paper_alignment_audit.md` | 定義 C1/C2/C3 是否對齊論文、哪些話可以寫、哪些不能寫。 | 要寫論文/報告 claim，或決定下一條 reference route 時看。 |
-| `reports/reference_baseline_status.md` | 詳細工作紀錄；保留實作脈絡、指令、歷史解讀。 | 需要追溯「為什麼這樣做」或 debug 舊決策時看，不作為第一入口。 |
+| `reports/baselines/reference_baseline_runs.md` | Reference baseline 入口；整理已跑哪些 route、每個 run 的來源、目前結論。 | 組員第一次接手或要快速同步時先看。 |
+| `reports/baselines/reference_baseline_results.csv` | 可攜帶的數字結果表；取代 ignored `.exp/` raw outputs。 | 要畫表、比較 R2/MAE/Spearman、寫實驗結果時看。 |
+| `reports/baselines/reference_baseline_paper_alignment_audit.md` | 定義 C1/C2/C3 是否對齊論文、哪些話可以寫、哪些不能寫。 | 要寫論文/報告 claim，或決定下一條 reference route 時看。 |
+| `reports/baselines/reference_baseline_status.md` | 詳細工作紀錄；保留實作脈絡、指令、歷史解讀。 | 需要追溯「為什麼這樣做」或 debug 舊決策時看，不作為第一入口。 |
 | `docs/baseline_reference_implementation_plan.md` | 初始 reference baseline roadmap；說明 route 0、1、2 的設計來源。 | 要理解原始規劃時看；目前狀態以本文件與 status 為準。 |
 | `docs/baseline_directory_planning.md` | 說明 `reference_baseline_branch`、`ablation_branch`、`experiment_common` 的目錄分工。 | 新增 baseline 程式或調整目錄時看。 |
 | `docs/reference_baselines/f2_feature_concat_plan.md` | F2 feature-concat route 的實作規劃與輸入契約。 | 只在維護 F2 或解釋 no-RAG multimodal floor 時看。 |
 | `docs/rq2_rag_ablation_plan.md` | RQ2/RAG ablation 的問題定義與實驗設計。 | 只在處理 EXP2/RAG ablation，不是 reference overview 時看。 |
-| `reports/reference_baseline_weekly_sync_2026-05-12.md` | dated snapshot；保留當日同步紀錄。 | 僅供歷史追溯；不要當作最新狀態。 |
+| `reports/baselines/reference_baseline_weekly_sync_2026-05-12.md` | dated snapshot；保留當日同步紀錄。 | 僅供歷史追溯；不要當作最新狀態。 |
 
 目前主線判準只有兩條：第一，baseline 輸入要對齊本專案主框架；第二，在該輸入限制下，模型方法要盡量還原原論文設計。
 
 ## Tracked Result Table
 
 ```text
-reports/reference_baseline_results.csv
+reports/baselines/reference_baseline_results.csv
 ```
 
 ## Source Runs

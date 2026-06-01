@@ -28,8 +28,8 @@
 - artifacts/text_embeddings_test.parquet
 
 配套報告：
-- reports/text_embedding_pipeline_summary.json
-- reports/text_branch_metrics.json
+- reports/text_branch/text_embedding_pipeline_summary.json
+- reports/text_branch/text_branch_metrics.json
 
 ## 3. 清洗後的資料保留率
 - Train：12783 / 13376 已編碼（95.57%）

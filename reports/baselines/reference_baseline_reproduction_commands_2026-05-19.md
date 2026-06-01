@@ -3,12 +3,12 @@
 本文件是下一個 agent 接手 C1 / C2 / C3 baseline 復現時的指令索引。
 背景與判斷請先看：
 
-- `reports/reference_baseline_handoff_2026-05-19.md`
-- `reports/reference_baseline_reconstruction_taskboard_2026-05-19.md`
-- `reports/reference_baseline_paper_alignment_audit.md`
-- `reports/reference_baseline_status.md`
-- `reports/reference_baseline_runs.md`
-- `reports/reference_baseline_results.csv`
+- `reports/baselines/reference_baseline_handoff_2026-05-19.md`
+- `reports/baselines/reference_baseline_reconstruction_taskboard_2026-05-19.md`
+- `reports/baselines/reference_baseline_paper_alignment_audit.md`
+- `reports/baselines/reference_baseline_status.md`
+- `reports/baselines/reference_baseline_runs.md`
+- `reports/baselines/reference_baseline_results.csv`
 
 ## Common Sanity Checks
 
@@ -41,7 +41,7 @@ python -m py_compile src/reference_baseline_branch/build_c1_character_features.p
 檢查 reportable 結果：
 
 ```powershell
-python -c "import pandas as pd; df=pd.read_csv('reports/reference_baseline_results.csv'); print(df.tail(20).to_string(index=False))"
+python -c "import pandas as pd; df=pd.read_csv('reports/baselines/reference_baseline_results.csv'); print(df.tail(20).to_string(index=False))"
 ```
 
 注意：
@@ -67,13 +67,13 @@ Local artifacts:
 Tracked reports:
 
 ```text
-reports/reference_baseline_results.csv
-reports/reference_baseline_runs.md
-reports/reference_baseline_status.md
-reports/reference_baseline_paper_alignment_audit.md
-reports/reference_baseline_handoff_2026-05-19.md
-reports/reference_baseline_reconstruction_taskboard_2026-05-19.md
-reports/reference_baseline_reproduction_commands_2026-05-19.md
+reports/baselines/reference_baseline_results.csv
+reports/baselines/reference_baseline_runs.md
+reports/baselines/reference_baseline_status.md
+reports/baselines/reference_baseline_paper_alignment_audit.md
+reports/baselines/reference_baseline_handoff_2026-05-19.md
+reports/baselines/reference_baseline_reconstruction_taskboard_2026-05-19.md
+reports/baselines/reference_baseline_reproduction_commands_2026-05-19.md
 ```
 
 External source reference:
@@ -93,14 +93,14 @@ C1-Armenta-ProjectInputReconstruction
 查 C1 目前所有紀錄：
 
 ```powershell
-python -c "import pandas as pd; df=pd.read_csv('reports/reference_baseline_results.csv'); print(df[df['baseline_id'].str.startswith('C1', na=False)].to_string(index=False))"
+python -c "import pandas as pd; df=pd.read_csv('reports/baselines/reference_baseline_results.csv'); print(df[df['baseline_id'].str.startswith('C1', na=False)].to_string(index=False))"
 ```
 
 查 C1 文件狀態：
 
 ```powershell
-Select-String -Path reports/reference_baseline_status.md -Pattern "C1"
-Select-String -Path reports/reference_baseline_paper_alignment_audit.md -Pattern "C1"
+Select-String -Path reports/baselines/reference_baseline_status.md -Pattern "C1"
+Select-String -Path reports/baselines/reference_baseline_paper_alignment_audit.md -Pattern "C1"
 ```
 
 重建 GPT-2 synopsis artifact：
@@ -156,14 +156,14 @@ C2-ProjectInputCTNNDualVisualReconstruction
 查 C2 目前所有紀錄：
 
 ```powershell
-python -c "import pandas as pd; df=pd.read_csv('reports/reference_baseline_results.csv'); print(df[df['baseline_id'].str.startswith('C2', na=False)].to_string(index=False))"
+python -c "import pandas as pd; df=pd.read_csv('reports/baselines/reference_baseline_results.csv'); print(df[df['baseline_id'].str.startswith('C2', na=False)].to_string(index=False))"
 ```
 
 查 C2 文件狀態：
 
 ```powershell
-Select-String -Path reports/reference_baseline_status.md -Pattern "C2"
-Select-String -Path reports/reference_baseline_paper_alignment_audit.md -Pattern "C2"
+Select-String -Path reports/baselines/reference_baseline_status.md -Pattern "C2"
+Select-String -Path reports/baselines/reference_baseline_paper_alignment_audit.md -Pattern "C2"
 ```
 
 重跑 C2 reconstruction：
@@ -222,13 +222,13 @@ python -c "import pandas as pd; p='.exp/baseline/rag_features/skapp_graph_proxy_
 查 C3 所有結果：
 
 ```powershell
-python -c "import pandas as pd; df=pd.read_csv('reports/reference_baseline_results.csv'); print(df[df['baseline_id'].str.startswith('C3', na=False)].to_string(index=False))"
+python -c "import pandas as pd; df=pd.read_csv('reports/baselines/reference_baseline_results.csv'); print(df[df['baseline_id'].str.startswith('C3', na=False)].to_string(index=False))"
 ```
 
 查目前 C3 selective / SKAPP 相關結果：
 
 ```powershell
-python -c "import pandas as pd; df=pd.read_csv('reports/reference_baseline_results.csv'); m=df['baseline_id'].str.contains('SKAPP|Selective|RAG', case=False, na=False); print(df[m].to_string(index=False))"
+python -c "import pandas as pd; df=pd.read_csv('reports/baselines/reference_baseline_results.csv'); m=df['baseline_id'].str.contains('SKAPP|Selective|RAG', case=False, na=False); print(df[m].to_string(index=False))"
 ```
 
 目前性能上仍最強的 C3 row 是：
@@ -365,10 +365,10 @@ rg -n "RRCP|CXMI|dissembled|retrieved|mask|without|with" src/reference_baseline_
 每次正式跑完，至少更新：
 
 ```text
-reports/reference_baseline_results.csv
-reports/reference_baseline_runs.md
-reports/reference_baseline_status.md
-reports/reference_baseline_paper_alignment_audit.md
+reports/baselines/reference_baseline_results.csv
+reports/baselines/reference_baseline_runs.md
+reports/baselines/reference_baseline_status.md
+reports/baselines/reference_baseline_paper_alignment_audit.md
 ```
 
 建議紀錄格式：
@@ -385,7 +385,7 @@ reports/reference_baseline_paper_alignment_audit.md
 9. whether this is final, proxy, smoke, or diagnostic
 ```
 
-`reports/reference_baseline_results.csv` 必須保存可比較 metrics。`.exp/` 裡的 raw
+`reports/baselines/reference_baseline_results.csv` 必須保存可比較 metrics。`.exp/` 裡的 raw
 artifact 可以保留在本機，但不應作為唯一紀錄。
 
 ## Diff And Commit Preparation
@@ -393,13 +393,13 @@ artifact 可以保留在本機，但不應作為唯一紀錄。
 只檢查 baseline 相關差異：
 
 ```powershell
-git diff -- .gitignore reports/reference_baseline_paper_alignment_audit.md reports/reference_baseline_results.csv reports/reference_baseline_runs.md reports/reference_baseline_status.md reports/reference_baseline_handoff_2026-05-19.md reports/reference_baseline_reconstruction_taskboard_2026-05-19.md reports/reference_baseline_reproduction_commands_2026-05-19.md src/experiment_common/features.py src/reference_baseline_branch/build_c1_character_features.py src/reference_baseline_branch/build_gpt2_text_embeddings.py src/reference_baseline_branch/build_c3_rag_features.py src/reference_baseline_branch/configs/reference_baselines.yaml src/reference_baseline_branch/sklearn_models.py src/reference_baseline_branch/run_c3_skapp_full.py
+git diff -- .gitignore reports/baselines/reference_baseline_paper_alignment_audit.md reports/baselines/reference_baseline_results.csv reports/baselines/reference_baseline_runs.md reports/baselines/reference_baseline_status.md reports/baselines/reference_baseline_handoff_2026-05-19.md reports/baselines/reference_baseline_reconstruction_taskboard_2026-05-19.md reports/baselines/reference_baseline_reproduction_commands_2026-05-19.md src/experiment_common/features.py src/reference_baseline_branch/build_c1_character_features.py src/reference_baseline_branch/build_gpt2_text_embeddings.py src/reference_baseline_branch/build_c3_rag_features.py src/reference_baseline_branch/configs/reference_baselines.yaml src/reference_baseline_branch/sklearn_models.py src/reference_baseline_branch/run_c3_skapp_full.py
 ```
 
 空白錯誤檢查：
 
 ```powershell
-git diff --check -- .gitignore reports/reference_baseline_paper_alignment_audit.md reports/reference_baseline_results.csv reports/reference_baseline_runs.md reports/reference_baseline_status.md reports/reference_baseline_handoff_2026-05-19.md reports/reference_baseline_reconstruction_taskboard_2026-05-19.md reports/reference_baseline_reproduction_commands_2026-05-19.md src/experiment_common/features.py src/reference_baseline_branch/build_c1_character_features.py src/reference_baseline_branch/build_gpt2_text_embeddings.py src/reference_baseline_branch/build_c3_rag_features.py src/reference_baseline_branch/configs/reference_baselines.yaml src/reference_baseline_branch/sklearn_models.py src/reference_baseline_branch/run_c3_skapp_full.py
+git diff --check -- .gitignore reports/baselines/reference_baseline_paper_alignment_audit.md reports/baselines/reference_baseline_results.csv reports/baselines/reference_baseline_runs.md reports/baselines/reference_baseline_status.md reports/baselines/reference_baseline_handoff_2026-05-19.md reports/baselines/reference_baseline_reconstruction_taskboard_2026-05-19.md reports/baselines/reference_baseline_reproduction_commands_2026-05-19.md src/experiment_common/features.py src/reference_baseline_branch/build_c1_character_features.py src/reference_baseline_branch/build_gpt2_text_embeddings.py src/reference_baseline_branch/build_c3_rag_features.py src/reference_baseline_branch/configs/reference_baselines.yaml src/reference_baseline_branch/sklearn_models.py src/reference_baseline_branch/run_c3_skapp_full.py
 ```
 
 若使用者要求 commit，建議分批：

@@ -211,7 +211,7 @@ Score：
    - meanScore acc_within_10pt vs MAL `score * 10`：0.7488。
    - meanScore Spearman vs MAL `score * 10`：0.6079。
 
-完整報告見 `reports/external_evaluation_summary.md`。
+完整報告見 `reports/external/external_evaluation_summary.md`。
 
 ## 7. 目前不做的事
 

@@ -30,7 +30,7 @@ Purpose: record local artifact policy before staging baseline work.
 |---|---|---|---|
 | source code | `.gitignore` | yes | Keeps generated/local artifacts out of future commits. |
 | raw results | `data/fetch_log.csv` | no | Local image download log; should not be committed. |
-| synthesis | `reports/git_cleanup_plan_2026-05-21.md` | yes | Documents the baseline-only cleanup and commit boundary. |
+| synthesis | `reports/planning/git_cleanup_plan_2026-05-21.md` | yes | Documents the baseline-only cleanup and commit boundary. |
 
 ## Batch 1 - Reference Baseline Source Code
 
@@ -60,8 +60,8 @@ Purpose: commit the result layer that lets teammates inspect the scores without 
 
 | Class | Files | Commit? | Reason |
 |---|---|---|---|
-| result analysis | `reports/reference_baseline_results.csv` | yes | Consolidated C1/C2/C3 score table. |
-| result analysis | `reports/reference_baseline_runs.md` | yes | Maps result rows to local run IDs and provenance. |
+| result analysis | `reports/baselines/reference_baseline_results.csv` | yes | Consolidated C1/C2/C3 score table. |
+| result analysis | `reports/baselines/reference_baseline_runs.md` | yes | Maps result rows to local run IDs and provenance. |
 | raw results | `.exp/baseline/results/18,25,33,34,35,36,37,38,39,40,41,42` | no | Bulky/local raw artifacts; summarized by the CSV and run index. |
 
 ## Batch 3 - Reference Baseline Analysis
@@ -70,8 +70,8 @@ Purpose: commit the reasoning behind the baseline interpretation and stopping de
 
 | Class | Files | Commit? | Reason |
 |---|---|---|---|
-| result analysis | `reports/reference_baseline_paper_alignment_audit.md` | yes | Explains C1/C2/C3 paper-alignment boundaries. |
-| result analysis | `reports/c3_skappfull_negative_r2_diagnosis_2026-05-20.md` | yes | Records why C3 SKAPPFull underperforms and why it should stop. |
+| result analysis | `reports/baselines/reference_baseline_paper_alignment_audit.md` | yes | Explains C1/C2/C3 paper-alignment boundaries. |
+| result analysis | `reports/diagnostics/c3_skappfull_negative_r2_diagnosis_2026-05-20.md` | yes | Records why C3 SKAPPFull underperforms and why it should stop. |
 
 ## Batch 4 - Reference Baseline Synthesis
 
@@ -79,14 +79,14 @@ Purpose: commit the teammate-facing summaries and handoff material.
 
 | Class | Files | Commit? | Reason |
 |---|---|---|---|
-| result analysis | `reports/reference_baseline_status.md` | yes | Main status record for completed reference baselines. |
-| synthesis | `reports/sota_reconstruction_summary_2026-05-19.md` | yes | Final SOTA/reference reconstruction summary. |
-| synthesis | `reports/meeting_brief_2026-05-19_exp_reference_alignment.md` | yes | Meeting-readable baseline/EXP alignment brief. |
-| synthesis | `reports/reference_baseline_handoff_2026-05-19.md` | yes | Handoff for future agents/teammates. |
-| synthesis | `reports/reference_baseline_reconstruction_taskboard_2026-05-19.md` | yes | Follow-up taskboard and stop criteria. |
-| synthesis | `reports/reference_baseline_reproduction_commands_2026-05-19.md` | yes | Commands needed to reproduce the curated results. |
-| synthesis | `reports/reference_baseline_code_availability_2026-05-14.md` | no | Older note superseded by audit/status. |
-| synthesis | `reports/reference_baseline_weekly_sync_2026-05-12.md` | no | Older weekly note; not needed for this baseline commit set. |
+| result analysis | `reports/baselines/reference_baseline_status.md` | yes | Main status record for completed reference baselines. |
+| synthesis | `reports/diagnostics/sota_reconstruction_summary_2026-05-19.md` | yes | Final SOTA/reference reconstruction summary. |
+| synthesis | `reports/planning/meeting_brief_2026-05-19_exp_reference_alignment.md` | yes | Meeting-readable baseline/EXP alignment brief. |
+| synthesis | `reports/baselines/reference_baseline_handoff_2026-05-19.md` | yes | Handoff for future agents/teammates. |
+| synthesis | `reports/baselines/reference_baseline_reconstruction_taskboard_2026-05-19.md` | yes | Follow-up taskboard and stop criteria. |
+| synthesis | `reports/baselines/reference_baseline_reproduction_commands_2026-05-19.md` | yes | Commands needed to reproduce the curated results. |
+| synthesis | `reports/baselines/reference_baseline_code_availability_2026-05-14.md` | no | Older note superseded by audit/status. |
+| synthesis | `reports/baselines/reference_baseline_weekly_sync_2026-05-12.md` | no | Older weekly note; not needed for this baseline commit set. |
 
 ## Out-Of-Scope Dirty Files
 

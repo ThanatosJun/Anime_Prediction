@@ -94,7 +94,7 @@ $$
 
 #### 4.1.1 Current Available Baseline Results
 
-正式文件中建議將 Exp1 結果分成兩種表格。第一張表呈現 baseline family 的定位；第二組表格呈現目前已完成的 baseline 結果。以下數值使用既有結果檔與 prediction 檔重新整理；其中 `v2` 代表 `reports/reference_baseline_v2_results.csv`，`highres` 代表 `reports/reference_baseline_v2_highres_results.csv`。由於部分模型的可用樣本數不同，以下屬於 available-case comparison，正式主表仍建議另補 common-subset comparison。
+正式文件中建議將 Exp1 結果分成兩種表格。第一張表呈現 baseline family 的定位；第二組表格呈現目前已完成的 baseline 結果。以下數值使用既有結果檔與 prediction 檔重新整理；其中 `v2` 代表 `reports/baselines/reference_baseline_v2_results.csv`，`highres` 代表 `reports/baselines/reference_baseline_v2_highres_results.csv`。由於部分模型的可用樣本數不同，以下屬於 available-case comparison，正式主表仍建議另補 common-subset comparison。
 
 | Group | Method | Metadata | Text | Image | RAG | Literature support / adaptation | Role |
 |---|---|---|---|---|---|---|---|
