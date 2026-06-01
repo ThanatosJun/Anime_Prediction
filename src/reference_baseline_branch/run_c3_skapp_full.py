@@ -12,7 +12,13 @@ import pandas as pd
 import yaml
 
 from src.experiment_common.metrics import compute_metrics
+from src.reference_baseline_branch.c3_source_faithful_data import build_source_faithful_npz
 from src.reference_baseline_branch.build_c3_rag_features import OfflineRagFeatureBuilder
+from src.reference_baseline_branch.skapp_source_faithful_models import (
+    SourceFaithfulAllItemsModel,
+    SourceFaithfulFinalModel,
+    SourceFaithfulSingleItemModel,
+)
 
 
 TARGET_SPECS = {
@@ -41,12 +47,25 @@ def main() -> None:
     parser.add_argument("--dropout", type=float, default=0.0)
     parser.add_argument("--single-dropout", type=float, default=None)
     parser.add_argument("--threshold-of-rrcp", type=float, default=0.0)
+    parser.add_argument(
+        "--model-profile",
+        choices=("default", "source_faithful"),
+        default="default",
+        help="Use source-faithful SKAPP GNN blocks when set to source_faithful.",
+    )
+    parser.add_argument(
+        "--dataset-profile",
+        choices=("default", "source_faithful"),
+        default="default",
+        help="Emit source-style tensor aliases when set to source_faithful.",
+    )
     parser.add_argument("--variant-label", default="")
     parser.add_argument("--device", default="cpu", choices=("cpu", "cuda", "auto"))
     parser.add_argument("--torch-num-threads", type=int, default=1)
     parser.add_argument("--force-rebuild-dataset", action="store_true")
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
+    _apply_source_faithful_preset(args)
 
     config = _load_config(Path(args.config))
     run_dir = _resolve_run_dir(config, args.run_id)
@@ -54,8 +73,31 @@ def main() -> None:
     dataset_dir = Path(config["data"].get("skapp_full_dataset_dir", ".exp/baseline/skapp_full/dataset"))
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.force_rebuild_dataset or not _dataset_exists(dataset_dir):
-        _build_tensor_dataset(config, dataset_dir, top_k=args.top_k)
+    effective_dataset_profile = (
+        "source_faithful" if args.model_profile == "source_faithful" else args.dataset_profile
+    )
+    need_rebuild = args.force_rebuild_dataset or not _dataset_exists(dataset_dir)
+    if (
+        not need_rebuild
+        and effective_dataset_profile == "source_faithful"
+        and not _dataset_has_source_aliases(dataset_dir)
+    ):
+        need_rebuild = True
+    if need_rebuild:
+        if effective_dataset_profile == "source_faithful":
+            build_source_faithful_npz(
+                config=config,
+                dataset_dir=dataset_dir,
+                top_k=int(args.top_k),
+                device=str(args.device),
+            )
+        else:
+            _build_tensor_dataset(
+                config,
+                dataset_dir,
+                top_k=args.top_k,
+                dataset_profile=effective_dataset_profile,
+            )
 
     targets = [args.target] if args.target else list(TARGET_SPECS)
     rows = []
@@ -72,8 +114,8 @@ def main() -> None:
     print(f"[done] results saved to {run_dir}")
 
 
-def _build_tensor_dataset(config: dict, dataset_dir: Path, top_k: int) -> None:
-    print(f"[skapp-full] build tensor dataset top_k={top_k}")
+def _build_tensor_dataset(config: dict, dataset_dir: Path, top_k: int, dataset_profile: str) -> None:
+    print(f"[skapp-full] build tensor dataset top_k={top_k} profile={dataset_profile}")
     builder = OfflineRagFeatureBuilder(config, top_k=top_k)
     splits = config["data"].get("splits", ["train", "val", "test"])
     for split in splits:
@@ -100,6 +142,13 @@ def _build_tensor_dataset(config: dict, dataset_dir: Path, top_k: int) -> None:
             retrieved_mask=retrieved_mask,
             popularity=y_popularity,
             meanScore=y_mean_score,
+            # Source-style aliases for easier parity audit with skapp-main.
+            merged_text_vec=query_text,
+            cls_vec=query_image,
+            retrieved_visual_feature_embedding_cls=retrieved_image[:, :, None, :],
+            retrieved_textual_feature_embedding=retrieved_text[:, :, None, :],
+            retrieved_label_list_popularity=retrieved_labels[:, :, 0],
+            retrieved_label_list_meanScore=retrieved_labels[:, :, 1],
         )
         valid = float(retrieved_mask.mean()) if retrieved_mask.size else 0.0
         print(f"  [{split}] {len(ids)} rows -> {out_path}  mask_mean={valid:.4f}")
@@ -186,10 +235,48 @@ def _run_target(
     }
     single_dropout = args.dropout if args.single_dropout is None else args.single_dropout
 
+    if args.model_profile == "source_faithful":
+        all_items_model = SourceFaithfulAllItemsModel(
+            text_dim=dims["text_dim"],
+            image_dim=dims["image_dim"],
+            top_k=dims["top_k"],
+            d_model=dims["d_model"],
+            dropout=float(args.dropout),
+            strict_source=True,
+        )
+        single_item_model = SourceFaithfulSingleItemModel(
+            text_dim=dims["text_dim"],
+            image_dim=dims["image_dim"],
+            d_model=dims["d_model"],
+            dropout=float(single_dropout),
+            strict_source=True,
+        )
+        final_rrcp_model = SourceFaithfulFinalModel(
+            text_dim=dims["text_dim"],
+            image_dim=dims["image_dim"],
+            top_k=dims["top_k"],
+            d_model=dims["d_model"],
+            threshold_of_rrcp=float(args.threshold_of_rrcp),
+            dropout=float(args.dropout),
+            strict_source=True,
+        )
+        baseline_id = f"C3-ProjectInputSKAPPFullSourceFaithful{args.variant_label}"
+        model_label = "project_input_skapp_full_source_faithful"
+    else:
+        all_items_model = _SKAPPAllItemsModel(**dims, dropout=float(args.dropout))
+        single_item_model = _SKAPPSingleItemModel(**dims, dropout=float(single_dropout))
+        final_rrcp_model = _SKAPPFinalRRCPModel(
+            **dims,
+            threshold_of_rrcp=args.threshold_of_rrcp,
+            dropout=float(args.dropout),
+        )
+        baseline_id = f"C3-ProjectInputSKAPPFull{args.variant_label}"
+        model_label = "project_input_skapp_full"
+
     all_model = _train_model(
         torch= torch,
         nn=nn,
-        model=_SKAPPAllItemsModel(**dims, dropout=float(args.dropout)),
+        model=all_items_model,
         train=data["train"],
         val=data["val"],
         device=device,
@@ -199,11 +286,12 @@ def _run_target(
         lr=args.learning_rate,
         weight_decay=args.weight_decay,
         mode="all",
+        optimizer_kind="adam" if args.model_profile == "source_faithful" else "adamw",
     )
     single_model = _train_model(
         torch=torch,
         nn=nn,
-        model=_SKAPPSingleItemModel(**dims, dropout=float(single_dropout)),
+        model=single_item_model,
         train=_make_disassembled_data(data["train"]),
         val=_make_disassembled_data(data["val"]),
         device=device,
@@ -213,6 +301,7 @@ def _run_target(
         lr=args.learning_rate,
         weight_decay=args.weight_decay,
         mode="single",
+        optimizer_kind="adam" if args.model_profile == "source_faithful" else "adamw",
     )
 
     diagnostics = {
@@ -229,6 +318,8 @@ def _run_target(
             "dropout": float(args.dropout),
             "single_dropout": float(single_dropout),
             "variant_label": str(args.variant_label),
+            "model_profile": str(args.model_profile),
+            "dataset_profile": str(args.dataset_profile),
             "y_mean": y_mean,
             "y_std": y_std,
         },
@@ -288,11 +379,7 @@ def _run_target(
     final_model = _train_model(
         torch=torch,
         nn=nn,
-        model=_SKAPPFinalRRCPModel(
-            **dims,
-            threshold_of_rrcp=args.threshold_of_rrcp,
-            dropout=float(args.dropout),
-        ),
+        model=final_rrcp_model,
         train=data["train"],
         val=data["val"],
         device=device,
@@ -302,13 +389,14 @@ def _run_target(
         lr=args.learning_rate,
         weight_decay=args.weight_decay,
         mode="final",
+        optimizer_kind="adam" if args.model_profile == "source_faithful" else "adamw",
     )
 
     row = {
-        "baseline_id": f"C3-ProjectInputSKAPPFull{args.variant_label}",
+        "baseline_id": baseline_id,
         "target": target,
         "feature_set": "skapp_style_tensor_dataset",
-        "model": "project_input_skapp_full",
+        "model": model_label,
         "reference": "Xu et al. 2025 SKAPP",
         "reproduction_level": "structure_complete_project_input",
         "paper_supported_component": (
@@ -423,9 +511,13 @@ def _train_model(
     lr: float,
     weight_decay: float,
     mode: str,
+    optimizer_kind: str = "adamw",
 ):
     model = model.to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    if optimizer_kind == "adam":
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    else:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_fn = nn.MSELoss()
     best_loss = np.inf
     best_state = None
@@ -905,6 +997,39 @@ def _write_summary(table: pd.DataFrame, path: Path) -> None:
 
 def _dataset_exists(dataset_dir: Path) -> bool:
     return all((dataset_dir / f"{split}.npz").exists() for split in ("train", "val", "test"))
+
+
+def _dataset_has_source_aliases(dataset_dir: Path) -> bool:
+    required = {
+        "merged_text_vec",
+        "cls_vec",
+        "retrieved_visual_feature_embedding_cls",
+        "retrieved_textual_feature_embedding",
+        "retrieved_label_list_popularity",
+        "retrieved_label_list_meanScore",
+    }
+    for split in ("train", "val", "test"):
+        path = dataset_dir / f"{split}.npz"
+        if not path.exists():
+            return False
+        keys = set(np.load(path).keys())
+        if not required.issubset(keys):
+            return False
+    return True
+
+
+def _apply_source_faithful_preset(args: argparse.Namespace) -> None:
+    if args.model_profile != "source_faithful":
+        return
+    # Align with skapp-main defaults as closely as possible.
+    args.top_k = 500
+    args.d_model = 768
+    args.batch_size = 64
+    args.max_epochs = 1000
+    args.patience = 5
+    args.learning_rate = 1e-4
+    args.weight_decay = 0.0
+    args.threshold_of_rrcp = 0.0
 
 
 def _resolve_device(torch, requested: str):
