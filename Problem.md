@@ -59,3 +59,17 @@ LoRA (Low-Rank Adaptation)
 2. RAG 加入的影響
 3. 消融實驗 (attention, image)這兩者是否加入 MLP 輸入的消融
 4. SHAP , Captum , attention heatmap 的可解釋性分析
+
+id 154587
+English:Sousou no Frieren
+
+id 170068
+
+Bleach
+id 1686
+id 2889
+id 4835
+id 100719
+id 8247
+id 116674
+1686 2889 4835 100719 8247 116674

@@ -379,6 +379,49 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 > 2. **text / image 單獨都很弱**（log_MAE 1.26 / 1.35），需與 metadata 結合才有效。
 > 3. **多模態互補性確立**：full model 明顯勝過任何單模態，融合架構有實質價值。
 
+### Per-target HP 消融（test set，`ablation_pertarget_s42.py`）— **論文 4.3 權威版**
+
+> 舊版 `ablation.py` / `ablation_multimodal.py` 強制共用 Run07 HP，meanScore 不在最佳，導致「移除組件反而 score 變好」的反直覺結果。
+> 本版**每個 target 各用自己的最佳 HP**（保留 config 的 per-target overrides：pop dr=0.3；score dr=0.3, attn_dr=0.1, wd=1e-4, batch=256），full=Run22 設定、seed=42，整張表同一條 code path。
+> **結果乾淨：full model 在兩個 target 都最佳**，RAG 與每個模態對兩者都有正貢獻。摘要 `runs/ablation_pertarget_s42_summary.json`。
+
+| 設定 | pop log_MAE↓ | pop facc_2x | pop spear | score MAE↓ | score win10 | score spear |
+|------|:---:|:---:|:---:|:---:|:---:|:---:|
+| **full（img+txt+meta+rag）** | **0.8823** | **0.4943** | **0.8520** | **7.5911** | **0.7104** | **0.5424** |
+| RAG off | 0.9473 | 0.4642 | 0.8387 | 8.1246 | 0.6718 | 0.5273 |
+| 移除 image | 0.9307 | 0.4830 | 0.8293 | 8.6352 | 0.6511 | 0.5168 |
+| meta only | 0.9524 | 0.4587 | 0.8271 | 7.9560 | 0.6832 | 0.5105 |
+| text only | 1.2705 | 0.3638 | 0.7012 | 10.3885 | 0.5274 | 0.2113 |
+| image only | 1.3106 | 0.3453 | 0.7311 | 8.7938 | 0.6459 | 0.3910 |
+
+#### image 來源消融（per-target HP，seed=42）
+
+| image 來源 | pop log_MAE↓ | pop spear | score MAE↓ | score spear |
+|------------|:---:|:---:|:---:|:---:|
+| **full（cover+banner+yolo）** | **0.8823** | **0.8520** | **7.5911** | **0.5424** |
+| cover only | 0.9059 | 0.8443 | 8.0512 | 0.5125 |
+| cover + banner | 0.9367 | 0.8481 | 7.9372 | 0.5390 |
+| banner only | 0.8948 | 0.8385 | 8.2616 | 0.5419 |
+| yolo only | 0.9280 | 0.8437 | 8.2020 | 0.5188 |
+
+> **發現（每 target 最佳 HP 下）**：
+> 1. **full model 兩個 target 都最佳**（pop 0.8823、score 7.5911）→ 每個組件在各自最佳 HP 下都有貢獻，先前共用 HP 的反直覺消失。
+> 2. **RAG 對兩者皆有益**：移除後 pop 0.8823→0.9473、score 7.5911→8.1246。
+> 3. **image 對 meanScore 尤其關鍵**：移除 image，score 7.5911→8.6352（大幅退步）、pop 0.8823→0.9307。
+> 4. **meta 仍是最強單一模態**（only_meta：pop 0.9524、score 7.956）；text / image 單獨都弱（pop 1.27 / 1.31）。
+> 5. **三個視覺來源合用最佳**：任一單獨來源（cover / banner / yolo）兩個 target 都不如三者合，視覺模態互補。
+
+#### Temporal Trend（TrendHead）on/off — **concept drift 證據**（論文 4.3.3）
+
+`abl_full_notrend_pt` = full model 但關掉 TrendHead（linear+year 時序項），對照 `abl_full_pt`。test 比 train 晚，故此對照衡量時序項在 drift 下是否有用。指令：`python src_2/ablation_pertarget_s42.py --only abl_full_notrend_pt`
+
+| 設定 | pop log_MAE↓ | pop log_R²↑ | score MAE↓ | score R²↑ | score spear |
+|------|:---:|:---:|:---:|:---:|:---:|
+| **with trend（full）** | **0.8823** | **0.7633** | **7.5911** | **0.1934** | 0.5424 |
+| without trend | 0.9036 | 0.7518 | 7.8877 | 0.1247 | 0.5533 |
+
+> **發現**：加 TrendHead 兩個 target 主要誤差都更好 —— pop log_MAE 0.9036→0.8823、**score MAE 7.8877→7.5911、score R² 0.1247→0.1934**（meanScore 受年代評分漂移影響最大，得益最多）。score Spearman 幾乎不變（trend 平移數值水準、不改排序）→ **支持「時序項處理 concept drift」的宣稱**。
+
 ### Stage Embedding 實驗（test set，`fussion_configs_stages*.yaml`）
 
 主 image 從 Swin pooler（1024）換成 4 個 stage concat（1920）+ stage 投影（4×256→1024），RAG 維持 pooler（解耦）。Run12 加 per-stage LayerNorm，Run13 為對照（無 LayerNorm，隔離 LN 變因）。
@@ -407,6 +450,45 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 > 3. **判斷**：多尺度 stage 特徵未帶來增益，**pooler 仍最佳**（更簡單、維度低、能開 AMP）。**stage 這條線收掉。**
 >
 > 數值修正紀錄：stage 初期 NaN，根因 raw stage 量級大 + AMP float16 梯度溢位。解法：stage config 停用 AMP（`mixed_precision: false`）；LayerNorm（`image_stage_norm`）預設 false。
+
+---
+
+## 可解釋性分析（Run22，`explain/`）— **論文 4.5**
+
+對 Run22 best model 做兩種解釋：cross-attention 注意力圖（`rag_heatmap.py`）、梯度 attribution（`feature_attr.py`：Captum IG + SHAP）。
+
+產生指令：
+```bash
+python src_2/explain/rag_heatmap.py  --target popularity --split test --ids 154587   # Frieren heatmap
+python src_2/explain/feature_attr.py --target popularity --split test --n 30          # Captum + SHAP（兩 target 各跑）
+```
+
+### Captum Integrated Gradients — 模態層級 mean |IG|（test n=30 平均）
+
+| 模態 | popularity | meanScore |
+|------|:---:|:---:|
+| **rag_image** | **0.399** | **0.431** |
+| image_yolo | 0.207 | 0.253 |
+| image_banner | 0.150 | 0.144 |
+| image_cover | 0.081 | 0.089 |
+| meta | 0.074 | 0.051 |
+| rag_meta | 0.045 | 0.022 |
+| text | 0.032 | 0.008 |
+| rag_text | 0.011 | 0.002 |
+
+> **發現**：兩個 target 都是 **retrieved image（rag_image）attribution 最高**，其次自身 image（yolo/banner/cover），**text 類最低**。
+> 注意這與 attention 權重（集中於 metadata）方向不同：attention 看「在 retrieved tokens 中看哪裡」，IG attribution 看「哪個輸入改變輸出」，兩者衡量不同的東西。
+
+### SHAP — metadata 特徵重要性（popularity top）
+
+`va_te_pop`（0.14）> `prequel_meanScore_mean`（0.10）> `prequel_popularity_mean_log1p`（0.10）> `studio_te_pop`（0.08）> `va_te_score`（0.07）> `studio_te_score`（0.05）…
+
+> 前段全是 **inter-title 訊號**（聲優 TE、前作評分/人氣、工作室 TE）→ 一部作品的預測接受度與其前作、製作團隊的過往表現高度相關，印證 RAG 的設計動機。
+
+### Cross-Attention Heatmap（以 Sousou no Frieren 為例）
+
+注意力幾乎全落在 retrieved 作品的 **metadata 列**（0.13–0.26），text / image ≈ 0，且集中在少數幾部最相關作品。
+> 呼應 cross-attention 設計：query = 目標 metadata，故模型以「關係」判斷相關性。
 
 ---
 

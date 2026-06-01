@@ -12,6 +12,7 @@ KV layout：[meta(0-4), text(5-9), image(10-14)]
 import argparse
 import json
 import sys
+import textwrap
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "fussion_training"))
@@ -46,7 +47,7 @@ def plot_heatmap(attn: np.ndarray, titles: list[str], anime_title: str, save_pat
     im = ax.imshow(attn.T, aspect="auto", cmap="Blues", vmin=0)   # [3, top_k]
 
     ax.set_xticks(range(len(titles)))
-    ax.set_xticklabels(titles, rotation=35, ha="right", fontsize=8)
+    ax.set_xticklabels(titles, rotation=35, ha="right", fontsize=7)
     ax.set_yticks(range(3))
     ax.set_yticklabels(modalities, fontsize=9)
 
@@ -139,7 +140,8 @@ def main():
         attn = extract_attn(model, batch, device)  # [top_k, 3]
 
         rids   = ds.retrieved_ids_map.get(anime_id, [])
-        titles = [id_to_title.get(rid, str(rid))[:18] for rid in rids]
+        titles = ["\n".join(textwrap.wrap(id_to_title.get(rid, str(rid)), 22))
+                  for rid in rids]
         titles += ["[pad]"] * (config.get("top_k_retrieved", 5) - len(titles))
 
         anime_title = id_to_title.get(anime_id, str(anime_id))[:45]
