@@ -36,10 +36,19 @@ def compute_metrics(
     }
 
     if target_col == "popularity":
-        log_mae = float(np.mean(
-            np.abs(np.log1p(np.clip(y_true, 0, None)) - np.log1p(np.clip(y_pred, 0, None)))
-        ))
+        y_true_log = np.log1p(np.clip(y_true, 0, None))
+        y_pred_log = np.log1p(np.clip(y_pred, 0, None))
+        log_mae = float(np.mean(np.abs(y_true_log - y_pred_log)))
+        log_ss_res = float(np.sum((y_true_log - y_pred_log) ** 2))
+        log_ss_tot = float(np.sum((y_true_log - np.mean(y_true_log)) ** 2))
+        log_r2 = 1.0 - log_ss_res / log_ss_tot if log_ss_tot > 0 else 0.0
+        factor_acc_2x = float(np.mean(np.abs(y_true_log - y_pred_log) < np.log(2.0)))
         metrics["log_MAE"] = round(log_mae, 4)
+        metrics["log_R2"] = round(float(log_r2), 4)
+        metrics["factor_acc_2x"] = round(factor_acc_2x, 4)
+    elif target_col == "meanScore":
+        acc_within_10pt = float(np.mean(np.abs(y_true - y_pred) < 10.0))
+        metrics["acc_within_10pt"] = round(acc_within_10pt, 4)
 
     return metrics
 
