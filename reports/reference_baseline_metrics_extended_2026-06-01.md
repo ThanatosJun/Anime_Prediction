@@ -45,4 +45,5 @@ Generated from existing `test_predictions.csv` files. `test_R2_raw` is original-
 | C3-RAG-Selective-XGB                  | v2_highres |     2808 |     8.0901 |                 0.6667 |              0.5561 |        0.0884 |
 | C3-ProjectInputSKAPPProxy-XGB         | v2_highres |     2808 |     7.8582 |                 0.6912 |              0.5634 |        0.1274 |
 | C3-ProjectInputSKAPPGraphProxy        | v2_highres |     2808 |     8.1218 |                 0.6806 |              0.5169 |        0.0671 |
+| C3-SourceExact-Staged-K64             | c3_source_exact_k64 | 3087 | 19.8518 | 0.3061 | 0.1155 | -4.2271 |
 

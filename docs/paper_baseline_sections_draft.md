@@ -1,6 +1,6 @@
 # Baseline 與實驗段落草稿
 
-本文件整理本研究中與 baseline、reference baseline、research questions、Exp1 與 Exp3 相關的論文草稿。此版本用於後續整合進正式報告；其中數值表格仍需依最終實驗結果補齊。
+本文件整理本研究中與 baseline、reference baseline、research questions、Exp1 與 Exp3 相關的論文草稿。此版本用於後續整合進正式報告；目前已填入 baseline 與 C3 source-faithful diagnostic 的可用結果，主框架與 out-dataset 結果仍需由對應實驗補齊。
 
 ## 2. Related Works
 
@@ -149,10 +149,11 @@ meanScore baseline results:
 | `C3-RAG-Selective-XGB` | highres | 2808 | 8.0901 | 0.6667 | 0.5561 | 0.0884 |
 | `C3-ProjectInputSKAPPProxy-XGB` | highres | 2808 | 7.8582 | 0.6912 | 0.5634 | 0.1274 |
 | `C3-ProjectInputSKAPPGraphProxy` | highres | 2808 | 8.1218 | 0.6806 | 0.5169 | 0.0671 |
+| `C3-SourceExact-Staged-K64` | source-exact diagnostic | 3087 | 19.8518 | 0.3061 | 0.1155 | -4.2271 |
 
 目前結果顯示，`popularity` 的強基準並不只來自深度模型：`F1-RF-Meta` 已有相當強的 metadata-only 表現，代表播出前結構化資訊本身包含大量訊號。`F2-XGB-Concat` 在 `log_R2` 上表現最佳，說明簡單 early fusion 已具競爭力；但 `C3-RAG-Selective-XGB` 在原始尺度 `MAE/raw R2` 與 Spearman 上較突出，顯示 selective retrieval 對人氣排序與高人氣樣本的解釋有幫助。對 `meanScore` 而言，整體 R2 仍偏低，最佳結果為 `C3-ProjectInputSKAPPProxy-XGB`，表示 retrieved aggregate 對分數預測有一定幫助，但 `meanScore` 相較 `popularity` 更難由播出前資訊穩定預測。
 
-此外，`C3-SourceExact-Staged-K64` 是 `c3_source_exact_pipeline.py` 完成的第一個 source-faithful staged run，但目前只完成 `popularity`，且使用 `top_k=64` urgent setting，而非 SKAPP source 預設的 `top_k=500`。其結果明顯不穩定：`test_log_R2=-2.1272`、`factor_acc_2x=0.0901`、`raw R2=-15.0432`，且大量 prediction 被 clip 到 train-set 上下界。此結果應作為 source-faithful 路線的 diagnostic finding，而不是主表中的最終 C3 external baseline。它的價值在於指出直接搬移 staged SKAPP/RRCP pipeline 到 anime-domain mapping 仍需要 target calibration、retrieval size、loss design 與 full-target rerun 的後續修正。
+此外，`C3-SourceExact-Staged-K64` 是 `c3_source_exact_pipeline.py` 完成的第一批 source-faithful staged diagnostic run，已涵蓋 `popularity` 與 `meanScore`，但使用 `top_k=64` urgent setting，而非 SKAPP source 預設的 `top_k=500`。其結果明顯不穩定：`popularity` 的 `test_log_R2=-2.1272`、`factor_acc_2x=0.0901`、`raw R2=-15.0432`；`meanScore` 的 `MAE=19.8518`、`acc_within_10pt=0.3061`、`R2=-4.2271`。兩個目標皆出現大量 prediction 被 clip 到 train-set 上下界的現象，其中 popularity 常落在 24.999998 或 231528.98，meanScore 則大量落在 27 或 85。此結果應作為 source-faithful 路線的 diagnostic finding，而不是主表中的最終 C3 external baseline。它的價值在於指出直接搬移 staged SKAPP/RRCP pipeline 到 anime-domain mapping 仍需要 target calibration、retrieval size、loss design 與重新訓練設定調整。
 
 與 proposed framework 的差距需等主框架最終結果固定後再計算；正式文件不應先放空值表格。建議在主框架結果確認後，以 `proposed - baseline` 的形式補一張差距表，並優先比較 `F1-RF-Meta`、`F2-XGB-Concat`、C1/C2/C3 代表 row。這張表的目的不是重新排行，而是回答 proposed framework 是否真的超越 metadata-only、simple fusion 與 literature-adapted references。
 
@@ -180,7 +181,7 @@ Exp3 的正式結果表應避免只列 out-dataset 絕對分數，而應同時�
 
 對於 C2 所參考的電影票房預測研究，未來可補足更接近原始設計的 BERT text encoder 與 ViT visual stream。原論文針對電影評論文字使用 BERT 進行語意編碼，並同時使用 ResNet-50 與 Vision Transformer 擷取電影海報的視覺特徵。目前本研究的 C2 adaptation 受限於動畫資料集並不存在完全對應的 movie reviews 與 movie posters，因此以動畫描述文字與專案圖像特徵作為替代。未來若能為動畫作品建立更接近 review-style 或 pre-release discussion 的文字來源，並加入 ViT-based cover/banner visual encoder，將能更完整地檢驗 C2 類型 cross-modal transformer fusion 架構在動畫人氣預測上的可遷移性。
 
-對於 C3 所參考的 SKAPP retrieval-based popularity prediction 研究，未來工作應進一步完成 source-faithful SKAPP full pipeline。C3 的價值不僅在於加入 RAG 特徵，而在於其 selective retrieval、retrieved candidate filtering 與後續融合機制。現階段本研究已完成 project-input RAG proxy 與若干 SKAPP-inspired baseline，並已完成第一個 `c3_source_exact_pipeline.py` 的 source-faithful staged diagnostic run。然而，該 run 目前只涵蓋 `popularity`，使用 `top_k=64` 而非原始 SKAPP 設定的 `top_k=500`，且結果顯示 prediction 明顯飽和於 clipping boundary。因此，本研究不將其寫成已完成的最終 C3 external baseline，而是將其視為後續補強 reference baseline 完整度的重要診斷結果。後續仍需完成 `top_k=500`、雙 target、校準檢查與 loss/target-space 設計修正後，才能更嚴格地評估 source-faithful SKAPP pipeline 在本任務上的可遷移性。
+對於 C3 所參考的 SKAPP retrieval-based popularity prediction 研究，未來工作應進一步完成 source-faithful SKAPP full pipeline。C3 的價值不僅在於加入 RAG 特徵，而在於其 selective retrieval、retrieved candidate filtering 與後續融合機制。現階段本研究已完成 project-input RAG proxy 與若干 SKAPP-inspired baseline，並已完成 `c3_source_exact_pipeline.py` 在 `popularity` 與 `meanScore` 上的 source-faithful staged diagnostic run。然而，該 run 使用 `top_k=64` 而非原始 SKAPP 設定的 `top_k=500`，且兩個目標皆顯示 prediction 明顯飽和於 clipping boundary。因此，本研究不將其寫成已完成的最終 C3 external baseline，而是將其視為後續補強 reference baseline 完整度的重要診斷結果。後續仍需完成 `top_k=500`、校準檢查與 loss/target-space 設計修正後，才能更嚴格地評估 source-faithful SKAPP pipeline 在本任務上的可遷移性。
 
 整體而言，未來 reference baseline 的改進方向並非單純增加更多模型，而是提高外部文獻方法與原始設計之間的對齊程度。透過補齊 C1 的角色層級資料、C2 的 BERT 與 ViT 雙路徑設計，以及 C3 的 source-faithful SKAPP retrieval pipeline，後續研究將能更嚴格地區分「本研究主框架的實際貢獻」與「外部方法在資料轉換後的適應能力」。這也有助於使 baseline comparison 不僅作為效能表格，而是成為分析不同多模態與檢索增強設計在播出前動畫人氣預測任務中適用性的依據。
 
@@ -188,5 +189,5 @@ Exp3 的正式結果表應避免只列 out-dataset 絕對分數，而應同時�
 
 - Exp1 的核心不是排行 baseline，而是依序回答 sanity、metadata strength、modality contribution、simple fusion、external-adapted reference comparison。
 - C1/C2/C3 必須使用 `literature-adapted`、`project-input proxy`、`source-faithful diagnostic` 等字眼，不應寫成 exact reproduction。
-- C3 source-faithful SKAPP full pipeline 目前已有 `top_k=64` popularity diagnostic run，但尚未形成最終 baseline；正式文件應標註為 diagnostic/ongoing，而不是 completed external baseline。
+- C3 source-faithful SKAPP full pipeline 目前已有 `top_k=64` popularity 與 meanScore diagnostic run，但尚未形成最終 baseline；正式文件應標註為 diagnostic/ongoing，而不是 completed external baseline。
 - 若最終表格要比較 baseline 與主框架，應優先補齊 common-subset evaluation，或在表格註明 available-case comparison 與各模型 `n_test`。
