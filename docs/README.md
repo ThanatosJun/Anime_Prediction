@@ -25,7 +25,7 @@
   - `baseline_reference_implementation_plan.md`：reference baseline 初始路線圖；目前進度以 `../reports/baselines/reference_baseline_runs.md` 為準。
   - `rq2_rag_ablation_plan.md`：RAG 有無與檢索策略 ablation 的設計，不作為 reference baseline 總覽。
 - **簡報與專案進度**
-  - `../reports/missing_value_status_latest.md`
+  - `reports/missing_value_status_latest.md`
   - `../reports/external/external_evaluation_summary.md`
 - **外部資料轉換**
   - `pipeline/external_dataset_transform_flow.md`
