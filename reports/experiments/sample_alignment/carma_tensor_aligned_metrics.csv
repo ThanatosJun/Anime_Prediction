@@ -1,0 +1,22 @@
+model,split,target,n,MAE,Spearman_rho,log_MAE,log_R2,factor_acc_2x,R2,acc_within_10pt,diagnostics,RMSE,Pearson_r
+CARMA-Run02,mal2025_popularity_local_ready,popularity,3765,3518.3324,0.4709,1.012,0.2709,0.4656,,,existing CARMA Run02 external inference artifact,,
+CARMA-Run02,mal2025_dual_local_ready,popularity,1202,7750.9359,0.5495,1.391,-0.461,0.3344,,,existing CARMA Run02 external inference artifact,,
+CARMA-Run02,mal2025_dual_local_ready,meanScore,1202,7.5086,0.6079,,,,-1.0659,0.7488,existing CARMA Run02 external inference artifact,,
+CARMA-Run22,mal2025_popularity_local_ready,popularity,3765,3588.0588,0.4998,1.0359,0.2979,0.4234,,,existing CARMA Run02 external inference artifact,,
+CARMA-Run22,mal2025_dual_local_ready,popularity,1202,7732.8303,0.5647,1.1707,-0.1188,0.426,,,existing CARMA Run02 external inference artifact,,
+CARMA-Run22,mal2025_dual_local_ready,meanScore,1202,6.3363,0.577,,,,-0.3253,0.7945,existing CARMA Run02 external inference artifact,,
+F1-RF-Meta-CARMATensor,test,popularity,3087,9728.6471,0.8326,0.9731,0.7105,0.4655,0.5181,,resumed from existing CARMA tensor prediction file,24842.9763,0.7289
+F1-RF-Meta-CARMATensor,mal2025_popularity_local_ready,popularity,3765,3558.3021,0.4572,1.0015,0.2572,0.4776,-0.0258,,resumed from existing CARMA tensor prediction file,17734.958,0.2967
+F1-RF-Meta-CARMATensor,mal2025_dual_local_ready,popularity,1202,7916.6163,0.5144,1.4387,-0.603,0.3236,-0.0794,,resumed from existing CARMA tensor prediction file,27714.3784,0.2278
+F1-RF-Meta-CARMATensor,test,meanScore,3087,8.8547,0.5171,,,,-0.0438,0.6281,resumed from existing CARMA tensor prediction file,10.9923,0.5304
+F1-RF-Meta-CARMATensor,mal2025_dual_local_ready,meanScore,1202,9.121,0.5629,,,,-1.3687,0.6106,resumed from existing CARMA tensor prediction file,10.6519,0.5538
+F2-XGB-Concat-CARMATensor,test,popularity,3087,8872.964,0.8578,0.8799,0.7667,0.4885,0.6032,,resumed from existing CARMA tensor prediction file,22544.7156,0.7884
+F2-XGB-Concat-CARMATensor,mal2025_popularity_local_ready,popularity,3765,3598.1826,0.524,1.0294,0.1637,0.5017,-0.0335,,resumed from existing CARMA tensor prediction file,17801.7096,0.331
+F2-XGB-Concat-CARMATensor,mal2025_dual_local_ready,popularity,1202,8061.0942,0.5789,1.6172,-0.9353,0.2787,-0.0864,,resumed from existing CARMA tensor prediction file,27804.6011,0.3443
+F2-XGB-Concat-CARMATensor,test,meanScore,3087,8.6542,0.5591,,,,0.0142,0.645,resumed from existing CARMA tensor prediction file,10.6823,0.5732
+F2-XGB-Concat-CARMATensor,mal2025_dual_local_ready,meanScore,1202,9.76,0.6061,,,,-1.5992,0.5649,resumed from existing CARMA tensor prediction file,11.1581,0.5833
+C3-RAG-XGB-CARMATensor,test,popularity,3087,9032.5883,0.852,0.8947,0.7574,0.4917,0.5908,,resumed from existing CARMA tensor prediction file,22894.8317,0.7818
+C3-RAG-XGB-CARMATensor,mal2025_popularity_local_ready,popularity,3765,3586.9237,0.4392,1.0383,0.2011,0.4497,-0.0296,,resumed from existing CARMA tensor prediction file,17768.1821,0.3639
+C3-RAG-XGB-CARMATensor,mal2025_dual_local_ready,popularity,1202,8012.3729,0.6211,1.5637,-0.7912,0.2704,-0.0822,,resumed from existing CARMA tensor prediction file,27750.6258,0.3802
+C3-RAG-XGB-CARMATensor,test,meanScore,3087,8.7747,0.5432,,,,-0.0107,0.6323,resumed from existing CARMA tensor prediction file,10.8166,0.556
+C3-RAG-XGB-CARMATensor,mal2025_dual_local_ready,meanScore,1202,9.3699,0.5989,,,,-1.43,0.5932,resumed from existing CARMA tensor prediction file,10.7889,0.5655
