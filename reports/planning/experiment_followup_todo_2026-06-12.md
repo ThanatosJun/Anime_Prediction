@@ -2,7 +2,7 @@
 
 Date: 2026-06-12
 
-Branch: `feature/eval-sample-alignment`
+Branch: `feature/experiment-followups`
 
 ## Current Authoritative Result Files
 
@@ -13,6 +13,13 @@ Use these files for the revised paper narrative and future reporting:
 - `reports/experiments/sample_alignment/carma_tensor_aligned_metrics.md`
 - `reports/experiments/sample_alignment/mal2025_yolo_diagnostic_metrics.csv`
 - `reports/experiments/sample_alignment/mal2025_yolo_diagnostic_metrics.md`
+- `reports/experiments/sample_alignment/mal2025_overlap_label_sanity.csv`
+- `reports/experiments/sample_alignment/mal2025_external_calibration_summary.csv`
+- `reports/experiments/sample_alignment/mal2025_external_calibration_bins.csv`
+- `reports/experiments/sample_alignment/mal2025_external_diagnostics.md`
+- `reports/experiments/sample_alignment/followup_paired_bootstrap_tests.csv`
+- `reports/experiments/sample_alignment/followup_image_proxy_diagnostics.csv`
+- `reports/experiments/sample_alignment/followup_experiment_statistics.md`
 - `reports/experiments/sample_alignment/run22_artifact_manifest.md`
 - `reports/paper/paper_user_sections_complete_draft_2026-06-01.md`
 
@@ -29,18 +36,16 @@ Completed:
   temporal test set as CARMA: `n=3,087`.
 - Added C1/C2 rows back into the internal Exp1 comparison.
 - Updated the paper narrative away from the old `n=2,808` complete-case table.
+- Added paired bootstrap diagnostics for CARMA-vs-baseline headline deltas.
 
 Remaining:
 
 1. Run multiple seeds for CARMA and the most important baselines.
    - Suggested scope: Run22-style CARMA, F2, C2-Recurrent, C3-RAG-XGB.
    - Report mean/std for key metrics.
-2. Add significance tests for headline deltas.
-   - Suggested deltas: CARMA vs F2 on score MAE; CARMA vs C3/C2 on popularity
-     Spearman.
-3. Add CNN-vs-Swin backbone ablation if the image-encoder contribution needs a
+2. Add strict CNN-vs-Swin backbone ablation if the image-encoder contribution needs a
    stronger response to review feedback.
-4. Keep C1/C2 claim boundaries explicit.
+3. Keep C1/C2 claim boundaries explicit.
    - Use `literature-adapted`, `project-input proxy`, or `C2-inspired`.
    - Do not describe them as exact reproductions of the original papers.
 
@@ -52,18 +57,17 @@ Completed:
   retrieval, image, and temporal trend removal.
 - Current interpretation: removing retrieval, image, or temporal trend increases
   error, so these components contribute to CARMA.
+- Added paired bootstrap diagnostics for the main ablation deltas.
 
 Remaining:
 
 1. Add multi-seed mean/std for the key ablation deltas.
    - Priority deltas: full model vs remove retrieval, remove image, remove
      temporal trend.
-2. Add significance tests for the ablation deltas if the report needs stronger
-   statistical backing.
-3. Confirm Exp2 charts and captions use the same target/metric direction.
+2. Confirm Exp2 charts and captions use the same target/metric direction.
    - `log_MAE` and `MAE`: lower is better.
    - Avoid wording that implies higher error is an improvement.
-4. If time permits, add a small calibration/error-distribution view for
+3. If time permits, add a small calibration/error-distribution view for
    `meanScore`, because internal R2 remains modest.
 
 ## Exp3: MAL External Test
@@ -75,26 +79,22 @@ Completed:
 - Added cover-derived YOLO diagnostic splits and reran CARMA plus F1/F2/C1/C2/C3.
 - Confirmed the image encoder artifact exists under
   `src_2/component_image/model-image/best/`.
+- Added MAL 2025 overlap label sanity check.
+  - Popularity Spearman: `0.9836`.
+  - Score Spearman: `0.9446`.
+- Added Run22 external calibration and prediction-quantile diagnostics.
+- Added cover-as-banner proxy splits and reran CARMA plus F1/F2/C1/C2/C3.
+  - This is a diagnostic proxy only; MAL 2025 still has no true banner images.
 
 Remaining:
 
-1. Add MAL 2025 overlap label sanity check.
-   - Current label sanity relies on MAL July as the label-check dataset.
-   - A MAL 2025 overlap sanity check would remove the possible criticism that
-     the label-check source differs from the external exam source.
-2. Add calibration or quantile analysis for external scale mismatch.
-   - Motivation: external R2 remains weak/negative even when ranking transfer is
-     useful.
-   - Suggested output: quantile bins of predicted vs observed MAL members and
-     score.
-3. Add banner-like external visual branch only if the project wants to reduce
-   the remaining visual modality gap.
-   - YOLO is now filled from cover crops.
-   - Banner remains unavailable in MAL 2025.
-4. Keep the external conclusion conservative.
+1. Keep the external conclusion conservative.
    - CARMA is strongest for external score MAE/10-point accuracy.
    - Popularity and score ranking are mixed; F2/C2/C3 can be stronger on
      Spearman depending on the split.
+2. A true banner-like branch remains future work.
+   - The completed cover-as-banner proxy shows that naive cover duplication is
+     not a substitute for real banner information.
 
 ## Report Context Decisions
 
@@ -105,4 +105,7 @@ Remaining:
 - Exp3 should distinguish:
   - main no-YOLO MAL local-ready external exam,
   - cover-derived YOLO diagnostic,
-  - remaining banner/calibration limitations.
+  - cover-as-banner proxy diagnostic,
+  - MAL 2025 overlap label sanity,
+  - external calibration diagnostics,
+  - remaining true-banner limitation.

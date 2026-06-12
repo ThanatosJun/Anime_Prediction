@@ -2,7 +2,8 @@
 
 Date: 2026-06-11
 
-Branch: `feature/eval-sample-alignment`
+Branch: `feature/eval-sample-alignment`; follow-up diagnostics added on
+`feature/experiment-followups`
 
 ## Purpose
 
@@ -46,11 +47,20 @@ Main outputs:
 - `reports/experiments/sample_alignment/carma_tensor_aligned_metrics.md`
 - `reports/experiments/sample_alignment/mal2025_yolo_diagnostic_metrics.csv`
 - `reports/experiments/sample_alignment/mal2025_yolo_diagnostic_metrics.md`
+- `reports/experiments/sample_alignment/mal2025_overlap_label_sanity.csv`
+- `reports/experiments/sample_alignment/mal2025_external_calibration_summary.csv`
+- `reports/experiments/sample_alignment/mal2025_external_calibration_bins.csv`
+- `reports/experiments/sample_alignment/mal2025_external_diagnostics.md`
+- `reports/experiments/sample_alignment/followup_paired_bootstrap_tests.csv`
+- `reports/experiments/sample_alignment/followup_image_proxy_diagnostics.csv`
+- `reports/experiments/sample_alignment/followup_experiment_statistics.md`
 - `reports/experiments/sample_alignment/carma_tensor_predictions/`
 - `data/external_transformed/run22_mal2025_popularity_local_ready_metrics.json`
 - `data/external_transformed/run22_mal2025_dual_local_ready_metrics.json`
 - `data/external_transformed/run22_mal2025_popularity_local_ready_yolo_metrics.json`
 - `data/external_transformed/run22_mal2025_dual_local_ready_yolo_metrics.json`
+- `data/external_transformed/run22_mal2025_popularity_local_ready_yolo_coverbanner_metrics.json`
+- `data/external_transformed/run22_mal2025_dual_local_ready_yolo_coverbanner_metrics.json`
 
 Run22 external inference can be reproduced with:
 
@@ -65,6 +75,27 @@ The cover-derived YOLO diagnostic can be reproduced with:
 python scripts/external/build_mal2025_yolo_image_embeddings.py --model-path src_2/component_image/model-image/best --splits mal2025_popularity_local_ready mal2025_dual_local_ready --suffix yolo --batch-size 64
 python scripts/external/run_external_inference.py --split mal2025_popularity_local_ready_yolo --targets popularity --run-id 22 --run-dir final_project/runs --output-prefix run22_mal2025_popularity_local_ready_yolo
 python scripts/external/run_external_inference.py --split mal2025_dual_local_ready_yolo --targets popularity meanScore --run-id 22 --run-dir final_project/runs --output-prefix run22_mal2025_dual_local_ready_yolo
+```
+
+The cover-as-banner proxy diagnostic can be reproduced with:
+
+```bash
+python scripts/external/build_mal2025_cover_banner_proxy.py
+python scripts/external/run_external_inference.py --split mal2025_popularity_local_ready_yolo_coverbanner --targets popularity --run-id 22 --run-dir final_project/runs --output-prefix run22_mal2025_popularity_local_ready_yolo_coverbanner
+python scripts/external/run_external_inference.py --split mal2025_dual_local_ready_yolo_coverbanner --targets popularity meanScore --run-id 22 --run-dir final_project/runs --output-prefix run22_mal2025_dual_local_ready_yolo_coverbanner
+python scripts/experiments/run_carma_tensor_aligned_baselines.py --splits mal2025_popularity_local_ready_yolo_coverbanner mal2025_dual_local_ready_yolo_coverbanner --targets popularity meanScore
+```
+
+External label sanity and calibration diagnostics can be reproduced with:
+
+```bash
+python scripts/external/analyze_mal2025_external_diagnostics.py
+```
+
+Follow-up paired bootstrap and image-proxy diagnostics can be reproduced with:
+
+```bash
+python scripts/experiments/analyze_followup_experiment_statistics.py --n-boot 500
 ```
 
 The YOLO diagnostic requires the image encoder artifact under
@@ -114,12 +145,57 @@ Artifact note:
   repository's `src_2/runs` directory still only contains Run02, so reproduction
   commands explicitly pass `--run-dir final_project/runs`.
 
+### Paired Bootstrap Follow-up
+
+The paired bootstrap diagnostic uses existing per-row prediction files and
+resamples the same test ids with replacement. It is not a substitute for
+multi-seed training, but it answers whether the observed fixed-seed deltas are
+stable on the evaluated sample.
+
+Selected results:
+
+| Comparison | Target | Metric | Delta in favor of CARMA | 95% CI | p |
+|---|---|---|---:|---:|---:|
+| CARMA vs F2 | popularity | log_MAE | -0.0024 | [-0.0248, 0.0183] | 0.772 |
+| CARMA vs F2 | meanScore | MAE | 1.0631 | [0.8995, 1.2552] | 0.000 |
+| CARMA vs C3 | popularity | Spearman | 0.0000 | [-0.0074, 0.0071] | 0.952 |
+| CARMA full vs remove retrieval | popularity | log_MAE | 0.0650 | [0.0429, 0.0839] | 0.000 |
+| CARMA full vs remove image | meanScore | MAE | 1.0440 | [0.8929, 1.1862] | 0.000 |
+| CARMA full vs remove temporal trend | meanScore | MAE | 0.2966 | [0.2054, 0.3941] | 0.000 |
+
+Interpretation:
+
+- CARMA's meanScore MAE advantage over F2/C2/C3 is stable under paired
+  resampling.
+- Popularity is genuinely mixed. CARMA is competitive, but F2/C2/C3 can match
+  or exceed it on some popularity ranking/error metrics.
+- The main ablation deltas for retrieval, image, and temporal trend are stable
+  for error metrics, though some Spearman deltas are smaller or mixed.
+
 ## External MAL Alignment
 
 External rows use the same MAL 2025 local-ready records for CARMA and baselines:
 
 - Pop-only set: `n=3,765`
 - Dual-target set: `n=1,202`
+
+### MAL 2025 Overlap Label Sanity
+
+The original paper draft used MAL July as a label-check source. To avoid the
+criticism that the label-check dataset differs from the external exam dataset,
+the same check was repeated on MAL 2025 overlap rows:
+
+| Target | n | Spearman | Pearson | Calibration slope | Error |
+|---|---:|---:|---:|---:|---:|
+| popularity | 13,740 | 0.9836 | 0.9842 | 0.9351 | log_MAE 1.2657 |
+| meanScore | 13,740 | 0.9446 | 0.9419 | 1.1643 | MAE 3.9705 |
+
+Interpretation:
+
+- MAL 2025 `members` is strongly rank-aligned with AniList `popularity` on
+  overlap rows.
+- MAL 2025 `score * 10` is strongly rank-aligned with AniList `meanScore`.
+- This supports using MAL 2025 MAL-only rows as the external answer source.
 
 ### MAL Pop-only (`n=3,765`)
 
@@ -230,6 +306,78 @@ Interpretation:
   robustness/diagnostic result rather than replacing the original MAL external
   table.
 
+### Cover-as-banner Proxy Diagnostic
+
+MAL 2025 still has no true AniList-style banner images. To test whether the
+empty banner slot itself explains external degradation, a second diagnostic
+copies each cover embedding into the banner embedding slot after YOLO has been
+filled. This creates:
+
+- `mal2025_popularity_local_ready_yolo_coverbanner`: cover `3,765`, banner
+  proxy `3,765`, YOLO `3,765`
+- `mal2025_dual_local_ready_yolo_coverbanner`: cover `1,202`, banner proxy
+  `1,202`, YOLO `1,202`
+
+This is a proxy, not a true banner evaluation. It should not be used to claim
+that MAL has equivalent banner information.
+
+Selected cover-as-banner rows:
+
+| Model | Split | Target | Main metric |
+|---|---|---|---:|
+| CARMA Run22 | pop-only | popularity | Spearman 0.5166 |
+| F2-XGB-Concat-CARMATensor | pop-only | popularity | Spearman 0.5172 |
+| C3-RAG-XGB-CARMATensor | pop-only | popularity | Spearman 0.5050 |
+| CARMA Run22 | dual | popularity | Spearman 0.5955 |
+| C2-CrossAttention-CARMATensor | dual | popularity | Spearman 0.6637 |
+| C3-RAG-XGB-CARMATensor | dual | popularity | Spearman 0.6343 |
+| CARMA Run22 | dual | meanScore | MAE 6.4098 |
+| C1-Armenta-CARMATensor | dual | meanScore | MAE 6.9666 |
+| C3-RAG-XGB-CARMATensor | dual | meanScore | MAE 7.3660 |
+
+Interpretation:
+
+- Copying cover into the banner slot does not improve CARMA beyond the
+  cover-derived YOLO condition. Pop-only Spearman changes from `0.5213` to
+  `0.5166`; dual popularity Spearman changes from `0.6073` to `0.5955`; score
+  Spearman changes from `0.5999` to `0.5921`.
+- The remaining visual limitation is therefore not solved by a naive
+  cover-as-banner proxy. A true banner-like external branch would need a real
+  banner source or a deliberately trained banner imputation method.
+- CARMA remains best on dual external score MAE among the cover-as-banner rows,
+  while C2/C3 baselines can be stronger on popularity ranking.
+
+### External Calibration Diagnostics
+
+Prediction-quantile calibration bins were added for Run22. The bins are grouped
+by predicted value, not by ground truth, so they show whether higher model
+predictions correspond to higher observed MAL outcomes.
+
+Summary:
+
+| Source | Target | n | Spearman | R2 | Calibration slope | Error |
+|---|---|---:|---:|---:|---:|---:|
+| pop_only:no_yolo | popularity | 3,765 | 0.4998 | 0.2979 | 1.0435 | log_MAE 1.0359 |
+| dual:no_yolo | popularity | 1,202 | 0.5647 | -0.1188 | 0.8464 | log_MAE 1.1707 |
+| dual:no_yolo | meanScore | 1,202 | 0.5770 | -0.3253 | 0.5890 | MAE 6.3363 |
+| pop_only:cover_yolo | popularity | 3,765 | 0.5213 | 0.3173 | 1.1622 | log_MAE 1.0143 |
+| dual:cover_yolo | popularity | 1,202 | 0.6073 | -0.1613 | 0.9310 | log_MAE 1.2001 |
+| dual:cover_yolo | meanScore | 1,202 | 0.5999 | -0.3573 | 0.6367 | MAE 6.4919 |
+| pop_only:cover_yolo_coverbanner_proxy | popularity | 3,765 | 0.5166 | 0.3149 | 1.1295 | log_MAE 1.0174 |
+| dual:cover_yolo_coverbanner_proxy | popularity | 1,202 | 0.5955 | -0.1433 | 0.9057 | log_MAE 1.1880 |
+| dual:cover_yolo_coverbanner_proxy | meanScore | 1,202 | 0.5921 | -0.3374 | 0.6197 | MAE 6.4098 |
+
+Interpretation:
+
+- Actual MAL outcomes are generally monotonic across prediction quantiles, so
+  the external predictions retain useful ranking signal.
+- The highest predicted popularity quantiles are still under-scaled relative to
+  observed MAL members. This explains why ranking metrics can remain useful
+  while external R2 is weak or negative.
+- For meanScore, the model underpredicts low-to-mid MAL score bins more than
+  high-score bins. This is another calibration issue rather than a complete
+  failure of ranking transfer.
+
 ## Answer to Presentation Feedback
 
 For Q1, the clean internal comparison now exists on `n=3,087`. It weakens the
@@ -255,5 +403,6 @@ High priority if the paper is revised again:
 
 Lower priority:
 
-1. CNN-vs-Swin backbone ablation.
-2. External calibration or quantile analysis for MAL scale mismatch.
+1. Strict CNN-vs-Swin backbone ablation inside the same CARMA architecture.
+   Existing artifacts support image-source ablations and ResNet/CNN literature
+   proxy diagnostics, but not a one-variable CARMA CNN-vs-Swin replacement.
