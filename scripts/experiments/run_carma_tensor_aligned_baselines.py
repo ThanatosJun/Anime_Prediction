@@ -60,6 +60,67 @@ BASELINES = {
         },
         "groups": ["meta", "text", "image"],
     },
+    "C1-Armenta-CARMATensor": {
+        "model": "armenta_project_input_mlp",
+        "params": {
+            "branch_dim": 768,
+            "big_mlp_hidden_dims": (768, 384, 192, 96, 48, 24, 12, 6),
+            "dropout": 0.1,
+            "learning_rate": 1e-3,
+            "weight_decay": 1e-4,
+            "batch_size": 256,
+            "max_epochs": 100,
+            "patience": 12,
+            "validation_fraction": 0.15,
+            "random_state": 42,
+            "device": "auto",
+            "torch_num_threads": 1,
+        },
+        "groups": ["meta", "text", "image"],
+        "dynamic_dims": True,
+    },
+    "C2-CrossAttention-CARMATensor": {
+        "model": "project_input_cross_attention",
+        "params": {
+            "d_model": 128,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "dropout": 0.1,
+            "learning_rate": 1e-3,
+            "weight_decay": 1e-4,
+            "batch_size": 256,
+            "max_epochs": 90,
+            "patience": 10,
+            "validation_fraction": 0.15,
+            "random_state": 42,
+            "device": "auto",
+            "torch_num_threads": 1,
+        },
+        "groups": ["meta", "text", "image"],
+        "dynamic_dims": True,
+    },
+    "C2-RecurrentFusion-CARMATensor": {
+        "model": "project_input_recurrent_fusion",
+        "params": {
+            "d_model": 128,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "dropout": 0.1,
+            "learning_rate": 1e-3,
+            "weight_decay": 1e-4,
+            "batch_size": 256,
+            "max_epochs": 90,
+            "patience": 10,
+            "validation_fraction": 0.15,
+            "random_state": 42,
+            "device": "auto",
+            "torch_num_threads": 1,
+        },
+        "groups": ["meta", "text", "image"],
+        "dynamic_dims": True,
+    },
     "C3-RAG-XGB-CARMATensor": {
         "model": "xgboost",
         "params": {
@@ -78,6 +139,8 @@ BASELINES = {
 EXTERNAL_SPLITS = {
     "mal2025_popularity_local_ready": ["popularity"],
     "mal2025_dual_local_ready": ["popularity", "meanScore"],
+    "mal2025_popularity_local_ready_yolo": ["popularity"],
+    "mal2025_dual_local_ready_yolo": ["popularity", "meanScore"],
 }
 
 
@@ -163,6 +226,22 @@ def _feature_names(ds: AnimeDataset, groups: Sequence[str]) -> List[str]:
     return names
 
 
+def _dynamic_model_params(spec: dict, train: MatrixBundle) -> dict:
+    params = dict(spec["params"])
+    if not spec.get("dynamic_dims", False):
+        return params
+    diag = train.diagnostics
+    params.update(
+        {
+            "metadata_dim": 56,
+            "text_dim": int(diag["text_dim"]),
+            "image_dim": int(diag["n_image_modality"]) * int(diag["image_dim"])
+            + int(diag["n_image_modality"]),
+        }
+    )
+    return params
+
+
 def _build_bundle(
     split: str,
     config: dict,
@@ -226,6 +305,8 @@ def _carma_external_rows() -> List[dict]:
         Path("data/external_transformed/run02_mal2025_dual_local_ready_metrics.json"),
         Path("data/external_transformed/run22_mal2025_popularity_local_ready_metrics.json"),
         Path("data/external_transformed/run22_mal2025_dual_local_ready_metrics.json"),
+        Path("data/external_transformed/run22_mal2025_popularity_local_ready_yolo_metrics.json"),
+        Path("data/external_transformed/run22_mal2025_dual_local_ready_yolo_metrics.json"),
     ]
     rows: List[dict] = []
     for path in paths:
@@ -250,7 +331,7 @@ def _carma_external_rows() -> List[dict]:
                     "factor_acc_2x": pop["factor_acc_2x_prediction_vs_mal_members"],
                     "R2": "",
                     "acc_within_10pt": "",
-                    "diagnostics": "existing CARMA Run02 external inference artifact",
+                    "diagnostics": f"existing CARMA Run{run_id} external inference artifact",
                 }
             )
         if "meanScore" in metrics:
@@ -268,7 +349,7 @@ def _carma_external_rows() -> List[dict]:
                     "log_MAE": "",
                     "log_R2": "",
                     "factor_acc_2x": "",
-                    "diagnostics": "existing CARMA Run02 external inference artifact",
+                    "diagnostics": f"existing CARMA Run{run_id} external inference artifact",
                 }
             )
     return rows
@@ -283,7 +364,7 @@ def _run_one(
     split: str,
     out_dir: Path,
 ) -> dict:
-    model = make_model(spec["model"], spec["params"])
+    model = make_model(spec["model"], _dynamic_model_params(spec, train))
     model.fit(train.x, _transform_target(train.y_raw, target))
     pred = _inverse_target(model.predict(eval_bundle.x), target)
     metrics = compute_metrics(eval_bundle.y_raw, pred, target)
@@ -348,22 +429,34 @@ def _write_markdown(summary: pd.DataFrame, path: Path) -> None:
         "R2",
     ]
     present = [col for col in cols if col in summary.columns]
+    table = summary[present].replace({np.nan: ""}).to_markdown(index=False)
+    table = "\n".join(line.rstrip() for line in table.splitlines())
     lines = [
         "# CARMA Tensor-aligned Baseline Evaluation",
         "",
         "Baselines in this table flatten the actual tensors returned by `src_2.fussion_training.dataset.AnimeDataset`.",
         "No text/image/RAG embeddings are regenerated.",
         "",
-        summary[present].replace({np.nan: ""}).to_markdown(index=False),
+        table,
         "",
     ]
-    path.write_text("\n".join(lines), encoding="utf-8")
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines))
 
 
 def _write_outputs(rows: List[dict], out_dir: Path) -> None:
     summary = pd.DataFrame(rows)
-    summary.to_csv(out_dir / "carma_tensor_aligned_metrics.csv", index=False)
+    if not summary.empty:
+        summary = summary.drop_duplicates(["model", "split", "target"], keep="last")
+    summary.to_csv(out_dir / "carma_tensor_aligned_metrics.csv", index=False, lineterminator="\n")
     _write_markdown(summary, out_dir / "carma_tensor_aligned_metrics.md")
+
+
+def _existing_summary_rows(out_dir: Path) -> List[dict]:
+    path = out_dir / "carma_tensor_aligned_metrics.csv"
+    if not path.exists():
+        return []
+    return pd.read_csv(path).to_dict("records")
 
 
 def main() -> None:
@@ -388,7 +481,7 @@ def main() -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     meta_encoder = _fit_meta_encoder(config)
-    rows: List[dict] = []
+    rows: List[dict] = _existing_summary_rows(out_dir)
     rows.extend(_carma_external_rows())
     _write_outputs(rows, out_dir)
 
