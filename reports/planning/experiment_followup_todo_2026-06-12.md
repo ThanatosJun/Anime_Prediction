@@ -40,12 +40,21 @@ Completed:
 
 Remaining:
 
-1. Run multiple seeds for CARMA and the most important baselines.
-   - Suggested scope: Run22-style CARMA, F2, C2-Recurrent, C3-RAG-XGB.
-   - Report mean/std for key metrics.
-2. Add strict CNN-vs-Swin backbone ablation if the image-encoder contribution needs a
-   stronger response to review feedback.
-3. Keep C1/C2 claim boundaries explicit.
+1. Add a compact paired-bootstrap summary table for the paper/report.
+   - Suggested rows: CARMA vs F2, CARMA vs C2-Recurrent, CARMA vs C3.
+   - Suggested metrics: popularity `log_MAE`/Spearman and meanScore MAE/Spearman.
+   - Purpose: show which differences are stable and which are effectively tied.
+2. Keep the Exp1 conclusion target-specific.
+   - `meanScore`: CARMA has the clearest MAE and 10-point accuracy advantage.
+   - `popularity`: CARMA is competitive, but F2/C2/C3 remain strong on some
+     ranking/error metrics.
+   - Avoid the claim that CARMA is the best on every popularity metric.
+3. Keep the baseline role table compact and explicit.
+   - F1: metadata-only strong floor.
+   - F2: simple multimodal concatenation floor.
+   - C1/C2: literature-adapted fusion proxies.
+   - C3: retrieval reference baseline.
+4. Keep C1/C2 claim boundaries explicit.
    - Use `literature-adapted`, `project-input proxy`, or `C2-inspired`.
    - Do not describe them as exact reproductions of the original papers.
 
@@ -88,13 +97,57 @@ Completed:
 
 Remaining:
 
-1. Keep the external conclusion conservative.
+1. Add external paired-bootstrap diagnostics.
+   - Compare CARMA against F2, C2, and C3 on the same MAL rows.
+   - Prioritize MAL 2025 no-YOLO and cover-derived YOLO splits.
+   - Treat cover-as-banner as diagnostic only.
+2. Add external error slicing.
+   - Suggested slices: MAL popularity quantiles, MAL score quantiles, release
+     year, format, source, and high-popularity tail.
+   - Purpose: identify where the external transfer degrades rather than only
+     reporting aggregate metrics.
+3. Add a compact calibration/quantile table or figure.
+   - Use existing prediction-quantile bins.
+   - Explain why Spearman can remain useful while external R2 is weak or
+     negative.
+4. Optionally add a small success/failure case table.
+   - Include high-confidence ranking successes.
+   - Include high-popularity underestimation examples.
+   - Include large score-error examples.
+5. Keep the external conclusion conservative.
    - CARMA is strongest for external score MAE/10-point accuracy.
    - Popularity and score ranking are mixed; F2/C2/C3 can be stronger on
      Spearman depending on the split.
-2. A true banner-like branch remains future work.
+6. A true banner-like branch remains future work.
    - The completed cover-as-banner proxy shows that naive cover duplication is
      not a substitute for real banner information.
+
+## Global Robustness, Not Exp1-specific
+
+These tasks improve overall evidence quality but should not be described as
+Exp1-only work:
+
+1. Run multiple seeds for CARMA and the most important baselines.
+   - Affects Exp1 baseline comparison and Exp2 ablation reliability.
+   - Suggested scope: Run22-style CARMA, F2, C2-Recurrent, C3-RAG-XGB.
+   - Report mean/std for key metrics.
+2. Add seed-level significance tests after multi-seed runs exist.
+   - The current paired bootstrap checks fixed prediction artifacts only.
+   - It does not replace seed-level uncertainty.
+
+## Main Framework Remaining Work, Out of Scope for Exp1/Exp3 Cleanup
+
+These tasks require model or architecture work and should not be mixed with the
+current Exp1/Exp3 evaluation-cleanup track:
+
+1. Add a strict CNN-vs-Swin backbone ablation inside the same CARMA architecture.
+   - Existing artifacts support image-source ablations and ResNet/CNN
+     literature proxy diagnostics.
+   - They do not provide a one-variable CARMA CNN-vs-Swin replacement.
+2. Train or acquire a true banner-like external branch.
+   - The cover-as-banner proxy is only a missing-modality diagnostic.
+   - A valid branch would need real banner data or a deliberately trained banner
+     imputation method.
 
 ## Report Context Decisions
 
