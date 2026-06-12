@@ -45,5 +45,10 @@ python scripts/external/run_external_inference.py --split mal2025_dual_local_rea
 python scripts/external/build_mal2025_yolo_image_embeddings.py --splits mal2025_popularity_local_ready mal2025_dual_local_ready --suffix yolo --batch-size 64
 python scripts/external/run_external_inference.py --split mal2025_popularity_local_ready_yolo --targets popularity --run-id 22 --run-dir final_project/runs --output-prefix run22_mal2025_popularity_local_ready_yolo
 python scripts/external/run_external_inference.py --split mal2025_dual_local_ready_yolo --targets popularity meanScore --run-id 22 --run-dir final_project/runs --output-prefix run22_mal2025_dual_local_ready_yolo
+python scripts/external/build_mal2025_cover_banner_proxy.py
+python scripts/external/run_external_inference.py --split mal2025_popularity_local_ready_yolo_coverbanner --targets popularity --run-id 22 --run-dir final_project/runs --output-prefix run22_mal2025_popularity_local_ready_yolo_coverbanner
+python scripts/external/run_external_inference.py --split mal2025_dual_local_ready_yolo_coverbanner --targets popularity meanScore --run-id 22 --run-dir final_project/runs --output-prefix run22_mal2025_dual_local_ready_yolo_coverbanner
 python scripts/experiments/run_carma_tensor_aligned_baselines.py
+python scripts/external/analyze_mal2025_external_diagnostics.py
+python scripts/experiments/analyze_followup_experiment_statistics.py --n-boot 500
 ```
