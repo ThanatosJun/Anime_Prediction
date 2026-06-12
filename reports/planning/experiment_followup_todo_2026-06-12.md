@@ -18,6 +18,8 @@ Use these files for the revised paper narrative and future reporting:
 - `reports/experiments/sample_alignment/mal2025_external_calibration_bins.csv`
 - `reports/experiments/sample_alignment/mal2025_external_diagnostics.md`
 - `reports/experiments/sample_alignment/followup_paired_bootstrap_tests.csv`
+- `reports/experiments/sample_alignment/followup_external_paired_bootstrap_tests.csv`
+- `reports/experiments/sample_alignment/followup_external_paired_bootstrap_tests.md`
 - `reports/experiments/sample_alignment/followup_image_proxy_diagnostics.csv`
 - `reports/experiments/sample_alignment/followup_experiment_statistics.md`
 - `reports/experiments/sample_alignment/run22_artifact_manifest.md`
@@ -94,31 +96,29 @@ Completed:
 - Added Run22 external calibration and prediction-quantile diagnostics.
 - Added cover-as-banner proxy splits and reran CARMA plus F1/F2/C1/C2/C3.
   - This is a diagnostic proxy only; MAL 2025 still has no true banner images.
+- Added external paired-bootstrap diagnostics for CARMA-vs-F2/C2/C3 on the
+  same MAL rows.
 
 Remaining:
 
-1. Add external paired-bootstrap diagnostics.
-   - Compare CARMA against F2, C2, and C3 on the same MAL rows.
-   - Prioritize MAL 2025 no-YOLO and cover-derived YOLO splits.
-   - Treat cover-as-banner as diagnostic only.
-2. Add external error slicing.
+1. Add external error slicing.
    - Suggested slices: MAL popularity quantiles, MAL score quantiles, release
      year, format, source, and high-popularity tail.
    - Purpose: identify where the external transfer degrades rather than only
      reporting aggregate metrics.
-3. Add a compact calibration/quantile table or figure.
+2. Add a compact calibration/quantile table or figure.
    - Use existing prediction-quantile bins.
    - Explain why Spearman can remain useful while external R2 is weak or
      negative.
-4. Optionally add a small success/failure case table.
+3. Optionally add a small success/failure case table.
    - Include high-confidence ranking successes.
    - Include high-popularity underestimation examples.
    - Include large score-error examples.
-5. Keep the external conclusion conservative.
+4. Keep the external conclusion conservative.
    - CARMA is strongest for external score MAE/10-point accuracy.
    - Popularity and score ranking are mixed; F2/C2/C3 can be stronger on
      Spearman depending on the split.
-6. A true banner-like branch remains future work.
+5. A true banner-like branch remains future work.
    - The completed cover-as-banner proxy shows that naive cover duplication is
      not a substitute for real banner information.
 

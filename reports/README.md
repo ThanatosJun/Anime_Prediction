@@ -29,6 +29,8 @@ current source of truth:
 - `experiments/sample_alignment/mal2025_external_calibration_summary.csv`
 - `experiments/sample_alignment/mal2025_external_calibration_bins.csv`
 - `experiments/sample_alignment/followup_paired_bootstrap_tests.csv`
+- `experiments/sample_alignment/followup_external_paired_bootstrap_tests.csv`
+- `experiments/sample_alignment/followup_external_paired_bootstrap_tests.md`
 - `experiments/sample_alignment/followup_image_proxy_diagnostics.csv`
 - `experiments/sample_alignment/followup_experiment_statistics.md`
 - `experiments/sample_alignment/run22_artifact_manifest.md`

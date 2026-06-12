@@ -52,6 +52,8 @@ Main outputs:
 - `reports/experiments/sample_alignment/mal2025_external_calibration_bins.csv`
 - `reports/experiments/sample_alignment/mal2025_external_diagnostics.md`
 - `reports/experiments/sample_alignment/followup_paired_bootstrap_tests.csv`
+- `reports/experiments/sample_alignment/followup_external_paired_bootstrap_tests.csv`
+- `reports/experiments/sample_alignment/followup_external_paired_bootstrap_tests.md`
 - `reports/experiments/sample_alignment/followup_image_proxy_diagnostics.csv`
 - `reports/experiments/sample_alignment/followup_experiment_statistics.md`
 - `reports/experiments/sample_alignment/carma_tensor_predictions/`
@@ -92,7 +94,8 @@ External label sanity and calibration diagnostics can be reproduced with:
 python scripts/external/analyze_mal2025_external_diagnostics.py
 ```
 
-Follow-up paired bootstrap and image-proxy diagnostics can be reproduced with:
+Follow-up paired bootstrap, external paired bootstrap, and image-proxy
+diagnostics can be reproduced with:
 
 ```bash
 python scripts/experiments/analyze_followup_experiment_statistics.py --n-boot 500
@@ -346,6 +349,43 @@ Interpretation:
   banner source or a deliberately trained banner imputation method.
 - CARMA remains best on dual external score MAE among the cover-as-banner rows,
   while C2/C3 baselines can be stronger on popularity ranking.
+
+### External Paired Bootstrap Diagnostics
+
+The external paired-bootstrap diagnostics compare CARMA Run22 against F2, C2,
+and C3 baselines on the same MAL 2025 rows. Positive deltas mean CARMA is better
+under the metric direction. These tests use fixed prediction artifacts, so they
+do not replace multi-seed uncertainty, but they do clarify which external
+differences are stable on the evaluated rows.
+
+Selected main-variant rows:
+
+| Variant | Split | Comparison | Target | Metric | Delta in favor of CARMA | 95% CI | p |
+|---|---|---|---|---|---:|---:|---:|
+| no_yolo | pop-only | CARMA vs F2 | popularity | Spearman | -0.0242 | [-0.0516, 0.0039] | 0.084 |
+| no_yolo | pop-only | CARMA vs C3 | popularity | Spearman | 0.0606 | [0.0368, 0.0808] | 0.000 |
+| no_yolo | dual | CARMA vs C3 | popularity | log_MAE | 0.3929 | [0.3568, 0.4270] | 0.000 |
+| no_yolo | dual | CARMA vs C3 | popularity | Spearman | -0.0564 | [-0.0901, -0.0216] | 0.000 |
+| no_yolo | dual | CARMA vs F2 | meanScore | MAE | 3.4237 | [3.1828, 3.7018] | 0.000 |
+| no_yolo | dual | CARMA vs F2 | meanScore | Spearman | -0.0290 | [-0.0624, 0.0097] | 0.116 |
+| cover_yolo | pop-only | CARMA vs F2 | popularity | log_MAE | -0.0210 | [-0.0388, -0.0015] | 0.028 |
+| cover_yolo | dual | CARMA vs C2-CrossAttention | popularity | Spearman | -0.0615 | [-0.0900, -0.0321] | 0.000 |
+| cover_yolo | dual | CARMA vs F2 | meanScore | MAE | 3.4415 | [3.2149, 3.6831] | 0.000 |
+| cover_yolo | dual | CARMA vs F2 | meanScore | Spearman | -0.0450 | [-0.0774, -0.0124] | 0.004 |
+
+Interpretation:
+
+- CARMA's external score MAE advantage is stable on both no-YOLO and
+  cover-derived YOLO dual splits.
+- External score ranking is mixed. Some baseline Spearman advantages are small
+  or not stable in the no-YOLO split, but F2 and C2-Recurrent have stable
+  Spearman advantages in the cover-derived YOLO split.
+- External popularity remains metric-dependent. CARMA is stable on several
+  log-error comparisons, while C2/C3 can be stronger on dual-split popularity
+  Spearman.
+- The external claim should therefore remain: CARMA gives the most reliable
+  external score error performance, while cross-platform ranking is useful but
+  not uniformly best.
 
 ### External Calibration Diagnostics
 
