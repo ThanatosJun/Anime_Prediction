@@ -19,6 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "reports" / "experiments" / "sample_alignment"
 
 
+def _write_text_lf(path: Path, text: str) -> None:
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+
+
 @dataclass(frozen=True)
 class PredictionSpec:
     name: str
@@ -161,6 +166,32 @@ def _spec_for_baseline(model: str, target: str) -> PredictionSpec:
     )
 
 
+def _spec_for_external_carma(split: str, target: str) -> PredictionSpec:
+    pred_col = f"prediction_{target}"
+    target_col = "external_popularity_members" if target == "popularity" else "external_score_0_100"
+    return PredictionSpec(
+        name="CARMA-Run22",
+        path=Path("data") / "external_transformed" / f"run22_{split}_predictions.csv",
+        pred_col=pred_col,
+        target_col=target_col,
+    )
+
+
+def _spec_for_external_baseline(split: str, model: str, target: str) -> PredictionSpec:
+    return PredictionSpec(
+        name=model,
+        path=Path("reports")
+        / "experiments"
+        / "sample_alignment"
+        / "carma_tensor_predictions"
+        / split
+        / model
+        / target
+        / "predictions.csv",
+        pred_col="prediction",
+    )
+
+
 def build_paired_tests(n_boot: int, seed: int) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     comparisons: list[PairedComparison] = []
@@ -239,6 +270,84 @@ def build_paired_tests(n_boot: int, seed: int) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def build_external_paired_tests(n_boot: int, seed: int) -> pd.DataFrame:
+    rng = np.random.default_rng(seed + 17)
+    baseline_models = [
+        "F2-XGB-Concat-CARMATensor",
+        "C2-CrossAttention-CARMATensor",
+        "C2-RecurrentFusion-CARMATensor",
+        "C3-RAG-XGB-CARMATensor",
+    ]
+    external_splits = {
+        "mal2025_popularity_local_ready": {
+            "targets": ("popularity",),
+            "variant": "no_yolo",
+            "priority": "main",
+        },
+        "mal2025_dual_local_ready": {
+            "targets": ("popularity", "meanScore"),
+            "variant": "no_yolo",
+            "priority": "main",
+        },
+        "mal2025_popularity_local_ready_yolo": {
+            "targets": ("popularity",),
+            "variant": "cover_yolo",
+            "priority": "main",
+        },
+        "mal2025_dual_local_ready_yolo": {
+            "targets": ("popularity", "meanScore"),
+            "variant": "cover_yolo",
+            "priority": "main",
+        },
+        "mal2025_popularity_local_ready_yolo_coverbanner": {
+            "targets": ("popularity",),
+            "variant": "cover_yolo_coverbanner_proxy",
+            "priority": "diagnostic",
+        },
+        "mal2025_dual_local_ready_yolo_coverbanner": {
+            "targets": ("popularity", "meanScore"),
+            "variant": "cover_yolo_coverbanner_proxy",
+            "priority": "diagnostic",
+        },
+    }
+
+    rows = []
+    for split, split_info in external_splits.items():
+        for target in split_info["targets"]:
+            metrics = ("log_mae", "spearman") if target == "popularity" else ("mae", "spearman")
+            for model in baseline_models:
+                carma = _spec_for_external_carma(split, target)
+                baseline = _spec_for_external_baseline(split, model, target)
+                try:
+                    df = _aligned_pair(carma, baseline)
+                except FileNotFoundError:
+                    continue
+                for metric in metrics:
+                    stats = _bootstrap_comparison(
+                        df,
+                        carma.name,
+                        baseline.name,
+                        target,
+                        metric,
+                        rng,
+                        n_boot,
+                    )
+                    rows.append(
+                        {
+                            "group": "exp3_external_paired",
+                            "split": split,
+                            "variant": split_info["variant"],
+                            "priority": split_info["priority"],
+                            "target": target,
+                            "model_a": carma.name,
+                            "model_b": baseline.name,
+                            "note": "CARMA Run22 and the baseline are evaluated on the same MAL 2025 external rows.",
+                            **stats,
+                        }
+                    )
+    return pd.DataFrame(rows)
+
+
 def build_image_proxy_diagnostics(paired: pd.DataFrame) -> pd.DataFrame:
     rows = []
     exp2 = paired[paired["group"].eq("exp2_ablation")].copy()
@@ -303,24 +412,41 @@ def build_image_proxy_diagnostics(paired: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _write_markdown(paired: pd.DataFrame, image_diag: pd.DataFrame, path: Path) -> None:
+def _write_markdown(
+    paired: pd.DataFrame,
+    external_paired: pd.DataFrame,
+    image_diag: pd.DataFrame,
+    path: Path,
+) -> None:
+    def table(df: pd.DataFrame) -> str:
+        markdown = df.replace({np.nan: ""}).to_markdown(index=False)
+        return "\n".join(line.rstrip() for line in markdown.splitlines())
+
     lines = [
         "# Follow-up Experiment Statistics",
         "",
         "This report uses existing per-row prediction artifacts. Positive `delta_a_better` means `model_a` is better than `model_b` under the listed metric direction.",
         "",
-        "## Paired bootstrap tests",
+        "## Internal paired bootstrap tests",
         "",
-        paired.replace({np.nan: ""}).to_markdown(index=False),
+        table(paired),
+        "",
+        "## External paired bootstrap tests",
+        "",
+        "External tests compare CARMA Run22 with tensor-aligned baselines on the same MAL 2025 rows. `cover_yolo_coverbanner_proxy` rows are diagnostic only.",
+        "",
+        table(external_paired),
         "",
         "## Image backbone/proxy diagnostics",
         "",
         "The CARMA artifacts support image-source ablations and literature-proxy comparisons. They do not support a strict one-variable CNN-vs-Swin replacement inside the same CARMA architecture.",
         "",
-        image_diag.replace({np.nan: ""}).to_markdown(index=False),
+        table(image_diag),
         "",
     ]
-    path.write_text("\n".join(lines), encoding="utf-8")
+    text = "\n".join(lines)
+    text = "\n".join(line.rstrip() for line in text.splitlines())
+    _write_text_lf(path, text + "\n")
 
 
 def main() -> None:
@@ -332,16 +458,25 @@ def main() -> None:
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     paired = build_paired_tests(n_boot=args.n_boot, seed=args.seed)
+    external_paired = build_external_paired_tests(n_boot=args.n_boot, seed=args.seed)
     image_diag = build_image_proxy_diagnostics(paired)
 
     paired_path = args.out_dir / "followup_paired_bootstrap_tests.csv"
+    external_paired_path = args.out_dir / "followup_external_paired_bootstrap_tests.csv"
+    external_paired_md_path = args.out_dir / "followup_external_paired_bootstrap_tests.md"
     image_path = args.out_dir / "followup_image_proxy_diagnostics.csv"
     report_path = args.out_dir / "followup_experiment_statistics.md"
     paired.to_csv(paired_path, index=False)
+    external_paired.to_csv(external_paired_path, index=False)
+    external_paired_md = external_paired.replace({np.nan: ""}).to_markdown(index=False)
+    external_paired_md = "\n".join(line.rstrip() for line in external_paired_md.splitlines())
+    _write_text_lf(external_paired_md_path, external_paired_md + "\n")
     image_diag.to_csv(image_path, index=False)
-    _write_markdown(paired, image_diag, report_path)
+    _write_markdown(paired, external_paired, image_diag, report_path)
 
     print(f"Wrote {paired_path}")
+    print(f"Wrote {external_paired_path}")
+    print(f"Wrote {external_paired_md_path}")
     print(f"Wrote {image_path}")
     print(f"Wrote {report_path}")
 
