@@ -141,6 +141,8 @@ EXTERNAL_SPLITS = {
     "mal2025_dual_local_ready": ["popularity", "meanScore"],
     "mal2025_popularity_local_ready_yolo": ["popularity"],
     "mal2025_dual_local_ready_yolo": ["popularity", "meanScore"],
+    "mal2025_popularity_local_ready_yolo_coverbanner": ["popularity"],
+    "mal2025_dual_local_ready_yolo_coverbanner": ["popularity", "meanScore"],
 }
 
 
@@ -307,6 +309,8 @@ def _carma_external_rows() -> List[dict]:
         Path("data/external_transformed/run22_mal2025_dual_local_ready_metrics.json"),
         Path("data/external_transformed/run22_mal2025_popularity_local_ready_yolo_metrics.json"),
         Path("data/external_transformed/run22_mal2025_dual_local_ready_yolo_metrics.json"),
+        Path("data/external_transformed/run22_mal2025_popularity_local_ready_yolo_coverbanner_metrics.json"),
+        Path("data/external_transformed/run22_mal2025_dual_local_ready_yolo_coverbanner_metrics.json"),
     ]
     rows: List[dict] = []
     for path in paths:
