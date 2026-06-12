@@ -12,13 +12,13 @@
 
 本文並不宣稱完整復現外部文獻模型。由於本研究使用的是 AniList anime snapshot、pre-release temporal split，以及 `popularity` / `meanScore` 雙目標回歸，與許多原始論文的資料來源、輸入模態、任務設定與切分方式不同，因此相關 baseline 被定位為 project-input adaptation、proxy 或 source-inspired reconstruction。這樣的定位可以保留文獻方法的比較價值，同時避免將不同資料條件下的改寫版本誤寫為 exact reproduction。
 
-### 2. 檢索增強生成（RAG）
+### 2. 檢索增強（Retrieval Augmentation）
 
 檢索增強（retrieval augmentation）的核心想法是，單一樣本本身的文字、圖片與 metadata 不一定足以完整預測其未來表現，因此可以檢索相似的歷史樣本作為額外 context。對於動畫播出前預測而言，這個想法尤其合理：若一部新作在題材、製作公司、聲優、系列關係、文字語意或視覺風格上接近過去作品，這些歷史作品的受眾反應可能提供關於人氣與評分的先驗訊號 [J3]。
 
 Retrieval augmentation 可依檢索依據分成 metadata-based retrieval 與 semantic retrieval。前者使用 genre、studio、source、voice actor 或 relation 等結構化欄位尋找相似作品，優點是可解釋性較高，也較容易控制時間洩漏；後者則使用文字或多模態 embedding 搜尋語意相近作品，能捕捉標籤欄位無法完整描述的內容相似性。兩者也可結合成 hybrid retrieval，以同時使用結構化與語意相似度。
 
-本文的 RAG 設計受到 selective retrieval knowledge augmentation 類方法啟發，但不將其寫成完整 SKAPP reproduction。原方法主要針對 social-media UGC popularity prediction，包含使用者生成內容、平台互動與特定 graph/attention 模組；而本文任務是 pre-release anime prediction，輸入契約與 target formulation 皆不同。因此，本文在 related work 中將 retrieval augmentation 定位為補充歷史上下文的研究方向；retrieval mechanisms 的詳細消融分析則於 Exp2 中呈現 [J3]。
+本文的 retrieval 設計受到 selective retrieval knowledge augmentation 類方法啟發，但不將其寫成完整 SKAPP reproduction。原方法主要針對 social-media UGC popularity prediction，包含使用者生成內容、平台互動與特定 graph/attention 模組；而本文任務是 pre-release anime prediction，輸入契約與 target formulation 皆不同。因此，本文在 related work 中將 retrieval augmentation 定位為補充歷史上下文的研究方向；retrieval mechanisms 的詳細消融分析則於 Exp2 中呈現 [J3]。
 
 ---
 
@@ -72,7 +72,7 @@ Retrieval augmentation 可依檢索依據分成 metadata-based retrieval 與 sem
 
 `meanScore` 則是 0 到 100 的線性分數，因此所有主要指標皆在原始尺度下計算。本文使用 Spearman correlation 檢查評分排序是否合理，使用 MAE 衡量平均分數偏差，使用 R2 檢查模型是否能解釋分數變異，並使用 `acc_within_10pt` 表示預測誤差在 10 分以內的比例。這組指標能同時反映排序能力、絕對誤差與實際可接受範圍。
 
-為了避免模型因可用輸入欄位不同而產生不公平比較，Exp1 的 reference baselines 統一限制在同一批具備 metadata、文字 embedding 與圖片 embedding 的樣本上評估。主框架結果則標示其對應的 internal test set 規模，使讀者能區分「相同樣本集合下的 baseline 比較」與「主框架在完整內部測試集上的代表結果」。
+為了避免模型因可用輸入欄位不同而產生不公平比較，修正版 Exp1 進一步將代表性 baselines 重算於與 CARMA 相同的 3,087 筆 internal temporal test set。這些 baselines 直接使用 CARMA pipeline 輸出的 tensor inputs，包括 metadata、text embedding、image embedding 與 retrieval tensors，因此不重新產生 embedding，也不更換資料處理設定。
 
 ### 3. 研究問題
 
@@ -104,49 +104,47 @@ Retrieval augmentation 可依檢索依據分成 metadata-based retrieval 與 sem
 
 本實驗用來回答 RQ1：在相同的 AniList temporal split 下，本研究的主框架是否能比只使用 metadata、簡單多模態串接、文獻改編融合模型與 retrieval baseline 提供更穩定的預測能力。換言之，Exp1 的重點不是建立一張包含所有嘗試模型的排行榜，而是用少量可解釋的參考系統，確認 proposed framework 的改善究竟來自 metadata、本身模態訊號、多模態融合，或歷史相似作品的補充資訊。
 
-為確保 reference baselines 的比較公平，Exp1 的 reference rows 均重算於相同的 2,808 筆 strict multimodal common subset。此 subset 定義為 metadata IDs、project text embedding IDs 與 project image embedding IDs 的交集；相較完整 V2 test split 的 3,087 筆，被排除的 279 筆皆是缺 project text embedding，而不是缺圖片、high-resolution image artifact 或 RAG feature。因此，表中的 reference baseline 差異主要反映方法差異，而不是各模型使用了不同樣本集合。
+為確保 reference baselines 的比較公平，修正版 Exp1 將代表性 baseline rows 與 CARMA 統一放在完整 internal temporal test set `n=3,087` 上比較。這批 baseline features 不是使用舊 baseline-only artifacts，而是直接展平 `AnimeDataset` 回傳給 CARMA 的實際 tensor inputs；因此比較樣本、文字 embedding、圖片 embedding、retrieval tensors 與 temporal split 均與主框架一致。
 
-本文將 Exp1 的比較系統整理為五種角色。`F1-RF-Meta` 是 metadata-only 強基準，用來確認播出前結構化資訊本身能提供多少預測力；`F2-XGB-Concat` 是 simple fusion floor，用來檢查將 metadata、文字與圖片直接串接是否已足以帶來多模態增益；C1/C2 是 literature-adapted fusion baselines，分別參考 anime-domain multimodal MLP 與 cross-modal / recurrent fusion 思想，但僅作為 project-input proxy，而非原論文 exact reproduction [J1], [J2]；C3 是 retrieval reference，用來檢查相似歷史作品是否能補充當前作品的播出前資訊 [J3]；`FusionModel v2 Run22` 則是主框架代表模型。
+本文將 Exp1 的比較系統整理為五種角色。`F1-RF-Meta-CARMATensor` 是 metadata-only 強基準，用來確認播出前結構化資訊本身能提供多少預測力；`F2-XGB-Concat-CARMATensor` 是 simple fusion floor，用來檢查將 metadata、文字、圖片與可用 tensor features 直接串接是否已足以帶來多模態增益；C1/C2 是 literature-adapted fusion baselines，用來回應 related work 中的 anime-domain multimodal MLP 與 cross-modal / recurrent fusion 參考方向，但僅作為 project-input proxy，而非原論文 exact reproduction [J1], [J2]；`C3-RAG-XGB-CARMATensor` 是 retrieval reference，用來檢查相似歷史作品是否能補充當前作品的播出前資訊 [J3]；`FusionModel v2 Run22` 則是主框架代表模型。
 
 | Comparison | Models | Input | Purpose |
 |---|---|---|---|
 | Metadata baseline | F1 | Metadata | Strong floor |
 | Simple fusion | F2 | Meta+Text+Image | Fusion floor |
-| Literature-adapted | C1/C2 | Multimodal | Architecture reference |
-| Retrieval baseline | C3 | Retrieved context | RAG reference |
+| Literature-adapted | C1/C2 | Multimodal | Diagnostic ref |
+| Retrieval baseline | C3 | Retrieved context | Retrieval ref |
 | Proposed framework | Run22 | Full framework | Main result |
 
 在評估指標上，Exp1 依 target 性質採用不同主指標。對 `popularity` 而言，由於其分布具有長尾與累積特性，本文同時觀察 `log_MAE`、`log_R2`、`factor_acc_2x` 與 Spearman；其中 `log_MAE` 約可解讀為幾何尺度誤差，例如 `log_MAE=0.89` 約對應到 `e^0.89=2.43` 倍的平均誤差尺度，能與 `factor_acc_2x` 共同解讀。對 `meanScore` 而言，本文觀察 MAE、R2、`acc_within_10pt` 與 Spearman，因為評分是 0 到 100 的線性尺度，MAE 可直接解讀為平均偏離幾分。
 
-`popularity` 的結果顯示，強基準不只來自深度模型。下表中的 reference baseline rows 皆於相同的 `n=2,808` common subset 上評估；`FusionModel v2 Run22` 則列出完整內部 temporal test set `n=3,087` 的結果，作為 proposed framework 的代表成績。metadata-only `F1-RF-Meta` 已取得 Spearman `0.8507`，表示播出年份、格式、來源、類型與製作相關資訊本身已包含大量排序訊號。`F2-XGB-Concat` 在 `log_MAE` 上略優於 metadata-only baseline，顯示直接加入文字與圖片後確實帶來部分誤差改善；C1/C2 則提供文獻改編融合架構的參考座標，但不應被解讀為外部論文模型的完整復現。C3 retrieval rows 的價值在於測試歷史相似作品是否能帶來額外訊號，其中 `C3-RAG-Selective` 在 Spearman 上表現最高，代表 retrieval 對人氣排序可能有補充效果。
+`popularity` 的結果顯示，強基準不只來自深度模型。下表所有 rows 皆於相同的 `n=3,087` internal temporal test set 上評估。metadata-only `F1-RF-Meta-CARMATensor` 已取得 Spearman `0.8326`，表示播出年份、格式、來源、類型與製作相關資訊本身已包含大量排序訊號。`F2-XGB-Concat-CARMATensor` 在 `log_MAE` 上略優於 CARMA (`0.8799` vs. `0.8823`)，代表簡單 tensor 串接仍是很強的 popularity error baseline；C2-RecurrentFusion 則取得最高 Spearman (`0.8614`)。CARMA 在 2x accuracy 上最高，且 ranking 表現與 retrieval baseline 接近。因此，本文不將 popularity 寫成 CARMA 全指標勝出，而是解讀為「competitive popularity prediction」。
 
 | Method | log_MAE | 2x_acc | Spearman |
 |---|---:|---:|---:|
-| F1-RF-Meta | 0.8923 | 0.4900 | 0.8507 |
-| F2-XGB-Concat | 0.8828 | 0.4708 | 0.8650 |
-| C1-Armenta-Proxy | 0.9538 | 0.4626 | 0.8418 |
-| C2-CrossAttention | 0.9236 | 0.4601 | 0.8647 |
-| C2-RecurrentFusion | 0.9151 | 0.4605 | 0.8673 |
-| C3-RAG-Selective | 0.9266 | 0.4665 | 0.8719 |
-| C3-SKAPPProxy | 0.9363 | 0.4548 | 0.8633 |
+| F1-RF-Meta-CARMATensor | 0.9731 | 0.4655 | 0.8326 |
+| F2-XGB-Concat-CARMATensor | 0.8799 | 0.4885 | 0.8578 |
+| C1-Armenta-CARMATensor | 0.9210 | 0.4704 | 0.8520 |
+| C2-CrossAttention-CARMATensor | 0.9115 | 0.4739 | 0.8537 |
+| C2-RecurrentFusion-CARMATensor | 0.8915 | 0.4817 | 0.8614 |
+| C3-RAG-XGB-CARMATensor | 0.8947 | 0.4917 | 0.8520 |
 | FusionModel v2 Run22 | 0.8823 | 0.4943 | 0.8520 |
 
-對 `meanScore` 而言，整體 R2 明顯低於 `popularity`，表示分數較難由播出前資訊穩定預測；因此正文表格保留 MAE、10 分內準確率與 Spearman，將 R2 作為診斷指標。下表的 reference baseline rows 同樣使用 `n=2,808` common subset，Run22 則列出完整內部 test set `n=3,087` 的結果。`C3-ProjectInputSKAPPProxy-XGB` 在 MAE 與 10 分內準確率上皆是較強的 reference row，代表 retrieved aggregate 對評分預測可能提供補充訊號；但 source-faithful K64 diagnostic 仍呈現明顯失敗，不能作為主要 baseline。
+對 `meanScore` 而言，整體 R2 明顯低於 `popularity`，表示分數較難由播出前資訊穩定預測；因此正文表格保留 MAE、10 分內準確率與 Spearman，將 R2 作為診斷指標。下表同樣使用 `n=3,087` internal temporal test set。Run22 在 MAE (`7.5911`) 與 10 分內準確率 (`0.7104`) 上明顯優於所有 tensor-aligned baselines，表示主框架對絕對評分誤差的改善較穩定；但 Spearman 最高者為 F2，因此本文將 meanScore 結論寫成「absolute error and practical tolerance improvement」，而非所有 ranking 指標皆勝出。
 
 | Method | MAE | 10pt_acc | Spearman |
 |---|---:|---:|---:|
-| F1-RF-Meta | 8.0085 | 0.6756 | 0.5634 |
-| F2-XGB-Concat | 8.2031 | 0.6556 | 0.5530 |
-| C1-Armenta-Proxy | 8.4901 | 0.6503 | 0.4808 |
-| C2-CrossAttention | 8.0630 | 0.6863 | 0.5044 |
-| C2-RecurrentFusion | 8.3908 | 0.6720 | 0.4895 |
-| C3-RAG-Selective | 8.0901 | 0.6667 | 0.5561 |
-| C3-ProjectInputSKAPPProxy | 7.8582 | 0.6912 | 0.5634 |
+| F1-RF-Meta-CARMATensor | 8.8547 | 0.6281 | 0.5171 |
+| F2-XGB-Concat-CARMATensor | 8.6542 | 0.6450 | 0.5591 |
+| C1-Armenta-CARMATensor | 8.1840 | 0.6728 | 0.5215 |
+| C2-CrossAttention-CARMATensor | 8.4217 | 0.6673 | 0.5354 |
+| C2-RecurrentFusion-CARMATensor | 9.2659 | 0.6132 | 0.5294 |
+| C3-RAG-XGB-CARMATensor | 8.7747 | 0.6323 | 0.5432 |
 | FusionModel v2 Run22 | 7.5911 | 0.7104 | 0.5424 |
 
-`C3-SourceExact-K64` 屬於 source-faithful diagnostic run，且使用完整 test set `n=3,087`，因此不與 common-subset performance rows 直接排名。其結果顯示，直接將 SKAPP/RRCP staged pipeline 轉換到 anime pre-release prediction 時，仍會受到 target calibration、retrieval size、loss design 與 target-space 設計影響。
+`C3-SourceExact-K64` 屬於 source-faithful diagnostic run，且使用完整 test set `n=3,087`，因此不與 main performance rows 直接排名。其結果顯示，直接將 SKAPP/RRCP staged pipeline 轉換到 anime pre-release prediction 時，仍會受到 target calibration、retrieval size、loss design 與 target-space 設計影響。
 
-主框架代表模型 `FusionModel v2 Run22` 使用 fixed seed 與 per-target hyperparameter overrides，讓 `popularity` 與 `meanScore` 分別套用較適合的 dropout、attention dropout、weight decay 與 batch size。由於 Run22 的結果來自完整 internal test set，而 reference baseline rows 來自 common subset，本文將其解讀為 proposed framework 的相對定位，而非完全同一樣本集合下的嚴格逐列勝負。
+主框架代表模型 `FusionModel v2 Run22` 使用 fixed seed 與 per-target hyperparameter overrides，讓 `popularity` 與 `meanScore` 分別套用較適合的 dropout、attention dropout、weight decay 與 batch size。本次修正版已補上 full-test aligned baselines，因此可直接回答樣本數不一致的疑慮：CARMA 並非 popularity 全面勝出，但在完整 internal test set 上維持 competitive popularity performance，並在 meanScore 的 MAE 與 10 分內準確率上提供最清楚的改善。
 
 ### 2. 實驗三：外部資料集測試
 
@@ -162,7 +160,7 @@ Retrieval augmentation 可依檢索依據分成 metadata-based retrieval 與 sem
 
 在資料來源篩選上，MAL July 2025 具有 `members` 與 `score`，因此可用來檢查 MAL label 是否能合理對應 AniList 的 `popularity` 與 `meanScore` [J6]。對齊後，AniList `popularity` 與 MAL `members` 的 Spearman correlation 為 `0.9757`，AniList `meanScore` 與 MAL `score x 10` 的 Spearman correlation 為 `0.9339`。此結果顯示 MAL `members` 與 `score` 適合作為外部答案來源；但由於 MAL July 缺少 image URL，因此不作為完整多模態外部主考卷。
 
-正式外部測試採用 MAL 2025。該資料集提供 MAL ID、`members`、`score`、description、metadata 與 cover image URL，可透過 adapter 轉換為模型可讀的外部 split [J8]。下載 cover 圖片並移除本機圖片缺失樣本後，得到兩份 local-ready external exam：`mal2025_popularity_local_ready` 共 `3,765` 筆，用於評估 MAL `members`；`mal2025_dual_local_ready` 共 `1,202` 筆，可同時評估 MAL `members` 與 `score x 10`。MAL 2025 只有 cover image，沒有 banner image；因此外部評估將缺失的 banner 與 YOLO branch 視為 missing modality。
+正式外部測試採用 MAL 2025。該資料集提供 MAL ID、`members`、`score`、description、metadata 與 cover image URL，可透過 adapter 轉換為模型可讀的外部 split [J8]。下載 cover 圖片並移除本機圖片缺失樣本後，得到兩份 local-ready external exam：`mal2025_popularity_local_ready` 共 `3,765` 筆，用於評估 MAL `members`；`mal2025_dual_local_ready` 共 `1,202` 筆，可同時評估 MAL `members` 與 `score x 10`。MAL 2025 具備 cover image，因此可作為外部多模態測試來源；但第一版 adapter 並未重建 AniList 內部資料才有的 banner branch 與 YOLO branch，因此這兩個 branch 在主外部推論中仍視為 unavailable modality。
 
 | Exam | Rows | Target | Label |
 |---|---:|---|---|
@@ -170,28 +168,36 @@ Retrieval augmentation 可依檢索依據分成 metadata-based retrieval 與 sem
 | Dual | 1,202 | Popularity | Members |
 | Dual | 1,202 | Score | Score x10 |
 
-外部推論使用 Run02 checkpoint 作為 cross-platform validation checkpoint。結果顯示，模型在 MAL-only rows 上仍保有一定程度的排序轉移能力。在 `3,765` 筆 popularity-only 外部考卷上，模型對 MAL `members` 的 Spearman correlation 為 `0.4709`，log MAE 為 `1.0120`，log R2 為 `0.2709`。在 `1,202` 筆 dual-target 外部考卷上，popularity Spearman 為 `0.5495`；meanScore 對 MAL `score x 10` 的 Spearman correlation 為 `0.6079`，MAE 為 `7.5086`，10 分內準確率為 `0.7488`。
+外部推論使用 Run22 checkpoint 作為主框架代表，並將 F1/F2/C1/C2/C3 baselines 重算於相同 MAL rows，以避免外部測試再次出現樣本集合不一致。結果顯示，模型在 MAL-only rows 上仍保有一定程度的排序轉移能力，但跨平台表現並非單一模型全指標勝出。在 `3,765` 筆 popularity-only 外部考卷上，Run22 的 Spearman 為 `0.4998`，高於 Run02 舊結果但低於 F2；在 `1,202` 筆 dual-target 外部考卷上，Run22 的 popularity log_MAE (`1.1707`) 與 score MAE (`6.3363`) 皆為表中最佳，但 popularity Spearman 最高者為 C3，score Spearman 最高者為 C2-Recurrent。
 
-| Exam | Rows | Metric | Value |
-|---|---:|---|---:|
-| Pop-only | 3,765 | Pop rho | 0.4709 |
-| Pop-only | 3,765 | log MAE | 1.0120 |
-| Pop-only | 3,765 | log R2 | 0.2709 |
-| Dual | 1,202 | Pop rho | 0.5495 |
-| Dual | 1,202 | Score rho | 0.6079 |
-| Dual | 1,202 | Score MAE | 7.5086 |
+| Exam | Model | Rows | Pop log_MAE | Pop Spearman | Score MAE | Score Spearman |
+|---|---|---:|---:|---:|---:|---:|
+| Pop-only | F1-RF-Meta | 3,765 | 1.0015 | 0.4572 | - | - |
+| Pop-only | F2-XGB-Concat | 3,765 | 1.0294 | 0.5240 | - | - |
+| Pop-only | C1-Armenta | 3,765 | 1.1704 | 0.2798 | - | - |
+| Pop-only | C2-CrossAttention | 3,765 | 1.0769 | 0.3576 | - | - |
+| Pop-only | C2-RecurrentFusion | 3,765 | 1.2692 | 0.0766 | - | - |
+| Pop-only | C3-RAG-XGB | 3,765 | 1.0383 | 0.4392 | - | - |
+| Pop-only | CARMA Run22 | 3,765 | 1.0359 | 0.4998 | - | - |
+| Dual | F1-RF-Meta | 1,202 | 1.4387 | 0.5144 | 9.1210 | 0.5629 |
+| Dual | F2-XGB-Concat | 1,202 | 1.6172 | 0.5789 | 9.7600 | 0.6061 |
+| Dual | C1-Armenta | 1,202 | 1.9602 | 0.4572 | 9.9122 | 0.5826 |
+| Dual | C2-CrossAttention | 1,202 | 1.7178 | 0.5607 | 8.3423 | 0.5491 |
+| Dual | C2-RecurrentFusion | 1,202 | 1.8289 | 0.4585 | 9.2142 | 0.6113 |
+| Dual | C3-RAG-XGB | 1,202 | 1.5637 | 0.6211 | 9.3699 | 0.5989 |
+| Dual | CARMA Run22 | 1,202 | 1.1707 | 0.5647 | 6.3363 | 0.5770 |
 
-不過，外部結果也顯示模型的數值校準仍有限。特別是 dual-target split 中，popularity log R2 為 `-0.4610`，meanScore R2 為 `-1.0659`，代表模型無法直接把 AniList 的絕對數值尺度完整轉移到 MAL 平台。這是合理限制，因為 AniList `popularity` 與 MAL `members` 雖然都反映人氣，但兩者屬於不同平台的累積 count scale。因此，本研究將外部測試的主要解讀放在 Spearman ranking transfer 與 log-scale 指標，而不是 raw MAE 或原始尺度 R2。
+不過，外部結果也顯示模型的數值校準仍有限。特別是 dual-target split 中，即使 Run22 將 meanScore MAE 從 Run02 的 `7.5086` 改善至 `6.3363`，meanScore R2 仍為負值 (`-0.3253`)；popularity log R2 也為 `-0.1188`。這代表模型能提供有用的排序與絕對誤差預測，但無法直接把 AniList 的絕對數值尺度完整轉移到 MAL 平台。這是合理限制，因為 AniList `popularity` 與 MAL `members` 雖然都反映人氣，但兩者屬於不同平台的累積 count scale。因此，本研究將外部測試的主要解讀放在 Spearman ranking transfer、log-scale error 與 score MAE，而不是原始尺度 R2。
 
-同時，外部 Spearman correlation 也低於內部 temporal test split，表示退化不只來自絕對尺度校準。可能原因包含兩點。第一，MAL 2025 僅提供 cover image，缺少內部資料中可用的 banner image 與 YOLO branch 特徵，adapter 只能將其視為 missing modality；這會削弱模型在多模態路徑上的訊號完整性。第二，AniList 與 MyAnimeList 的使用者社群、收錄時間與人氣累積機制不同，平台偏好與資料分布轉移會使同一類作品在兩個平台上的相對排名不完全一致。
+同時，外部 Spearman correlation 也低於內部 temporal test split，表示退化不只來自絕對尺度校準。為檢查 missing visual branch 的影響，本研究另補做 cover-derived YOLO diagnostic：從 MAL cover image 偵測人物與臉部 crop，補入原本為 zero-filled 的 YOLO branch，但仍保留 banner branch missing。補入 YOLO 後，CARMA 的 pop-only popularity Spearman 從 `0.4998` 提升至 `0.5213`；dual-target popularity Spearman 從 `0.5647` 提升至 `0.6073`，score Spearman 也從 `0.5770` 提升至 `0.5999`。然而 dual-target popularity log_MAE (`1.1707` → `1.2001`) 與 score MAE (`6.3363` → `6.4919`) 略微變差。相同 YOLO-filled split 上，F2/C2/C3 的 ranking 也明顯受益；例如 dual-target C2-CrossAttention 的 popularity Spearman 達 `0.6687`，C2-Recurrent 的 score Spearman 達 `0.6459`。因此，YOLO 缺失確實會影響外部排序能力，但無法單獨解釋所有外部退化；CARMA 在 YOLO-filled external setting 下仍保有最佳 score MAE 與 10 分內準確率，但不是所有 ranking 指標最佳。剩餘落差可能來自缺少 banner image、AniList 與 MyAnimeList 使用者社群差異、收錄時間差異，以及兩平台人氣累積尺度不同。
 
 ---
 
 ## 四、未來工作
 
-未來工作可沿著三個方向延伸。第一，MAL 2025 local-ready external split 可作為固定外部考卷，用於比較後續模型架構、checkpoint 或圖片處理 pipeline 的跨平台泛化能力 [J8]。第二，Largest MAL User Dataset 雖然具有大量使用者層級紀錄，但必須單獨建立嚴格的時間切分，只能使用動畫上映前可觀察的使用者行為；若直接使用觀看後評分或完成後互動紀錄，將造成 label leakage [J9]。第三，`holdout_unknown` 中可由 Anime Offline Database 補回 season/year 的樣本，可在未來形成 `holdout_recovered` robustness check，但不應回灌到本文正式 temporal split [J5]。
+未來工作可沿著三個方向延伸。第一，MAL 2025 local-ready external split 可作為固定外部考卷，用於比較後續模型架構、checkpoint 或圖片處理 pipeline 的跨平台泛化能力；目前已完成 cover-derived YOLO diagnostic，但仍可進一步補足 banner-like visual branch 與跨平台 calibration，以縮小外部 adapter 與內部 AniList pipeline 的模態及尺度落差 [J8]。第二，Largest MAL User Dataset 雖然具有大量使用者層級紀錄，但必須單獨建立嚴格的時間切分，只能使用動畫上映前可觀察的使用者行為；若直接使用觀看後評分或完成後互動紀錄，將造成 label leakage [J9]。第三，`holdout_unknown` 中可由 Anime Offline Database 補回 season/year 的樣本，可在未來形成 `holdout_recovered` robustness check，但不應回灌到本文正式 temporal split [J5]。
 
-對 reference baseline 而言，未來亦可持續提升外部文獻方法與原始設計之間的對齊程度。C1 可進一步補足角色描述與角色肖像資料 [J1]；C2 可補足更接近原文的 BERT text encoder 與 ViT visual stream [J2]；C3 目前已有 `popularity` 與 `meanScore` 的 source-faithful K64 diagnostic，但仍需在 SKAPP/RRCP pipeline 上完成 `top_k=500`、校準檢查與 loss/target-space 設計修正 [J3]。這些工作有助於區分本研究主框架的實際貢獻，與外部方法在資料轉換後的適應能力。
+對 reference baseline 而言，未來亦可持續提升外部文獻方法與原始設計之間的對齊程度。C1 可進一步補足角色描述與角色肖像資料 [J1]；C2 可補足更接近原文的 BERT text encoder 與 ViT visual stream [J2]；C3 目前已有 `popularity` 與 `meanScore` 的 source-faithful K64 diagnostic，但仍需在 SKAPP/RRCP pipeline 上完成 `top_k=500`、校準檢查與 loss/target-space 設計修正 [J3]。此外，本文目前仍以 single-seed runs 作為主要結果；後續應補做 multiple seeds、mean/std 與關鍵差異的顯著性檢定，並針對 MAL 外部尺度落差加入 calibration 或 quantile analysis。這些工作有助於區分本研究主框架的實際貢獻，與外部方法在資料轉換後的適應能力。
 
 ---
 
@@ -223,3 +229,5 @@ Retrieval augmentation 可依檢索依據分成 metadata-based retrieval 與 sem
 - `reports/external/external_evaluation_summary.md`
 - `reports/baselines/reference_baseline_metrics_extended_2026-06-01.md`
 - `reports/diagnostics/c3_source_exact_k64_diagnostic_2026-06-01.md`
+- `reports/experiments/sample_alignment/eval_sample_alignment_report_2026-06-11.md`
+- `reports/experiments/sample_alignment/run22_artifact_manifest.md`
