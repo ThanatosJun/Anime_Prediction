@@ -28,6 +28,8 @@ current source of truth:
 - `experiments/sample_alignment/mal2025_overlap_label_sanity.csv`
 - `experiments/sample_alignment/mal2025_external_calibration_summary.csv`
 - `experiments/sample_alignment/mal2025_external_calibration_bins.csv`
+- `experiments/sample_alignment/mal2025_external_error_slices.csv`
+- `experiments/sample_alignment/mal2025_external_case_examples.csv`
 - `experiments/sample_alignment/followup_paired_bootstrap_tests.csv`
 - `experiments/sample_alignment/followup_external_paired_bootstrap_tests.csv`
 - `experiments/sample_alignment/followup_external_paired_bootstrap_tests.md`

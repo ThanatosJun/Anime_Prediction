@@ -50,6 +50,8 @@ Main outputs:
 - `reports/experiments/sample_alignment/mal2025_overlap_label_sanity.csv`
 - `reports/experiments/sample_alignment/mal2025_external_calibration_summary.csv`
 - `reports/experiments/sample_alignment/mal2025_external_calibration_bins.csv`
+- `reports/experiments/sample_alignment/mal2025_external_error_slices.csv`
+- `reports/experiments/sample_alignment/mal2025_external_case_examples.csv`
 - `reports/experiments/sample_alignment/mal2025_external_diagnostics.md`
 - `reports/experiments/sample_alignment/followup_paired_bootstrap_tests.csv`
 - `reports/experiments/sample_alignment/followup_external_paired_bootstrap_tests.csv`
@@ -417,6 +419,36 @@ Interpretation:
 - For meanScore, the model underpredicts low-to-mid MAL score bins more than
   high-score bins. This is another calibration issue rather than a complete
   failure of ranking transfer.
+
+### External Error Slice Diagnostics
+
+External error slices were added to locate where transfer degrades. The full
+table is stored in `mal2025_external_error_slices.csv`; the compact view in
+`mal2025_external_diagnostics.md` focuses on dual-target no-YOLO and
+cover-derived YOLO variants.
+
+Selected slice findings:
+
+| Variant | Target | Slice | n | Error | Signed error | Scale note |
+|---|---|---|---:|---:|---:|---:|
+| no_yolo | popularity | Q5 actual members | 241 | log_MAE 2.6768 | -2.6749 | actual/pred 17.40x |
+| no_yolo | meanScore | Q5 actual score | 241 | MAE 10.4623 | -10.4035 | high-score underprediction |
+| cover_yolo | popularity | lower 90% members | 1,081 | log_MAE 0.9587 | -0.7251 | actual/pred 2.65x |
+| cover_yolo | popularity | top 10% members | 121 | log_MAE 3.3570 | -3.3570 | actual/pred 30.42x |
+| cover_yolo | meanScore | Q5 actual score | 241 | MAE 10.9231 | -10.8709 | high-score underprediction |
+
+Interpretation:
+
+- The largest external popularity degradation is concentrated in the high-MAL
+  member tail, where CARMA preserves some ordering signal but heavily
+  underestimates the MAL absolute scale.
+- Score errors also concentrate in the highest MAL score quantile, suggesting
+  that pre-release signals recover broad score order but compress the top end.
+- This supports the conservative external conclusion: the model transfers useful
+  ranking and absolute-error signal, but external scale calibration remains the
+  main limitation.
+- Diagnostic case examples are stored in `mal2025_external_case_examples.csv`
+  and summarized in `mal2025_external_diagnostics.md`.
 
 ## Answer to Presentation Feedback
 
