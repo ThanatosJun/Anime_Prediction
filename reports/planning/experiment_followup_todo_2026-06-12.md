@@ -6,6 +6,10 @@
 
 本文件是老師回饋後，針對 Exp1、Exp2、Exp3 的實驗補強進度總覽。它的用途是協助後續論文、簡報與程式交接判斷哪些結果已經可作為目前正本，哪些仍屬於 future work 或主框架延伸工作。
 
+## 一句話進度
+
+Exp1 與 Exp3 的主要嚴謹性修正已完成，可以作為目前 `dev` 正本。下方 Exp1/Exp3 的注意事項不是未完成實驗，而是撰寫論文或簡報時不能過度宣稱的邊界。真正尚未完成的是全域 robustness 工作，例如 multiple seeds mean/std 與 seed-level significance tests。
+
 ## 目前權威結果檔案
 
 修正版論文敘事與後續報告應優先使用下列檔案：
@@ -40,9 +44,9 @@
 - 已將論文敘事從舊版 `n=2,808` complete-case table 改成目前的 full-test aligned baselines。
 - 已加入 CARMA-vs-baseline headline deltas 的 paired bootstrap diagnostics。
 
-仍需注意：
+寫作注意事項，不是未完成實驗：
 
-1. 論文或報告若空間允許，可加入一張精簡 paired-bootstrap summary table。
+1. 論文或報告若空間允許，可加入一張精簡 paired-bootstrap summary table，但這屬於呈現方式加強，不是 Exp1 主實驗缺口。
    - 建議 rows：CARMA vs F2、CARMA vs C2-Recurrent、CARMA vs C3。
    - 建議 metrics：popularity `log_MAE` / Spearman，以及 meanScore MAE / Spearman。
    - 目的：說明哪些差距穩定，哪些其實接近 tie。
@@ -66,7 +70,7 @@
 - 目前解讀：移除 retrieval、image 或 temporal trend 都會增加 error，因此這三個 component 對 CARMA 都有貢獻。
 - 已加入主要 ablation deltas 的 paired bootstrap diagnostics。
 
-仍需注意：
+仍可加強：
 
 1. 若後續要回應老師的 robustness 建議，應補 key ablation deltas 的 multi-seed mean/std。
    - 優先 deltas：full model vs remove retrieval、remove image、remove temporal trend。
@@ -94,12 +98,12 @@
 - 已加入精簡的 external calibration / slice explanation，用來說明為何 Spearman 仍有參考價值，但 R2 可能很弱或為負。
 - 已加入 external success/failure case examples，涵蓋 high-confidence ranking successes、high-popularity underestimation 與 large score errors。
 
-仍需注意：
+寫作注意事項，不是未完成實驗：
 
 1. External conclusion 必須保守。
    - CARMA 在 external score MAE / 10-point accuracy 上最穩定。
    - Popularity 與 score ranking 是 mixed result；F2/C2/C3 在某些 splits 的 Spearman 可能比 CARMA 強。
-2. 真正的 banner-like branch 仍是 future work。
+2. 真正的 banner-like branch 仍是 future work，不是目前 Exp3 external cleanup 的 blocker。
    - 已完成的 cover-as-banner proxy 顯示 naive cover duplication 不能取代真正 banner information。
 
 ## 全域 Robustness 待辦，不屬於 Exp1 專屬工作
