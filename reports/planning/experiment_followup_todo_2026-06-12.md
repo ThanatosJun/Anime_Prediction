@@ -1,142 +1,324 @@
-# 實驗回補進度與後續待辦
+# 專案回饋分析與待辦清單
 
 日期：2026-06-12
 
-分支：`feature/experiment-followups`
+用途：本文件把老師對期末報告的回饋拆成可執行代辦，並標示每個代辦直接屬於 Exp1、Exp2、Exp3、主框架或文件。若某項工作只是統計檢定，會在說明中補充，但不作為主要分類，避免無法分工。
 
-本文件是老師回饋後，針對 Exp1、Exp2、Exp3 的實驗補強進度總覽。它的用途是協助後續論文、簡報與程式交接判斷哪些結果已經可作為目前正本，哪些仍屬於 future work 或主框架延伸工作。
+## 1. 老師回饋重點拆解
 
-## 一句話進度
+### 1.1 老師肯定的部分
 
-Exp1 與 Exp3 的主要嚴謹性修正已完成，可以作為目前 `dev` 正本。下方 Exp1/Exp3 的注意事項不是未完成實驗，而是撰寫論文或簡報時不能過度宣稱的邊界。真正尚未完成的是全域 robustness 工作，例如 multiple seeds mean/std 與 seed-level significance tests。
+這些不是待辦，而是目前應保留的專案優勢：
 
-## 目前權威結果檔案
+| 老師指出的 strengths | 專案對應內容 | 後續處理 |
+|---|---|---|
+| Leakage-aware temporal split | 使用 temporal split 避免 future leakage | 保留為 Methodology 核心敘事 |
+| Retrieval restricted to earlier titles | RAG/retrieval 不看未來作品 | 保留，避免任何實驗破壞時間限制 |
+| Multiple baseline families | F1/F2/C1/C2/C3 baseline families | 保留，但主表要樣本對齊 |
+| Three ablation axes | retrieval、image、temporal trend ablation | 保留，但若補 multi-seed 要重跑 Exp2 |
+| Genuine out-of-domain evaluation | MAL 2025 external test | 保留，並補 calibration/quantile 說明 |
+| Three interpretability methods | attention、Captum、SHAP | 保留，檢查圖表標題與說明 |
+| Strong literature | Swin、SimCLR、ULMFiT、RRF、SKAPP | 保留 citation 與 claim boundary |
+| Honest weak points | low MeanScore R2、negative external R2 | 保留，但要補合理解釋 |
 
-修正版論文敘事與後續報告應優先使用下列檔案：
+### 1.2 老師要求改善的部分
+
+| 老師回饋 | 問題本質 | 對應待辦 |
+|---|---|---|
+| Report multiple seeds with mean/std and significance test | single-run robustness 不足 | T1a、T1b、T1c、T2a、T2b、T2c |
+| Re-run baselines on identical `n=3,087` | Exp1 樣本數不公平 | T4 |
+| Fix mislabeled Table 9 headers | 文件表格錯誤 | T5 |
+| Add CNN-vs-Swin backbone ablation | 主框架缺一個 image backbone 控制實驗 | T6a、T6b |
+| Proofread awkward phrasing | 文件語句品質問題 | T7 |
+| Consider quantile/calibration analysis | external scale mismatch 解釋不足 | T8a、T8b、T8c、T8d |
+| Q1: `n=3,087` vs `n=2,808` 是否公平 | Exp1 headline claim 不嚴謹 | T4、T9 |
+| Q2: MeanScore 是否真的可預測 | 需要區分模型能力與 temporal/popularity prior | T8、T10a、T10b、T10c、T10d、T10e |
+| Q3: ablation deltas 是否跨 seed 穩定 | Exp2 fixed-seed 結論穩定性不足 | T1b、T2b |
+
+## 2. 待辦事項總表
+
+| ID | 代辦事項 | 歸屬 | 狀態 | 會影響其他部分嗎 |
+|---|---|---|---|---|
+| T1a | 補 Exp1 CARMA/baseline multiple seeds | Exp1 | 未做 | 會影響 Exp1，可能更新主表數字 |
+| T1b | 補 Exp2 ablation multiple seeds | Exp2 | 未做 | 會影響 Exp2 ablation 結論穩定性 |
+| T1c | 補 Exp3 external multiple seeds | Exp3 | 可選 / 未做 | 會影響 external uncertainty 說法，成本較高 |
+| T2a | 補 Exp1 CARMA-vs-baseline significance test | Exp1 | 未做 | 需等 T1a 完成，不直接改模型 |
+| T2b | 補 Exp2 ablation delta significance test | Exp2 | 未做 | 需等 T1b 完成，不直接改模型 |
+| T2c | 補 Exp3 external key-delta significance test | Exp3 | 可選 / 未做 | 需等 T1c 或 external multi-run 結果 |
+| T4 | baseline 統一 `n=3,087` 重跑 | Exp1 | 已完成 | 已影響 Exp1 與論文敘事 |
+| T5 | 修正 Table 9 headers | 文件 | 未確認 / 待修 | 不影響實驗，只影響文件可信度 |
+| T6a | 補 CNN-vs-Swin diagnostic ablation | 主框架 / Exp2 | 未做 | 新增 Exp2/Framework diagnostic，不一定重跑全部 |
+| T6b | 若 backbone 結論改變主框架，重跑相關主實驗 | 主框架 / Exp1 / Exp2 / Exp3 | 條件式 | 只有 T6a 顯示需更換主設定時才做 |
+| T7 | 全文 proofread awkward phrasing | 文件 | 待做 | 不影響實驗，但影響提交品質 |
+| T8a | 補 external calibration bins | Exp3 | 已完成 | 已影響 Exp3 scale mismatch 解釋 |
+| T8b | 補 external error slices | Exp3 | 已完成 | 已影響 Exp3 tail-error 解釋 |
+| T8c | 補 external case examples | Exp3 | 已完成 | 已支援 success/failure case 說明 |
+| T8d | 補 internal MeanScore residual slicing | Exp2 / internal diagnostic | 未做 | 可強化 Q2，不改模型 |
+| T9 | 修正 Exp1 headline claim | Exp1 / 文件 | 已完成主要修正 | 依賴 T4，避免過度宣稱 |
+| T10a | 用現有診斷補 MeanScore 可預測性文字解釋 | 文件 / Exp2 / Exp3 | 已完成可用版本 | 影響 Discussion，不需重跑 |
+| T10b | 補 temporal/popularity prior-only baseline | Exp1 | 未做 | 會新增 Exp1 diagnostic row |
+| T10c | 補 remove-prior feature ablation | Exp2 | 未做 | 會新增 Exp2 diagnostic；若改輸入群組需重跑相關 ablation |
+| T10d | 補 MeanScore residual slicing | Exp3 / internal diagnostic | 部分完成 | 可強化 Q2/Q3 解釋，不改模型 |
+| T10e | 補 MeanScore multi-seed ablation | Exp2 | 未做 | 會影響 Exp2 robustness 結論 |
+
+## 3. 各待辦細節與牽動範圍
+
+### T1a：補 Exp1 CARMA/baseline multiple seeds
+
+- 歸屬：Exp1。
+- 性質：統計穩定性檢查。
+- 目的：回應老師「single fixed seed 不足」的問題。
+- 建議對象：Run22-style CARMA、F2、C2-Recurrent、C3-RAG-XGB。
+- 產出：key metrics 的 mean/std。
+- 牽動範圍：
+  - 會影響 Exp1 主表，因為原本主表是 fixed seed 結果。
+  - 若 CARMA 或 baseline 排名變動，論文結論要跟著改。
+  - 不一定需要改主框架程式，但需要固定實驗腳本與輸出格式。
+
+### T1b：補 Exp2 ablation multiple seeds
+
+- 歸屬：Exp2。
+- 性質：統計穩定性檢查。
+- 目的：回應 Q3，確認 retrieval/image/temporal trend 的 ablation deltas 不是 seed noise。
+- 建議對象：full model vs remove retrieval、remove image、remove temporal trend。
+- 牽動範圍：
+  - 會影響 Exp2。
+  - 若 ablation 差距跨 seed 不穩，Exp2 結論要改成更保守。
+  - 不會直接影響 Exp3，除非因此改了主框架 checkpoint。
+
+### T1c：補 Exp3 external multiple seeds
+
+- 歸屬：Exp3。
+- 性質：外部測試 seed uncertainty，可選。
+- 目的：若要更嚴格檢查 external ranking/error 是否跨 seed 穩定，可以補外部 multi-seed。
+- 牽動範圍：
+  - 會影響 Exp3 uncertainty 說法。
+  - 成本較高，因為需要多個 CARMA checkpoints 或多 seed external predictions。
+  - 目前不是老師 Q1/Q3 的最低必要回應。
+
+### T2a：補 Exp1 CARMA-vs-baseline significance test
+
+- 歸屬：Exp1。
+- 性質：統計檢定。
+- 目的：判斷 CARMA-vs-baseline key deltas 是否跨 seed 穩定。
+- 前提：必須先完成 T1a，否則沒有 seed-level 分布可檢定。
+- 牽動範圍：
+  - 會影響 Exp1 的可信度說法。
+  - 不會直接改模型，也不會改資料切分。
+
+### T2b：補 Exp2 ablation delta significance test
+
+- 歸屬：Exp2。
+- 性質：統計檢定。
+- 目的：判斷 Exp2 ablation deltas 是否跨 seed 穩定。
+- 前提：必須先完成 T1b。
+- 牽動範圍：
+  - 會影響 Exp2 的可信度說法。
+  - 不會直接改模型，也不會改資料切分。
+
+### T2c：補 Exp3 external key-delta significance test
+
+- 歸屬：Exp3。
+- 性質：統計檢定，可選。
+- 目的：若補了 external multi-seed，就可檢定 external CARMA-vs-baseline key deltas。
+- 前提：需要 T1c 或等價的 external multi-run 結果。
+- 牽動範圍：
+  - 只影響 Exp3 uncertainty 說法。
+  - 不改主框架。
+
+### T4：baseline 統一 `n=3,087` 重跑
+
+- 歸屬：Exp1。
+- 目的：回應 Q1，避免 CARMA 用 full test、baseline 用 common subset 的不公平比較。
+- 狀態：已完成。
+- 目前結果用途：
+  - Exp1 主比較應使用 `n=3,087` full temporal test。
+  - 舊 `n=2,808` complete-case baseline 只能當歷史紀錄。
+- 牽動範圍：
+  - 已影響 Exp1 表格與論文敘事。
+  - 不影響 Exp3，因為 Exp3 有自己的 MAL rows 對齊。
+
+### T5：修正 Table 9 headers
+
+- 歸屬：文件。
+- 目的：修正老師點名的表格標題錯誤。
+- 狀態：待確認最終論文版本是否已修。
+- 牽動範圍：
+  - 不影響任何實驗。
+  - 但若不修，會直接影響文件可信度。
+
+### T6a：補 CNN-vs-Swin diagnostic ablation
+
+- 歸屬：主框架 / Exp2。
+- 目的：回應老師指出 missing CNN-vs-Swin backbone ablation。
+- 關鍵限制：
+  - 這不是單純拿 C1/C2 或 ResNet proxy 比較就能回答。
+  - 合格做法是在同一個 CARMA architecture 中，只替換 image backbone，其他設定不變。
+- 牽動範圍：
+  - 會新增主框架 ablation。
+  - 若結果被納入正文，可能需要更新 Methodology、Exp2、Future Work。
+  - 若只作 diagnostic ablation，則不需要重跑所有主實驗。
+
+### T6b：若 backbone 結論改變主框架，重跑相關主實驗
+
+- 歸屬：主框架 / Exp1 / Exp2 / Exp3。
+- 目的：如果 T6a 顯示應更換主 image backbone，必須重新確認主框架結果。
+- 觸發條件：
+  - 只有當 T6a 的結果導致主框架設定改變時才需要。
+- 牽動範圍：
+  - 可能需要重跑 Exp1。
+  - 可能需要重跑 Exp2。
+  - 可能需要重跑 Exp3。
+  - 若 T6a 只是補 diagnostic，不改主設定，則不需要做 T6b。
+
+### T7：全文 proofread awkward phrasing
+
+- 歸屬：文件。
+- 目的：修正老師點名的語句，例如 `A temporal design to light decrease concept drift`。
+- 牽動範圍：
+  - 不影響實驗。
+  - 可能影響 Introduction、Methodology、Experiments、Conclusion 的文字一致性。
+
+### T8a：補 external calibration bins
+
+- 歸屬：Exp3。
+- 目的：回應老師對 external scale mismatch 的疑問。
+- 狀態：已完成。
+- 產出：
+  - `mal2025_external_calibration_summary.csv`
+  - `mal2025_external_calibration_bins.csv`
+- 牽動範圍：
+  - 已影響 Exp3 解釋。
+  - 不改模型，不需要重跑 Exp1/Exp2。
+
+### T8b：補 external error slices
+
+- 歸屬：Exp3。
+- 目的：分析 external errors 在 popularity/score quantiles、release period、format、source、tail samples 的分布。
+- 狀態：已完成。
+- 產出：
+  - `mal2025_external_error_slices.csv`
+- 牽動範圍：
+  - 已影響 Exp3 tail-error 解釋。
+  - 不改模型，不需要重跑 Exp1/Exp2。
+
+### T8c：補 external case examples
+
+- 歸屬：Exp3。
+- 目的：提供 success/failure cases，輔助解釋 external ranking successes、high-popularity underestimation 與 large score errors。
+- 狀態：已完成。
+- 產出：
+  - `mal2025_external_case_examples.csv`
+  - `mal2025_external_diagnostics.md`
+- 牽動範圍：
+  - 已影響 Exp3 解釋。
+  - 不改模型，不需要重跑 Exp1/Exp2。
+
+### T8d：補 internal MeanScore residual slicing
+
+- 歸屬：Exp2 / internal diagnostic。
+- 目的：補 internal test 上的 MeanScore residual 分層，和 external slices 搭配回答 Q2。
+- 狀態：未做。
+- 牽動範圍：
+  - 可強化 Discussion 與 Exp2 解釋。
+  - 不改主框架。
+
+### T9：修正 Exp1 headline claim
+
+- 歸屬：Exp1 / 文件。
+- 目的：避免 `lowest reported error` 被老師質疑樣本不公平。
+- 狀態：已完成主要修正。
+- 目前可用說法：
+  - CARMA 在 meanScore MAE 與 10-point accuracy 上有最清楚優勢。
+  - Popularity 是 competitive，不是所有指標全面最佳。
+- 牽動範圍：
+  - 已依賴 T4 的 `n=3,087` 重跑結果。
+  - 不需改主框架。
+
+### T10a：用現有診斷補 MeanScore 可預測性文字解釋
+
+- 歸屬：文件 / Exp2 / Exp3。
+- 目的：用既有實驗回答 Q2：「MeanScore R2 低，模型到底是在預測分數，還是在吃 temporal/popularity prior？」
+- 狀態：已完成可用版本。
+- 目前可用證據：
+  - Exp2 ablation 可說明 retrieval/image/temporal trend 各自貢獻。
+  - External calibration/error slices 可說明 R2 弱與 scale mismatch、tail errors 有關。
+  - SHAP/Captum/attention 可輔助說明模型不是只靠單一 temporal prior。
+- 牽動範圍：
+  - 主要影響 Discussion。
+  - 不需要重跑任何實驗。
+
+### T10b：補 temporal/popularity prior-only baseline
+
+- 歸屬：Exp1。
+- 目的：建立只使用 temporal/popularity prior 的 baseline，回答 MeanScore 是否只是靠 prior。
+- 狀態：未做。
+- 牽動範圍：
+  - 會新增 Exp1 diagnostic row。
+  - 不需要改 CARMA 主框架。
+
+### T10c：補 remove-prior feature ablation
+
+- 歸屬：Exp2。
+- 目的：移除 popularity-like、sequel、prior performance features，檢查 MeanScore 是否仍可預測。
+- 狀態：未做。
+- 牽動範圍：
+  - 會新增 Exp2 diagnostic。
+  - 若現有 pipeline 沒有 feature group 開關，需補資料/輸入遮罩腳本。
+  - 不一定改模型架構，但可能要重跑相關 ablation。
+
+### T10d：補 MeanScore residual slicing
+
+- 歸屬：Exp3 / internal diagnostic。
+- 目的：按年份、popularity quantile、source、format 分析 MeanScore residual，說明模型錯在哪些區間。
+- 狀態：部分完成。
+- 牽動範圍：
+  - External error slices 已完成一部分。
+  - 若要完整回答 Q2，可補 internal test residual slicing。
+  - 不需要改主框架。
+
+### T10e：補 MeanScore multi-seed ablation
+
+- 歸屬：Exp2。
+- 目的：確認 MeanScore component contribution 是否跨 seed 穩定。
+- 狀態：未做。
+- 牽動範圍：
+  - 會影響 Exp2 robustness 結論。
+  - 不直接影響 Exp3，除非因此改主 checkpoint。
+
+## 4. 優先順序
+
+| 優先級 | 代辦 | 原因 |
+|---|---|---|
+| P0 | T5：修 Table 9 headers | 文件錯誤最容易被扣分，且成本低 |
+| P0 | T7：proofread awkward phrasing | 成本低，直接改善可讀性 |
+| P1 | T1a：Exp1 multiple seeds | 老師明確點名，影響 Exp1 robustness |
+| P1 | T1b：Exp2 ablation multiple seeds | 直接回應 Q3 |
+| P1 | T2a/T2b：seed-level significance tests | 需等 T1a/T1b 後才能做 |
+| P2 | T10b：prior-only baseline | 回應 Q2，屬 Exp1 diagnostic |
+| P2 | T10c：remove-prior feature ablation | 回應 Q2，屬 Exp2 diagnostic |
+| P2 | T10d / T8d：MeanScore residual slicing | 回應 Q2，屬 Exp3/internal diagnostic |
+| P2 | T6a：CNN-vs-Swin diagnostic ablation | 屬主框架延伸，成本較高 |
+
+## 5. 目前不要再用的舊依據
+
+- 舊 `n=2,808` complete-case baseline 不作為 Exp1 主表。
+- 舊 paper handoff 若與目前 `n=3,087` 結果衝突，以 sample alignment reports 為準。
+- C1/C2 不作 exact reproduction 宣稱。
+- Cover-as-banner proxy 不作 true banner image 宣稱。
+
+## 6. 查數字時看哪裡
 
 - `reports/experiments/sample_alignment/eval_sample_alignment_report_2026-06-11.md`
 - `reports/experiments/sample_alignment/carma_tensor_aligned_metrics.csv`
 - `reports/experiments/sample_alignment/carma_tensor_aligned_metrics.md`
 - `reports/experiments/sample_alignment/mal2025_yolo_diagnostic_metrics.csv`
 - `reports/experiments/sample_alignment/mal2025_yolo_diagnostic_metrics.md`
-- `reports/experiments/sample_alignment/mal2025_overlap_label_sanity.csv`
-- `reports/experiments/sample_alignment/mal2025_external_calibration_summary.csv`
-- `reports/experiments/sample_alignment/mal2025_external_calibration_bins.csv`
+- `reports/experiments/sample_alignment/mal2025_external_diagnostics.md`
 - `reports/experiments/sample_alignment/mal2025_external_error_slices.csv`
 - `reports/experiments/sample_alignment/mal2025_external_case_examples.csv`
-- `reports/experiments/sample_alignment/mal2025_external_diagnostics.md`
 - `reports/experiments/sample_alignment/followup_paired_bootstrap_tests.csv`
 - `reports/experiments/sample_alignment/followup_external_paired_bootstrap_tests.csv`
-- `reports/experiments/sample_alignment/followup_external_paired_bootstrap_tests.md`
-- `reports/experiments/sample_alignment/followup_image_proxy_diagnostics.csv`
 - `reports/experiments/sample_alignment/followup_experiment_statistics.md`
 - `reports/experiments/sample_alignment/run22_artifact_manifest.md`
 - `reports/paper/paper_user_sections_complete_draft_2026-06-01.md`
-
-`reports/baselines/` 底下的舊 baseline 報告，以及 `reports/paper/` 底下較早的 handoff 文件，部分仍會提到舊版 `n=2,808` complete-case baseline 設定。這些檔案現在應視為歷史開發紀錄，不應再作為目前主表或正式敘事的主要依據。
-
-## Exp1：Baseline Comparison
-
-已完成：
-
-- 已將代表性 F1/F2/C1/C2/C3 baselines 重新計算到與 CARMA 相同的完整 internal temporal test set：`n=3,087`。
-- 已把 C1/C2 rows 補回 Exp1 internal comparison，避免前文提到 literature baselines 但主表不呈現。
-- 已將論文敘事從舊版 `n=2,808` complete-case table 改成目前的 full-test aligned baselines。
-- 已加入 CARMA-vs-baseline headline deltas 的 paired bootstrap diagnostics。
-
-寫作注意事項，不是未完成實驗：
-
-1. 論文或報告若空間允許，可加入一張精簡 paired-bootstrap summary table，但這屬於呈現方式加強，不是 Exp1 主實驗缺口。
-   - 建議 rows：CARMA vs F2、CARMA vs C2-Recurrent、CARMA vs C3。
-   - 建議 metrics：popularity `log_MAE` / Spearman，以及 meanScore MAE / Spearman。
-   - 目的：說明哪些差距穩定，哪些其實接近 tie。
-2. Exp1 結論必須分 target 寫，不能宣稱 CARMA 全面勝出。
-   - `meanScore`：CARMA 在 MAE 與 10-point accuracy 上有最清楚優勢。
-   - `popularity`：CARMA 具 competitive performance，但 F2/C2/C3 在部分 ranking 或 error metrics 仍很強。
-3. Baseline role table 應保持精簡且角色明確。
-   - F1：metadata-only strong floor。
-   - F2：simple multimodal concatenation floor。
-   - C1/C2：literature-adapted fusion proxies。
-   - C3：retrieval reference baseline。
-4. C1/C2 的 claim boundary 要寫清楚。
-   - 可用：`literature-adapted`、`project-input proxy`、`C2-inspired`。
-   - 不可寫成 exact reproduction of the original papers。
-
-## Exp2：CARMA Ablation
-
-已完成：
-
-- 主要 ablation axes 已可用於目前專案敘事：remove retrieval、remove image、remove temporal trend。
-- 目前解讀：移除 retrieval、image 或 temporal trend 都會增加 error，因此這三個 component 對 CARMA 都有貢獻。
-- 已加入主要 ablation deltas 的 paired bootstrap diagnostics。
-
-仍可加強：
-
-1. 若後續要回應老師的 robustness 建議，應補 key ablation deltas 的 multi-seed mean/std。
-   - 優先 deltas：full model vs remove retrieval、remove image、remove temporal trend。
-2. Exp2 圖表與 captions 要確認 metric direction 一致。
-   - `log_MAE` 與 MAE 都是 lower is better。
-   - 避免寫成 error 上升代表改善。
-3. 若時間允許，可補 `meanScore` calibration 或 error-distribution view，因為 internal R2 仍偏低。
-
-## Exp3：MAL External Test
-
-已完成：
-
-- 已重新執行 Run22 在 MAL 2025 local-ready splits 上的 external inference。
-- 已在相同 MAL rows 上重新計算 F1/F2/C1/C2/C3 baselines。
-- 已加入 cover-derived YOLO diagnostic splits，並重跑 CARMA 與 F1/F2/C1/C2/C3。
-- 已確認 image encoder artifact 存在於 `src_2/component_image/model-image/best/`。
-- 已完成 MAL 2025 overlap label sanity check。
-  - Popularity Spearman：`0.9836`。
-  - Score Spearman：`0.9446`。
-- 已加入 Run22 external calibration 與 prediction-quantile diagnostics。
-- 已加入 cover-as-banner proxy splits，並重跑 CARMA 與 F1/F2/C1/C2/C3。
-  - 這只是 diagnostic proxy；MAL 2025 仍沒有真正的 banner images。
-- 已加入相同 MAL rows 上的 CARMA-vs-F2/C2/C3 external paired-bootstrap diagnostics。
-- 已加入 external error-slice diagnostics，涵蓋 MAL popularity/score quantiles、release period、format、source 與 high-popularity tail。
-- 已加入精簡的 external calibration / slice explanation，用來說明為何 Spearman 仍有參考價值，但 R2 可能很弱或為負。
-- 已加入 external success/failure case examples，涵蓋 high-confidence ranking successes、high-popularity underestimation 與 large score errors。
-
-寫作注意事項，不是未完成實驗：
-
-1. External conclusion 必須保守。
-   - CARMA 在 external score MAE / 10-point accuracy 上最穩定。
-   - Popularity 與 score ranking 是 mixed result；F2/C2/C3 在某些 splits 的 Spearman 可能比 CARMA 強。
-2. 真正的 banner-like branch 仍是 future work，不是目前 Exp3 external cleanup 的 blocker。
-   - 已完成的 cover-as-banner proxy 顯示 naive cover duplication 不能取代真正 banner information。
-
-## 全域 Robustness 待辦，不屬於 Exp1 專屬工作
-
-以下工作會提升整體證據品質，但不應被寫成 Exp1-only work：
-
-1. 對 CARMA 與重要 baselines 補 multiple seeds。
-   - 影響 Exp1 baseline comparison 與 Exp2 ablation reliability。
-   - 建議範圍：Run22-style CARMA、F2、C2-Recurrent、C3-RAG-XGB。
-   - 回報 key metrics 的 mean/std。
-2. 有了 multi-seed runs 後，再做 seed-level significance tests。
-   - 目前 paired bootstrap 只檢查 fixed prediction artifacts。
-   - 它不能取代 seed-level uncertainty。
-
-## 主框架剩餘工作，不屬於目前 Exp1/Exp3 cleanup
-
-以下任務需要模型或架構層級工作，不應與目前 Exp1/Exp3 evaluation cleanup 混在同一輪：
-
-1. 在同一個 CARMA architecture 裡補 strict CNN-vs-Swin backbone ablation。
-   - 目前 artifacts 支援 image-source ablations 與 ResNet/CNN literature proxy diagnostics。
-   - 但還沒有提供一個只替換 backbone 的 CARMA CNN-vs-Swin one-variable comparison。
-2. 訓練或取得真正的 banner-like external branch。
-   - cover-as-banner proxy 只是 missing-modality diagnostic。
-   - 合格的分支需要真正 banner data，或一個明確訓練過的 banner imputation method。
-
-## 論文與報告敘事決策
-
-- Exp1 main internal comparison 應使用 `n=3,087`。
-- 舊版 `n=2,808` complete-case baseline files 應視為 historical development artifacts，不是目前主要證據。
-- Exp3 敘事應區分：
-  - main no-YOLO MAL local-ready external exam，
-  - cover-derived YOLO diagnostic，
-  - cover-as-banner proxy diagnostic，
-  - MAL 2025 overlap label sanity，
-  - external calibration diagnostics，
-  - remaining true-banner limitation。
