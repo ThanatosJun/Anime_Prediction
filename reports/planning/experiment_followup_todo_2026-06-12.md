@@ -1,12 +1,14 @@
-# Experiment Follow-up TODO
+# 實驗回補進度與後續待辦
 
-Date: 2026-06-12
+日期：2026-06-12
 
-Branch: `feature/experiment-followups`
+分支：`feature/experiment-followups`
 
-## Current Authoritative Result Files
+本文件是老師回饋後，針對 Exp1、Exp2、Exp3 的實驗補強進度總覽。它的用途是協助後續論文、簡報與程式交接判斷哪些結果已經可作為目前正本，哪些仍屬於 future work 或主框架延伸工作。
 
-Use these files for the revised paper narrative and future reporting:
+## 目前權威結果檔案
+
+修正版論文敘事與後續報告應優先使用下列檔案：
 
 - `reports/experiments/sample_alignment/eval_sample_alignment_report_2026-06-11.md`
 - `reports/experiments/sample_alignment/carma_tensor_aligned_metrics.csv`
@@ -27,133 +29,110 @@ Use these files for the revised paper narrative and future reporting:
 - `reports/experiments/sample_alignment/run22_artifact_manifest.md`
 - `reports/paper/paper_user_sections_complete_draft_2026-06-01.md`
 
-Older baseline reports under `reports/baselines/` and older paper handoff files
-under `reports/paper/` are historical artifacts. They may still mention the old
-`n=2,808` complete-case baseline setting and should not be used as the current
-main-table narrative.
+`reports/baselines/` 底下的舊 baseline 報告，以及 `reports/paper/` 底下較早的 handoff 文件，部分仍會提到舊版 `n=2,808` complete-case baseline 設定。這些檔案現在應視為歷史開發紀錄，不應再作為目前主表或正式敘事的主要依據。
 
-## Exp1: Baseline Comparison
+## Exp1：Baseline Comparison
 
-Completed:
+已完成：
 
-- Recomputed representative F1/F2/C1/C2/C3 baselines on the same full internal
-  temporal test set as CARMA: `n=3,087`.
-- Added C1/C2 rows back into the internal Exp1 comparison.
-- Updated the paper narrative away from the old `n=2,808` complete-case table.
-- Added paired bootstrap diagnostics for CARMA-vs-baseline headline deltas.
+- 已將代表性 F1/F2/C1/C2/C3 baselines 重新計算到與 CARMA 相同的完整 internal temporal test set：`n=3,087`。
+- 已把 C1/C2 rows 補回 Exp1 internal comparison，避免前文提到 literature baselines 但主表不呈現。
+- 已將論文敘事從舊版 `n=2,808` complete-case table 改成目前的 full-test aligned baselines。
+- 已加入 CARMA-vs-baseline headline deltas 的 paired bootstrap diagnostics。
 
-Remaining:
+仍需注意：
 
-1. Add a compact paired-bootstrap summary table for the paper/report.
-   - Suggested rows: CARMA vs F2, CARMA vs C2-Recurrent, CARMA vs C3.
-   - Suggested metrics: popularity `log_MAE`/Spearman and meanScore MAE/Spearman.
-   - Purpose: show which differences are stable and which are effectively tied.
-2. Keep the Exp1 conclusion target-specific.
-   - `meanScore`: CARMA has the clearest MAE and 10-point accuracy advantage.
-   - `popularity`: CARMA is competitive, but F2/C2/C3 remain strong on some
-     ranking/error metrics.
-   - Avoid the claim that CARMA is the best on every popularity metric.
-3. Keep the baseline role table compact and explicit.
-   - F1: metadata-only strong floor.
-   - F2: simple multimodal concatenation floor.
-   - C1/C2: literature-adapted fusion proxies.
-   - C3: retrieval reference baseline.
-4. Keep C1/C2 claim boundaries explicit.
-   - Use `literature-adapted`, `project-input proxy`, or `C2-inspired`.
-   - Do not describe them as exact reproductions of the original papers.
+1. 論文或報告若空間允許，可加入一張精簡 paired-bootstrap summary table。
+   - 建議 rows：CARMA vs F2、CARMA vs C2-Recurrent、CARMA vs C3。
+   - 建議 metrics：popularity `log_MAE` / Spearman，以及 meanScore MAE / Spearman。
+   - 目的：說明哪些差距穩定，哪些其實接近 tie。
+2. Exp1 結論必須分 target 寫，不能宣稱 CARMA 全面勝出。
+   - `meanScore`：CARMA 在 MAE 與 10-point accuracy 上有最清楚優勢。
+   - `popularity`：CARMA 具 competitive performance，但 F2/C2/C3 在部分 ranking 或 error metrics 仍很強。
+3. Baseline role table 應保持精簡且角色明確。
+   - F1：metadata-only strong floor。
+   - F2：simple multimodal concatenation floor。
+   - C1/C2：literature-adapted fusion proxies。
+   - C3：retrieval reference baseline。
+4. C1/C2 的 claim boundary 要寫清楚。
+   - 可用：`literature-adapted`、`project-input proxy`、`C2-inspired`。
+   - 不可寫成 exact reproduction of the original papers。
 
-## Exp2: CARMA Ablation
+## Exp2：CARMA Ablation
 
-Completed:
+已完成：
 
-- Main ablation axes are already available in the project narrative:
-  retrieval, image, and temporal trend removal.
-- Current interpretation: removing retrieval, image, or temporal trend increases
-  error, so these components contribute to CARMA.
-- Added paired bootstrap diagnostics for the main ablation deltas.
+- 主要 ablation axes 已可用於目前專案敘事：remove retrieval、remove image、remove temporal trend。
+- 目前解讀：移除 retrieval、image 或 temporal trend 都會增加 error，因此這三個 component 對 CARMA 都有貢獻。
+- 已加入主要 ablation deltas 的 paired bootstrap diagnostics。
 
-Remaining:
+仍需注意：
 
-1. Add multi-seed mean/std for the key ablation deltas.
-   - Priority deltas: full model vs remove retrieval, remove image, remove
-     temporal trend.
-2. Confirm Exp2 charts and captions use the same target/metric direction.
-   - `log_MAE` and `MAE`: lower is better.
-   - Avoid wording that implies higher error is an improvement.
-3. If time permits, add a small calibration/error-distribution view for
-   `meanScore`, because internal R2 remains modest.
+1. 若後續要回應老師的 robustness 建議，應補 key ablation deltas 的 multi-seed mean/std。
+   - 優先 deltas：full model vs remove retrieval、remove image、remove temporal trend。
+2. Exp2 圖表與 captions 要確認 metric direction 一致。
+   - `log_MAE` 與 MAE 都是 lower is better。
+   - 避免寫成 error 上升代表改善。
+3. 若時間允許，可補 `meanScore` calibration 或 error-distribution view，因為 internal R2 仍偏低。
 
-## Exp3: MAL External Test
+## Exp3：MAL External Test
 
-Completed:
+已完成：
 
-- Recomputed Run22 external inference on MAL 2025 local-ready splits.
-- Recomputed F1/F2/C1/C2/C3 baselines on the same MAL rows.
-- Added cover-derived YOLO diagnostic splits and reran CARMA plus F1/F2/C1/C2/C3.
-- Confirmed the image encoder artifact exists under
-  `src_2/component_image/model-image/best/`.
-- Added MAL 2025 overlap label sanity check.
-  - Popularity Spearman: `0.9836`.
-  - Score Spearman: `0.9446`.
-- Added Run22 external calibration and prediction-quantile diagnostics.
-- Added cover-as-banner proxy splits and reran CARMA plus F1/F2/C1/C2/C3.
-  - This is a diagnostic proxy only; MAL 2025 still has no true banner images.
-- Added external paired-bootstrap diagnostics for CARMA-vs-F2/C2/C3 on the
-  same MAL rows.
-- Added external error-slice diagnostics across MAL popularity/score quantiles,
-  release period, format, source, and high-popularity tail.
-- Added a compact external calibration and slice explanation for why Spearman
-  can remain useful while R2 is weak or negative.
-- Added external success/failure case examples for high-confidence ranking
-  successes, high-popularity underestimation, and large score errors.
+- 已重新執行 Run22 在 MAL 2025 local-ready splits 上的 external inference。
+- 已在相同 MAL rows 上重新計算 F1/F2/C1/C2/C3 baselines。
+- 已加入 cover-derived YOLO diagnostic splits，並重跑 CARMA 與 F1/F2/C1/C2/C3。
+- 已確認 image encoder artifact 存在於 `src_2/component_image/model-image/best/`。
+- 已完成 MAL 2025 overlap label sanity check。
+  - Popularity Spearman：`0.9836`。
+  - Score Spearman：`0.9446`。
+- 已加入 Run22 external calibration 與 prediction-quantile diagnostics。
+- 已加入 cover-as-banner proxy splits，並重跑 CARMA 與 F1/F2/C1/C2/C3。
+  - 這只是 diagnostic proxy；MAL 2025 仍沒有真正的 banner images。
+- 已加入相同 MAL rows 上的 CARMA-vs-F2/C2/C3 external paired-bootstrap diagnostics。
+- 已加入 external error-slice diagnostics，涵蓋 MAL popularity/score quantiles、release period、format、source 與 high-popularity tail。
+- 已加入精簡的 external calibration / slice explanation，用來說明為何 Spearman 仍有參考價值，但 R2 可能很弱或為負。
+- 已加入 external success/failure case examples，涵蓋 high-confidence ranking successes、high-popularity underestimation 與 large score errors。
 
-Remaining:
+仍需注意：
 
-1. Keep the external conclusion conservative.
-   - CARMA is strongest for external score MAE/10-point accuracy.
-   - Popularity and score ranking are mixed; F2/C2/C3 can be stronger on
-     Spearman depending on the split.
-2. A true banner-like branch remains future work.
-   - The completed cover-as-banner proxy shows that naive cover duplication is
-     not a substitute for real banner information.
+1. External conclusion 必須保守。
+   - CARMA 在 external score MAE / 10-point accuracy 上最穩定。
+   - Popularity 與 score ranking 是 mixed result；F2/C2/C3 在某些 splits 的 Spearman 可能比 CARMA 強。
+2. 真正的 banner-like branch 仍是 future work。
+   - 已完成的 cover-as-banner proxy 顯示 naive cover duplication 不能取代真正 banner information。
 
-## Global Robustness, Not Exp1-specific
+## 全域 Robustness 待辦，不屬於 Exp1 專屬工作
 
-These tasks improve overall evidence quality but should not be described as
-Exp1-only work:
+以下工作會提升整體證據品質，但不應被寫成 Exp1-only work：
 
-1. Run multiple seeds for CARMA and the most important baselines.
-   - Affects Exp1 baseline comparison and Exp2 ablation reliability.
-   - Suggested scope: Run22-style CARMA, F2, C2-Recurrent, C3-RAG-XGB.
-   - Report mean/std for key metrics.
-2. Add seed-level significance tests after multi-seed runs exist.
-   - The current paired bootstrap checks fixed prediction artifacts only.
-   - It does not replace seed-level uncertainty.
+1. 對 CARMA 與重要 baselines 補 multiple seeds。
+   - 影響 Exp1 baseline comparison 與 Exp2 ablation reliability。
+   - 建議範圍：Run22-style CARMA、F2、C2-Recurrent、C3-RAG-XGB。
+   - 回報 key metrics 的 mean/std。
+2. 有了 multi-seed runs 後，再做 seed-level significance tests。
+   - 目前 paired bootstrap 只檢查 fixed prediction artifacts。
+   - 它不能取代 seed-level uncertainty。
 
-## Main Framework Remaining Work, Out of Scope for Exp1/Exp3 Cleanup
+## 主框架剩餘工作，不屬於目前 Exp1/Exp3 cleanup
 
-These tasks require model or architecture work and should not be mixed with the
-current Exp1/Exp3 evaluation-cleanup track:
+以下任務需要模型或架構層級工作，不應與目前 Exp1/Exp3 evaluation cleanup 混在同一輪：
 
-1. Add a strict CNN-vs-Swin backbone ablation inside the same CARMA architecture.
-   - Existing artifacts support image-source ablations and ResNet/CNN
-     literature proxy diagnostics.
-   - They do not provide a one-variable CARMA CNN-vs-Swin replacement.
-2. Train or acquire a true banner-like external branch.
-   - The cover-as-banner proxy is only a missing-modality diagnostic.
-   - A valid branch would need real banner data or a deliberately trained banner
-     imputation method.
+1. 在同一個 CARMA architecture 裡補 strict CNN-vs-Swin backbone ablation。
+   - 目前 artifacts 支援 image-source ablations 與 ResNet/CNN literature proxy diagnostics。
+   - 但還沒有提供一個只替換 backbone 的 CARMA CNN-vs-Swin one-variable comparison。
+2. 訓練或取得真正的 banner-like external branch。
+   - cover-as-banner proxy 只是 missing-modality diagnostic。
+   - 合格的分支需要真正 banner data，或一個明確訓練過的 banner imputation method。
 
-## Report Context Decisions
+## 論文與報告敘事決策
 
-- Current paper/report narrative should use `n=3,087` for Exp1 main internal
-  comparisons.
-- The old `n=2,808` complete-case baseline files should be treated as historical
-  development artifacts, not current main evidence.
-- Exp3 should distinguish:
-  - main no-YOLO MAL local-ready external exam,
-  - cover-derived YOLO diagnostic,
-  - cover-as-banner proxy diagnostic,
-  - MAL 2025 overlap label sanity,
-  - external calibration diagnostics,
-  - remaining true-banner limitation.
+- Exp1 main internal comparison 應使用 `n=3,087`。
+- 舊版 `n=2,808` complete-case baseline files 應視為 historical development artifacts，不是目前主要證據。
+- Exp3 敘事應區分：
+  - main no-YOLO MAL local-ready external exam，
+  - cover-derived YOLO diagnostic，
+  - cover-as-banner proxy diagnostic，
+  - MAL 2025 overlap label sanity，
+  - external calibration diagnostics，
+  - remaining true-banner limitation。
