@@ -39,7 +39,7 @@
 
 | ID | 代辦事項 | 歸屬 | 狀態 | 會影響其他部分嗎 |
 |---|---|---|---|---|
-| T1a | 補 Exp1 CARMA/baseline multiple seeds | Exp1 | 未做 | 會影響 Exp1，可能更新主表數字 |
+| T1a | 補 Exp1 CARMA/baseline multiple seeds | Exp1 | 部分完成（CARMA 7-seed 已跑；baseline 多 seed 未做） | 會影響 Exp1，可能更新主表數字 |
 | T1b | 補 Exp2 ablation multiple seeds | Exp2 | 未做 | 會影響 Exp2 ablation 結論穩定性 |
 | T1c | 補 Exp3 external multiple seeds | Exp3 | 可選 / 未做 | 會影響 external uncertainty 說法，成本較高 |
 | T2a | 補 Exp1 CARMA-vs-baseline significance test | Exp1 | 未做 | 需等 T1a 完成，不直接改模型 |
@@ -67,6 +67,7 @@
 
 - 歸屬：Exp1。
 - 性質：統計穩定性檢查。
+- 狀態：部分完成。CARMA 主模型已跑 7 個 seed（Run22–28，seeds 42/43/44/45/247135/610172/796445，`src_2/rerun_seeds.py`，摘要 `runs/rerun_seeds_summary.json`），test 與 val 的 mean±std 已記於 `src_2/README.md` 的 Seed Robustness 段。**baseline（F2/C2/C3）多 seed 尚未做。**
 - 目的：回應老師「single fixed seed 不足」的問題。
 - 建議對象：Run22-style CARMA、F2、C2-Recurrent、C3-RAG-XGB。
 - 產出：key metrics 的 mean/std。
