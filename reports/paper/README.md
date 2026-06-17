@@ -11,6 +11,8 @@ as the current Exp1 main table.
 
 For current Exp1-Exp3 metrics and reproducibility notes, use:
 
+- `../../src_2/README.md` for the latest 7-seed CARMA robustness,
+  ablation robustness, trend-head instability, and T2b significance summaries.
 - `../experiments/sample_alignment/eval_sample_alignment_report_2026-06-11.md`
 - `../experiments/sample_alignment/carma_tensor_aligned_metrics.md`
 - `../experiments/sample_alignment/mal2025_yolo_diagnostic_metrics.md`
