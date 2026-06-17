@@ -80,6 +80,83 @@ seed：22→42、23→43、24→44、25→45（連續）、**26→247135、27→
 
 ---
 
+## Ablation Robustness（T1b：ablation × 7 seed）— 哪些 ablation 結論跨 seed 成立
+
+對 3 組關鍵 ablation（**−RAG / −image / −trend**）各在 7 個 seed（42/43/44/45/247135/610172/796445）上跑，與 full（Run22–28，**同 seed 配對**）算 **delta = ablated − full**。配對相減把 seed 雜訊抵消，才能公平判斷組件的「淨貢獻」。
+腳本 `python src_2/ablation_multiseed_t1b.py`，摘要 `runs/ablation_multiseed_t1b_summary.json`（含 `_t1b_agg`）。
+
+> **判讀規則：delta 的 `|mean| > std` 才算「跨 seed 穩定的貢獻」；`std ≥ |mean|` 視為 seed 噪音。**
+> error 指標（log_MAE/MAE）delta 為正 = 拿掉後變差 = 組件有幫助；Spearman delta 為負 = 拿掉後排序變差 = 組件有幫助。
+
+### 🔴 重點發現：**TrendHead 是「seed 不穩定的來源」**（修正單 seed 的 4.3.3 結論）
+
+單 seed（seed=42）時 trend 看似有幫助（pop 0.8823 vs 無 trend 0.9036；score 7.5911 vs 7.8877）。**但 7 seed 配對後，trend 的貢獻「不成立」，而且 trend 正是不穩定的元兇：**
+
+| 主指標（test, 7 seed mean±std） | **full（有 trend）** | **−trend（無 trend）** |
+|---|:---:|:---:|
+| pop log_MAE↓ | 0.9756 ± **0.1185**（亂跳） | **0.9066 ± 0.0159**（超穩，且平均更好）|
+| score MAE↓ | **7.9269** ± 0.4788（亂跳） | 8.0434 ± **0.0901**（超穩，平均略差）|
+
+**逐 seed 看 popularity log_MAE 的 −trend 欄**：0.90/0.91/0.92/0.90/0.90/0.93/0.88 → **全部落在 0.88–0.93**；而 full（有 trend）是 0.88–1.14 亂跳。
+
+- **關掉 trend → 模型變得很穩**；開著 trend → 模型對 seed 敏感。**T1a 看到的 seed 不穩定，主因就是 trend head。**
+- trend head 是「**好 seed 小賺、壞 seed 大賠**」：seed 42/44/610172/796445（好 seed）trend 小幅幫忙；43/45/247135（壞 seed）trend 把 full 拖到 1.0–1.14，而無 trend 仍穩在 0.90。
+- **平均淨效果**：
+  - **popularity → 淨虧**（無 trend 0.907 反而優於有 trend 0.976）。
+  - **meanScore → 小賺但不穩**（有 trend 平均 7.93 優於無 trend 8.04 約 0.12，符合「評分隨年代漂移」的假設，但代價是 std 從 0.09 暴增到 0.48）。
+- **論文意涵**：concept-drift 的 trend 設計**不能說「穩定改善」**；誠實說法為「**trend 對 meanScore 有平均幫助但犧牲訓練穩定性，對 popularity 弊大於利**」。穩定化 trend head（正則 / 較小 lr / 約束斜率）列為 future work。
+
+### RAG / image：ranking 貢獻「穩」、error 貢獻「噪音」
+
+| Ablation | target | error Δ（ablated − full） | **Spearman Δ** |
+|---|---|---|---|
+| **−RAG** | pop | log_MAE +0.057 ± 0.086 ⚠️噪音 | **−0.011 ± 0.006 ✓穩** |
+| | score | MAE −0.066 ± 0.509 ⚠️無效 | **−0.021 ± 0.014 ✓穩** |
+| **−image** | pop | log_MAE +0.004 ± 0.098 ⚠️無效 | **−0.023 ± 0.003 ✓✓很穩** |
+| | score | MAE +0.728 ± 0.661 🟡偏有效 | **−0.032 ± 0.008 ✓✓很穩** |
+
+- **RAG 與 image 對 ranking（Spearman）的貢獻跨 seed 穩定**：拿掉任一個，兩 target 的 Spearman 都一致下降（image 尤其顯著，pop −0.023±0.003、score −0.032±0.008）→ **這是可主張的真貢獻**。
+- **error 指標（log_MAE/MAE）的貢獻幾乎都被 seed 噪音淹沒**（std ≥ |mean|），唯一例外是 −image 對 score MAE（+0.73±0.66，偏有效）→ **不可用 error 數字宣稱「RAG/image 降低多少誤差」**。
+
+### T1b 總結
+
+| 組件 | 跨 7 seed 的真相 |
+|---|---|
+| **RAG** | ✅ 改善 ranking（Spearman），穩定；error 貢獻為噪音 |
+| **image** | ✅ 改善 ranking（最顯著），穩定；對 score 誤差偏有效但較噪 |
+| **trend** | ❌ 無穩定貢獻，且是 seed 不穩定的來源；meanScore 平均小賺但犧牲穩定性 |
+
+> **一句話**：CARMA 跨 seed **唯一站得住的優勢是 ranking（RAG + image 都穩定貢獻）**；絕對誤差的組件貢獻多為 seed 噪音；trend head 應重新定位為「meanScore 的時序修正，代價是穩定性」而非「穩定改善 concept drift」。
+
+### T2b：顯著性檢定（paired t-test + Wilcoxon，n=7 配對 delta）
+
+對每個 ablation 的 7 個配對 delta（ablated − full，同 seed）做 **one-sample t-test（= paired t-test）** 與 **Wilcoxon signed-rank**（非參數，n=7 較穩健），H0：mean delta = 0。
+腳本 `python src_2/t2b_significance.py`，輸出 `runs/t2b_significance.json`。
+
+| 組件 | 指標 | meanΔ | 95% CI | p (t) | p (Wilcoxon) | 結論 |
+|---|---|---|---|:---:|:---:|---|
+| **−RAG** | pop Spearman | −0.0111 | [−0.016, −0.006] | **0.0019** | 0.0156 | ✓ 顯著（RAG 助排序）|
+| | score Spearman | −0.0213 | [−0.034, −0.008] | **0.0074** | 0.0156 | ✓ 顯著 |
+| | pop log_MAE | +0.0572 | [−0.023, +0.137] | 0.1304 | 0.1094 | — 不顯著 |
+| | score MAE | −0.0656 | [−0.536, +0.405] | 0.7449 | 0.8125 | — 不顯著 |
+| **−image** | pop Spearman | −0.0225 | [−0.025, −0.020] | **<0.0001** | 0.0156 | ✓✓ 最顯著 |
+| | score Spearman | −0.0322 | [−0.040, −0.024] | **0.0001** | 0.0156 | ✓✓ |
+| | score MAE | +0.7283 | [+0.117, +1.340] | **0.0269** | 0.0469 | ✓ 顯著（image 助 score 誤差）|
+| | score R² | −0.1470 | [−0.268, −0.026] | **0.0249** | 0.0469 | ✓ |
+| | pop log_MAE | +0.0043 | [−0.086, +0.095] | 0.9107 | 0.5781 | — 不顯著 |
+| **−trend** | pop log_MAE | −0.0690 | [−0.181, +0.043] | 0.1825 | 0.5781 | — 不顯著 |
+| | pop Spearman | +0.0029 | [−0.001, +0.006] | 0.0868 | 0.0781 | — 不顯著 |
+| | score MAE | +0.1164 | [−0.307, +0.540] | 0.5259 | 0.5781 | — 不顯著 |
+| | score Spearman | +0.0056 | [−0.004, +0.015] | 0.1897 | 0.2188 | — 不顯著 |
+
+> **T2b 正式結論（α=0.05）：**
+> 1. **RAG → ranking 顯著貢獻**：pop Spearman p=0.0019、score Spearman p=0.0074；誤差指標皆不顯著。
+> 2. **image → 最強最穩**：ranking 高度顯著（pop p<0.0001、score p=0.0001），且 **meanScore 誤差也顯著**（MAE p=0.027、R² p=0.025、within10pt p=0.034）。
+> 3. **trend → 任何指標、任何 target 皆不顯著（所有 p>0.05）** → **concept-drift 的 trend 貢獻在統計上不成立**；單 seed 的 4.3.3 為 seed 運氣。
+> 4. 註：共 24 個檢定，多重比較下 RAG/image 的 Spearman（p<0.01）最穩健；image 的 meanScore 誤差（p≈0.025）較邊際（Wilcoxon p≈0.05）。**論文主張以「RAG + image 的 ranking 顯著貢獻」為核心最安全。**
+
+---
+
 ## 目錄結構
 
 ```
@@ -437,6 +514,8 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 
 ### Per-target HP 消融（test set，`ablation_pertarget_s42.py`）— **論文 4.3 權威版**
 
+> ⚠️ **以下為單 seed（seed=42）消融。** 跨 seed 後，**只有 ranking（Spearman）的組件貢獻穩定/顯著**；誤差指標（log_MAE/MAE）的差距多為 seed 噪音，**trend 的貢獻甚至不顯著**。請以上方「Ablation Robustness（T1b）」與「T2b：顯著性檢定」的多 seed 結論為準，本段單 seed 數字僅供參考。
+
 > 舊版 `ablation.py` / `ablation_multimodal.py` 強制共用 Run07 HP，meanScore 不在最佳，導致「移除組件反而 score 變好」的反直覺結果。
 > 本版**每個 target 各用自己的最佳 HP**（保留 config 的 per-target overrides：pop dr=0.3；score dr=0.3, attn_dr=0.1, wd=1e-4, batch=256），full=Run22 設定、seed=42，整張表同一條 code path。
 > **結果乾淨：full model 在兩個 target 都最佳**，RAG 與每個模態對兩者都有正貢獻。摘要 `runs/ablation_pertarget_s42_summary.json`。
@@ -467,7 +546,9 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 > 4. **meta 仍是最強單一模態**（only_meta：pop 0.9524、score 7.956）；text / image 單獨都弱（pop 1.27 / 1.31）。
 > 5. **三個視覺來源合用最佳**：任一單獨來源（cover / banner / yolo）兩個 target 都不如三者合，視覺模態互補。
 
-#### Temporal Trend（TrendHead）on/off — **concept drift 證據**（論文 4.3.3）
+#### Temporal Trend（TrendHead）on/off — ~~concept drift 證據~~（論文 4.3.3）
+
+> ⚠️ **此段為單 seed（seed=42）結果，已被多 seed 推翻** —— 見上方「Ablation Robustness（T1b）」：7 seed 配對後 trend **無穩定貢獻**，且 trend head 本身是 seed 不穩定的來源。以下單 seed 數字僅保留為歷史紀錄，**論文結論以 T1b 多 seed 為準**。
 
 `abl_full_notrend_pt` = full model 但關掉 TrendHead（linear+year 時序項），對照 `abl_full_pt`。test 比 train 晚，故此對照衡量時序項在 drift 下是否有用。指令：`python src_2/ablation_pertarget_s42.py --only abl_full_notrend_pt`
 

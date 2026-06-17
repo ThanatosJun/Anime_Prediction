@@ -4,6 +4,23 @@
 
 用途：本文件把老師對期末報告的回饋拆成可執行代辦，並標示每個代辦直接屬於 Exp1、Exp2、Exp3、主框架或文件。若某項工作只是統計檢定，會在說明中補充，但不作為主要分類，避免無法分工。
 
+## 進度更新（2026-06-17）— seed robustness 批次
+
+| 任務 | 狀態 | 產出 |
+|---|---|---|
+| T1a（CARMA 主模型多 seed） | 部分完成 | Run22–28（7 seed，含 random 26/27/28），`src_2/rerun_seeds.py`，README「Seed Robustness」。**baseline 多 seed 未做** |
+| T1b（ablation 多 seed） | ✅ 已完成 | −RAG/−image/−trend × 7 seed，`src_2/ablation_multiseed_t1b.py`，README「Ablation Robustness（T1b）」 |
+| T2b（ablation delta 顯著性） | ✅ 已完成 | paired t-test + Wilcoxon，`src_2/t2b_significance.py`，README「T2b：顯著性檢定」 |
+| T10e（meanScore 多 seed ablation） | ✅ 已完成 | 含於 T1b（7 seed 涵蓋 meanScore） |
+
+**關鍵結論（多 seed，test set）：**
+- CARMA 跨 seed **唯一穩定/顯著的優勢是 ranking（Spearman）**；RAG 與 image 對 ranking 都有顯著貢獻（image 最強，p<0.001）。
+- **絕對誤差（log_MAE/MAE）的組件貢獻多為 seed 噪音**；單一 seed（Run22）的 headline 誤差只是運氣好的 seed（pop log_MAE 跨 seed 0.88–1.14）。
+- **trend 在任何指標、任何 target 皆不顯著（p>0.05）** → concept-drift 的 trend 設計**不能宣稱「穩定改善」**；且 trend head 本身是 seed 不穩定的來源（單 seed 4.3.3 被推翻）。
+
+**仍待處理（CARMA 相關）：** T6a（CNN-vs-Swin backbone）、T10c（remove-prior 消融）、T1a-baseline / T2a（baseline 多 seed + 顯著性）。
+**論文待改（重要）：** ABSTRACT / 1.3 / 2.5 / 4.3.3 的「最低誤差」與「trend 處理 concept drift」宣稱，需改成 **ranking + mean±std** 的誠實口徑。
+
 ## 1. 老師回饋重點拆解
 
 ### 1.1 老師肯定的部分
@@ -40,10 +57,10 @@
 | ID | 代辦事項 | 歸屬 | 狀態 | 會影響其他部分嗎 |
 |---|---|---|---|---|
 | T1a | 補 Exp1 CARMA/baseline multiple seeds | Exp1 | 部分完成（CARMA 7-seed 已跑；baseline 多 seed 未做） | 會影響 Exp1，可能更新主表數字 |
-| T1b | 補 Exp2 ablation multiple seeds | Exp2 | 未做 | 會影響 Exp2 ablation 結論穩定性 |
+| T1b | 補 Exp2 ablation multiple seeds | Exp2 | 已完成（−RAG/−image/−trend × 7 seed） | 會影響 Exp2 ablation 結論穩定性 |
 | T1c | 補 Exp3 external multiple seeds | Exp3 | 可選 / 未做 | 會影響 external uncertainty 說法，成本較高 |
 | T2a | 補 Exp1 CARMA-vs-baseline significance test | Exp1 | 未做 | 需等 T1a 完成，不直接改模型 |
-| T2b | 補 Exp2 ablation delta significance test | Exp2 | 未做 | 需等 T1b 完成，不直接改模型 |
+| T2b | 補 Exp2 ablation delta significance test | Exp2 | 已完成（paired t-test + Wilcoxon, n=7） | 需等 T1b 完成，不直接改模型 |
 | T2c | 補 Exp3 external key-delta significance test | Exp3 | 可選 / 未做 | 需等 T1c 或 external multi-run 結果 |
 | T4 | baseline 統一 `n=3,087` 重跑 | Exp1 | 已完成 | 已影響 Exp1 與論文敘事 |
 | T5 | 修正 Table 9 headers | 文件 | 未確認 / 待修 | 不影響實驗，只影響文件可信度 |
@@ -59,7 +76,7 @@
 | T10b | 補 temporal/popularity prior-only baseline | Exp1 | 未做 | 會新增 Exp1 diagnostic row |
 | T10c | 補 remove-prior feature ablation | Exp2 | 未做 | 會新增 Exp2 diagnostic；若改輸入群組需重跑相關 ablation |
 | T10d | 補 MeanScore residual slicing | Exp3 / internal diagnostic | 部分完成 | 可強化 Q2/Q3 解釋，不改模型 |
-| T10e | 補 MeanScore multi-seed ablation | Exp2 | 未做 | 會影響 Exp2 robustness 結論 |
+| T10e | 補 MeanScore multi-seed ablation | Exp2 | 已完成（含於 T1b：7 seed 涵蓋 meanScore） | 會影響 Exp2 robustness 結論 |
 
 ## 3. 各待辦細節與牽動範圍
 
@@ -80,6 +97,7 @@
 
 - 歸屬：Exp2。
 - 性質：統計穩定性檢查。
+- 狀態：已完成。−RAG / −image / −trend 各跑 7 seed（42/43/44/45/247135/610172/796445），與 full（Run22–28）同 seed 配對（`src_2/ablation_multiseed_t1b.py`，摘要 `runs/ablation_multiseed_t1b_summary.json`）。**結論：RAG/image 對 ranking（Spearman）有穩定貢獻；trend 無穩定貢獻，且為 seed 不穩定來源（修正單 seed 的 4.3.3）**。詳見 `src_2/README.md`「Ablation Robustness（T1b）」。
 - 目的：回應 Q3，確認 retrieval/image/temporal trend 的 ablation deltas 不是 seed noise。
 - 建議對象：full model vs remove retrieval、remove image、remove temporal trend。
 - 牽動範圍：
@@ -111,6 +129,7 @@
 
 - 歸屬：Exp2。
 - 性質：統計檢定。
+- 狀態：已完成。對 T1b 的 7 個配對 delta 做 paired t-test + Wilcoxon signed-rank（`src_2/t2b_significance.py`，輸出 `runs/t2b_significance.json`）。**結果：RAG/image 的 Spearman 顯著（p<0.01）、image 對 meanScore 誤差顯著（p≈0.025）；trend 在所有指標皆不顯著（p>0.05）。** 詳見 README「T2b：顯著性檢定」。
 - 目的：判斷 Exp2 ablation deltas 是否跨 seed 穩定。
 - 前提：必須先完成 T1b。
 - 牽動範圍：
