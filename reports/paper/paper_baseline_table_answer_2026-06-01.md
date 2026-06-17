@@ -1,5 +1,12 @@
 # Baseline 主表問題回覆 2026-06-01
 
+Status note, 2026-06-12: this is a historical baseline handoff document. It
+records the earlier `n=2,808` complete-case discussion and the questions that
+motivated the later sample-alignment rerun. Do not use this file as the current
+Exp1 main-table source. Current results are documented under
+`reports/experiments/sample_alignment/` and summarized in
+`reports/planning/experiment_followup_todo_2026-06-12.md`.
+
 本文件回覆文件整理 agent 提出的 23 個 baseline 表格問題。  
 重要修正：最新版 `dev` 的 FusionModel v2 Run22 可在完整 test set `n=3,087` 上評估，因為它採用 missing-modality fallback；reference baseline 目前則採 strict complete-case intersection，因此多數 multimodal rows 是 `n=2,808`。這兩者不是同一種 evaluation policy，正式論文不能未加說明地混在同一張表比較。
 

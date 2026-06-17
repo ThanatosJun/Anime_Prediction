@@ -1,0 +1,22 @@
+{
+  "splits": [
+    {
+      "split": "mal2025_popularity_local_ready",
+      "new_split": "mal2025_popularity_local_ready_yolo",
+      "rows": 3765,
+      "embedded_yolo_rows": 3765,
+      "missing_cover_rows": 0,
+      "fallback_full_image_rows": 0,
+      "output": "src_2/embedding/image/image_embeddings_mal2025_popularity_local_ready_yolo.parquet"
+    },
+    {
+      "split": "mal2025_dual_local_ready",
+      "new_split": "mal2025_dual_local_ready_yolo",
+      "rows": 1202,
+      "embedded_yolo_rows": 1202,
+      "missing_cover_rows": 0,
+      "fallback_full_image_rows": 0,
+      "output": "src_2/embedding/image/image_embeddings_mal2025_dual_local_ready_yolo.parquet"
+    }
+  ]
+}

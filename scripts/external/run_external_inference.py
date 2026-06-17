@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "src_2" / "fussion_training"))
 
 from dataset import AnimeDataset, denormalize_target  # noqa: E402
 from meta_encoder import MetaEncoder  # noqa: E402
-from model import FusionModel, make_model_config  # noqa: E402
+from model import FusionModel, apply_target_overrides, make_model_config  # noqa: E402
 
 
 DEFAULT_TARGETS = ["popularity", "meanScore"]
@@ -38,6 +38,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--id-map", default=None, help="Sidecar id map CSV. Defaults to data/external_transformed/<split>_id_map.csv.")
     parser.add_argument("--targets", nargs="+", default=DEFAULT_TARGETS, choices=DEFAULT_TARGETS)
     parser.add_argument("--run-id", default=None, help="Override output.run_id from the config, e.g. 02.")
+    parser.add_argument("--run-dir", default=None, help="Override output.run_dir from the config, e.g. final_project/runs.")
     parser.add_argument("--output-prefix", default=None)
     return parser.parse_args()
 
@@ -126,6 +127,7 @@ def _popularity_metrics(y_true: pd.Series, y_pred: pd.Series, rank: pd.Series | 
 
 @torch.no_grad()
 def _predict_target(target: str, split: str, config: dict, meta_encoder: MetaEncoder) -> pd.DataFrame:
+    config = apply_target_overrides(config, target)
     cfg_train = config["training"]
     cfg_out = config["output"]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -160,6 +162,8 @@ def main() -> None:
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if args.run_id:
         config["output"]["run_id"] = args.run_id
+    if args.run_dir:
+        config["output"]["run_dir"] = args.run_dir
 
     meta_encoder_path = Path(config["data"]["meta_encoder_path"])
     if not meta_encoder_path.is_absolute():

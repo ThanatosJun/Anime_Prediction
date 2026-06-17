@@ -1,0 +1,22 @@
+{
+  "splits": [
+    {
+      "source_split": "mal2025_popularity_local_ready_yolo",
+      "new_split": "mal2025_popularity_local_ready_yolo_coverbanner",
+      "rows": 3765,
+      "cover_nonzero_rows": 3765,
+      "banner_nonzero_rows": 3765,
+      "output": "src_2/embedding/image/image_embeddings_mal2025_popularity_local_ready_yolo_coverbanner.parquet",
+      "claim_boundary": "Cover embeddings copied into banner slot; diagnostic proxy only."
+    },
+    {
+      "source_split": "mal2025_dual_local_ready_yolo",
+      "new_split": "mal2025_dual_local_ready_yolo_coverbanner",
+      "rows": 1202,
+      "cover_nonzero_rows": 1202,
+      "banner_nonzero_rows": 1202,
+      "output": "src_2/embedding/image/image_embeddings_mal2025_dual_local_ready_yolo_coverbanner.parquet",
+      "claim_boundary": "Cover embeddings copied into banner slot; diagnostic proxy only."
+    }
+  ]
+}
