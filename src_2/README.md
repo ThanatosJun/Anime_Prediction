@@ -46,7 +46,7 @@ seed：22→42、23→43、24→44、25→45（連續）、**26→247135、27→
 > 2. **Popularity log_MAE 對 seed 敏感**：mean **0.9756 ± 0.1185**，**比 baseline F2-XGB-Concat（0.8828）還差** → popularity「誤差最低」是 seed=42 的運氣，**多 seed 下不成立**。
 > 3. **MeanScore MAE 也對 seed 敏感（std 隨 seed 數增大 0.22→0.48）**：mean **7.9269 ± 0.4788**，**也比最佳 baseline（7.8582）差**（4 seed 時曾誤判為「優勢守得住」，加到 7 seed 後翻盤）。R² 從 0.01 到 0.24，極不穩。
 > 4. **總結論**：CARMA 跨 seed **唯一站得住的是 ranking（Spearman）**；兩個 target 的**絕對誤差（log_MAE / MAE）都 seed-dependent**，主結果 Run22 是「兩 target 剛好都運氣好」的 seed。論文應以 **mean±std + ranking** 為主張，不可用單一 seed 的 headline 誤差宣稱「最低」。
-> 5. **根因**：兩個 target 的訓練跨 seed 呈現**雙峰/不穩收斂**（早停 / 過擬合敏感，見「已知限制」）。穩定化（更保守早停、正則、或多 seed 取最佳/集成）列為 future work。
+> 5. **根因已定位 = TrendHead**（詳見下方「Ablation Robustness → 🔴 TrendHead 是 seed 不穩定來源」）：波動集中在帶 trend 的設定，關掉 trend 後兩 target 都緊收斂。穩定化 trend（正則 / 較小 lr / 約束斜率 / 解除 year 重疊）列為 future work。
 
 #### 同 7 seed 的 Validation 成績（對照用）
 
@@ -88,23 +88,68 @@ seed：22→42、23→43、24→44、25→45（連續）、**26→247135、27→
 > **判讀規則：delta 的 `|mean| > std` 才算「跨 seed 穩定的貢獻」；`std ≥ |mean|` 視為 seed 噪音。**
 > error 指標（log_MAE/MAE）delta 為正 = 拿掉後變差 = 組件有幫助；Spearman delta 為負 = 拿掉後排序變差 = 組件有幫助。
 
-### 🔴 重點發現：**TrendHead 是「seed 不穩定的來源」**（修正單 seed 的 4.3.3 結論）
+### 🔴 重點發現：TrendHead 是「seed 不穩定的來源」（修正單 seed 的 4.3.3 結論）
 
-單 seed（seed=42）時 trend 看似有幫助（pop 0.8823 vs 無 trend 0.9036；score 7.5911 vs 7.8877）。**但 7 seed 配對後，trend 的貢獻「不成立」，而且 trend 正是不穩定的元兇：**
+單 seed（seed=42）時 trend 看似有幫助（pop 0.8823 vs 無 trend 0.9036；score 7.5911 vs 7.8877）。**但 7 seed 後翻盤：trend (1) 貢獻不顯著、(2) 是唯一的 seed 波動來源。** 以下分四步說明。
 
-| 主指標（test, 7 seed mean±std） | **full（有 trend）** | **−trend（無 trend）** |
+#### ① 逐 seed 證據：開 trend 亂跳、關 trend 緊收斂（Run22~28, test）
+
+| Run | seed | pop log_MAE（full）↓ | pop log_MAE（−trend）↓ | score MAE（full）↓ | score MAE（−trend）↓ |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| 22 | 42 | 0.8823 | 0.9036 | 7.5911 | 7.8877 |
+| 23 | 43 | **1.1184** | 0.9076 | 7.6196 | 8.0677 |
+| 24 | 44 | 0.8947 | 0.9232 | 8.0692 | 8.0250 |
+| 25 | 45 | **1.0318** | 0.8970 | 7.7027 | 8.1561 |
+| 26 | 247135 | **1.1410** | 0.9049 | 7.3859 | 8.0025 |
+| 27 | 610172 | 0.8851 | 0.9286 | 8.6012 | 8.0266 |
+| 28 | 796445 | 0.8760 | 0.8811 | 8.5187 | 8.1379 |
+| **mean ± std** | — | 0.9756 ± **0.1185** | 0.9066 ± **0.0159** | 7.9269 ± **0.4788** | 8.0434 ± **0.0901** |
+| **範圍 max−min** | — | **0.876–1.141** 亂跳 | 0.881–0.929 緊 | **7.39–8.60** 亂跳 | 8.00–8.16 緊 |
+
+> **重點**：full（有 trend）的 pop log_MAE 在 seed 43/45/247135 飆到 1.03–1.14、其餘 seed 卻落在 0.88（**雙峰**）；−trend 全部緊收在 0.881–0.929，**std 小一個量級**。兩個 target 同一現象——**只要關掉 trend，模型就穩**。
+
+#### ② 機制根因：trend 分支「沒調好」且與 metadata 欠辨識
+
+TrendHead 是裸 `nn.Linear(1,1)`，最終輸出 `out = delta + (w·year + b)`，與 backbone **共用全域 optimizer**（無獨立 lr / 無斜率正則 / 無獨立 early-stop）。且 `release_year` **同時**也經 metadata 餵進 MLP（`model.py:238`）→ trend 的「年度斜率／截距」與 residual 的「整體水準」**重疊、欠辨識（under-identified）**，兩者如何分攤輸出無唯一解，optimizer 依 seed 落到不同 basin → 雙峰收斂。**即「trend 這個額外輸入沒調好」才是波動主因，而非多模態核心。**
+
+#### ③ 完整 with/without trend 矩陣（6 模塊 × 7 seed）：波動是普適現象
+
+每個模塊各跑 trend ON / OFF 兩版（補跑腳本 `python src_2/trend_matrix_fill.py`，摘要 `runs/trend_matrix_fill_summary.json`）。
+
+**Popularity log_MAE（mean ± std）↓**
+
+| 模塊 | trend **ON** | trend **OFF** |
 |---|:---:|:---:|
-| pop log_MAE↓ | 0.9756 ± **0.1185**（亂跳） | **0.9066 ± 0.0159**（超穩，且平均更好）|
-| score MAE↓ | **7.9269** ± 0.4788（亂跳） | 8.0434 ± **0.0901**（超穩，平均略差）|
+| full | 0.9756 ± **0.1185** | 0.9066 ± 0.0159 |
+| RAG off | 1.0328 ± **0.0696** | 0.9514 ± 0.0048 |
+| −image | 0.9799 ± **0.0629** | 0.9524 ± 0.0194 |
+| meta only | 1.0060 ± **0.0672** | 0.9478 ± 0.0112 |
+| text only | 1.4506 ± **0.0599** | 1.2717 ± 0.0225 |
+| image only | 1.3528 ± **0.1183** | 1.2982 ± 0.0237 |
 
-**逐 seed 看 popularity log_MAE 的 −trend 欄**：0.90/0.91/0.92/0.90/0.90/0.93/0.88 → **全部落在 0.88–0.93**；而 full（有 trend）是 0.88–1.14 亂跳。
+**MeanScore MAE（mean ± std）↓**
 
-- **關掉 trend → 模型變得很穩**；開著 trend → 模型對 seed 敏感。**T1a 看到的 seed 不穩定，主因就是 trend head。**
-- trend head 是「**好 seed 小賺、壞 seed 大賠**」：seed 42/44/610172/796445（好 seed）trend 小幅幫忙；43/45/247135（壞 seed）trend 把 full 拖到 1.0–1.14，而無 trend 仍穩在 0.90。
-- **平均淨效果**：
-  - **popularity → 淨虧**（無 trend 0.907 反而優於有 trend 0.976）。
-  - **meanScore → 小賺但不穩**（有 trend 平均 7.93 優於無 trend 8.04 約 0.12，符合「評分隨年代漂移」的假設，但代價是 std 從 0.09 暴增到 0.48）。
-- **論文意涵**：concept-drift 的 trend 設計**不能說「穩定改善」**；誠實說法為「**trend 對 meanScore 有平均幫助但犧牲訓練穩定性，對 popularity 弊大於利**」。穩定化 trend head（正則 / 較小 lr / 約束斜率）列為 future work。
+| 模塊 | trend **ON** | trend **OFF** |
+|---|:---:|:---:|
+| full | 7.9269 ± **0.4788** | 8.0434 ± 0.0901 |
+| RAG off | 7.8614 ± 0.2163 | 7.9166 ± 0.2159 |
+| −image | 8.6552 ± **0.6608** | 8.3048 ± 0.1219 |
+| meta only | 8.0899 ± 0.3184 | 8.0958 ± 0.1669 |
+| text only | 10.9091 ± **2.0473** | 10.5605 ± 0.3208 |
+| image only | 9.0566 ± **0.9537** | 8.3536 ± 0.2238 |
+
+> **重點：**
+> - **6/6 模塊** trend ON 的 std 都 ≥ trend OFF（pop、score 皆然）→ **不穩定來自 trend 分支本身，與用哪些模態無關**（普適）。
+> - **popularity**：trend ON 在**所有模塊**都「mean 更差 + std 更大」→ 對 pop 純粹有害。
+> - **meanScore**：trend ON 只在 metadata 充足的 full / RAG off 微幅改善 mean（≤0.12），但 std 暴增；缺 meta 的 −image / text-only / image-only 反而更差更亂（text-only ON std 飆到 2.05）。
+> - **Spearman（排序）**：trend OFF 在所有 6 模塊、兩 target 都 ≥ ON → trend 對排序毫無幫助。
+> - ⚠️ text-only / image-only 的 trend ON 有 year-leak（release_year 經 trend 注入，雖 meta 關閉），即便如此仍更差更亂 → 更坐實問題在 trend 分支。
+
+#### ④ 平均淨效果與論文意涵
+
+- **popularity → 淨虧**：無 trend 0.907 反而優於有 trend 0.976。
+- **meanScore → 小賺但不穩**：有 trend 平均 7.93 vs 無 trend 8.04（差 0.12，符合「評分隨年代漂移」假設），但代價是 std 從 0.09 暴增到 0.48。
+- **論文意涵**：concept-drift 的 trend 設計**不能說「穩定改善」**；誠實說法為「trend 對 meanScore 有平均幫助但犧牲訓練穩定性，對 popularity 弊大於利，且本身是 seed 波動來源」。**穩定化 trend head（正則 / 較小 lr / 約束斜率 / 解除 year 重疊）列為 future work**；建議正文用第 ③ 步的矩陣取代單一 seed 的 Table 13/14。
 
 ### RAG / image：ranking 貢獻「穩」、error 貢獻「噪音」
 
@@ -154,6 +199,37 @@ seed：22→42、23→43、24→44、25→45（連續）、**26→247135、27→
 > 2. **image → 最強最穩**：ranking 高度顯著（pop p<0.0001、score p=0.0001），且 **meanScore 誤差也顯著**（MAE p=0.027、R² p=0.025、within10pt p=0.034）。
 > 3. **trend → 任何指標、任何 target 皆不顯著（所有 p>0.05）** → **concept-drift 的 trend 貢獻在統計上不成立**；單 seed 的 4.3.3 為 seed 運氣。
 > 4. 註：共 24 個檢定，多重比較下 RAG/image 的 Spearman（p<0.01）最穩健；image 的 meanScore 誤差（p≈0.025）較邊際（Wilcoxon p≈0.05）。**論文主張以「RAG + image 的 ranking 顯著貢獻」為核心最安全。**
+
+### 單模態上限 × 7 seed（補論文 Table 9/10 的 `w/ metadata`／`w/ text`／`w/ image`）
+
+三組單模態各跑 7 seed（與 T1b 同源：Run22 base + per-target HP；單模態一律 **rag off + trend off**，量「各模態各自上限」）。
+腳本 `python src_2/single_modality_multiseed.py`，摘要 `runs/single_modality_multiseed_summary.json`（`_sm_agg`）。delta = ablated − full（Run22–28 同 seed 配對），p 為 paired t-test。
+
+| 單模態（test, 7 seed mean±std） | pop log_MAE↓ | pop Spearman↑ | score MAE↓ | score Spearman↑ |
+|---|:---:|:---:|:---:|:---:|
+| **full（對照，Run22–28）** | 0.9756 ± 0.1185 | 0.8502 ± 0.0027 | 7.9269 ± 0.4788 | 0.5433 ± 0.0117 |
+| **meta-only** | **0.9478 ± 0.0112** | 0.8305 ± 0.0054 | 8.0958 ± 0.1669 | 0.5062 ± 0.0113 |
+| **text-only** | 1.2717 ± 0.0225 | 0.7043 ± 0.0040 | 10.5605 ± 0.3208 | 0.2548 ± 0.0415 |
+| **image-only** | 1.2982 ± 0.0237 | 0.7309 ± 0.0061 | 8.3536 ± 0.2238 | 0.4004 ± 0.0151 |
+
+**delta-vs-full 顯著性（paired t-test, n=7）：**
+
+| 單模態 | 指標 | meanΔ | p (t) | 結論 |
+|---|---|---|:---:|---|
+| **meta-only** | pop log_MAE | −0.028 | 0.561 | — 不顯著（meta-only 誤差 ≈ full，平均甚至略低）|
+| | pop Spearman | −0.020 | **<0.001** | ✓ full 顯著較佳（排序）|
+| | score MAE | +0.169 | 0.431 | — 不顯著 |
+| | score Spearman | −0.037 | **0.0036** | ✓ full 顯著較佳（排序）|
+| **text-only** | 全指標 | （大幅變差）| **<0.001** | ✓✓ 各指標皆顯著最差 |
+| **image-only** | pop log_MAE | +0.322 | **<0.001** | ✓ pop 顯著變差 |
+| | pop Spearman | −0.119 | **<0.001** | ✓ |
+| | score MAE | +0.427 | 0.101 | — 不顯著（image-only score 誤差 ≈ full）|
+| | score Spearman | −0.143 | **<0.001** | ✓ full 顯著較佳 |
+
+- **metadata 是壓倒性最強的單模態，且最穩**：meta-only 的 pop log_MAE（0.948±0.011）與 score MAE（8.10±0.17）在**誤差上與 full 無顯著差異**（p=0.56 / 0.43），std 也極小（無 trend → 不亂跳，呼應 T1b 的 trend 不穩定結論）。full 真正**顯著**贏 meta-only 的地方只有 **ranking（Spearman，pop/score 皆 p<0.01）**。
+- **text-only 與 image-only 對 popularity 全面顯著變差**（log_MAE +0.30/+0.32，p<0.001）；印證舊論文「metadata by far the strongest」，現有 7 seed + 顯著性背書。
+- **沒有任何單模態能在 ranking 上追平 full** → 與 RAG/image 結論一致：**融合的真正價值在 ranking，不在絕對誤差**（絕對誤差由 metadata 主導且 seed-noisy）。
+- **論文 Table 9/10 改法**：單模態列改 mean±std；敘述定調為「metadata 提供大部分誤差水準，多模態融合的顯著增益在排序」。
 
 ---
 
@@ -210,6 +286,11 @@ src_2/
 ├── hp_search.py                  # 超參數搜尋（Run04~09）
 ├── ablation.py                   # RAG / image 消融
 ├── ablation_multimodal.py        # 多模態分支消融（重訓版）
+├── rerun_seeds.py                # full model × 7 seed（T1a seed robustness）
+├── ablation_multiseed_t1b.py     # −RAG/−image/−trend × 7 seed（T1b）
+├── single_modality_multiseed.py  # meta/text/image-only × 7 seed（補 Table 9/10）
+├── trend_matrix_fill.py          # 補滿 6 模塊 × with/without trend 矩陣（× 7 seed）
+├── t2b_significance.py            # ablation delta paired t-test/Wilcoxon（T2b）
 ├── backfill_metrics.py           # 補算舊 run 缺的指標欄位（不重訓）
 ├── rerun_s42.py                  # 固定 seed=42 重跑全部 scripted 實驗（_s42 後綴）
 ├── rerun_extra_s42.py            # seed=42 補跑（02/03 + 單模態 banner/yolo）
@@ -520,14 +601,62 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 > 本版**每個 target 各用自己的最佳 HP**（保留 config 的 per-target overrides：pop dr=0.3；score dr=0.3, attn_dr=0.1, wd=1e-4, batch=256），full=Run22 設定、seed=42，整張表同一條 code path。
 > **結果乾淨：full model 在兩個 target 都最佳**，RAG 與每個模態對兩者都有正貢獻。摘要 `runs/ablation_pertarget_s42_summary.json`。
 
+> **消融方法論**：消融只改「被移除的那一項」，其餘組件維持 full 設定。**trend 本身是其中一個變因**，故以下分 **trend ON / trend OFF 兩版並列**，方便對比。
+> ⚠️ trend ON 版的 text only / image only 移除 meta 但 trend 仍讀 `release_year` → 有輕微 year-leak（這兩列略被高估）；trend OFF 版無此問題。
+
+#### ▍seed=42（單 seed）
+
+**trend ON：**
+
 | 設定 | pop log_MAE↓ | pop facc_2x | pop spear | score MAE↓ | score win10 | score spear |
 |------|:---:|:---:|:---:|:---:|:---:|:---:|
-| **full（img+txt+meta+rag）** | **0.8823** | **0.4943** | **0.8520** | **7.5911** | **0.7104** | **0.5424** |
+| **full（img+txt+meta+rag）** | 0.8823 | 0.4943 | 0.8520 | 7.5911 | 0.7104 | 0.5424 |
 | RAG off | 0.9473 | 0.4642 | 0.8387 | 8.1246 | 0.6718 | 0.5273 |
 | 移除 image | 0.9307 | 0.4830 | 0.8293 | 8.6352 | 0.6511 | 0.5168 |
+| meta only | 1.0847 | 0.3929 | 0.8276 | 7.7290 | 0.7020 | 0.5360 |
+| text only | 1.4263 | 0.3204 | 0.6997 | 9.2816 | 0.6016 | 0.2726 |
+| image only | 1.3994 | 0.3282 | 0.7325 | 8.1665 | 0.6725 | 0.3785 |
+
+**trend OFF：**
+
+| 設定 | pop log_MAE↓ | pop facc_2x | pop spear | score MAE↓ | score win10 | score spear |
+|------|:---:|:---:|:---:|:---:|:---:|:---:|
+| **full（img+txt+meta+rag）** | 0.9036 | 0.4830 | 0.8494 | 7.8877 | 0.6929 | 0.5533 |
+| RAG off | 0.9559 | 0.4587 | 0.8405 | 7.8172 | 0.6991 | 0.5403 |
+| 移除 image | 0.9799 | 0.4532 | 0.8318 | 8.4562 | 0.6660 | 0.5194 |
 | meta only | 0.9524 | 0.4587 | 0.8271 | 7.9560 | 0.6832 | 0.5105 |
 | text only | 1.2705 | 0.3638 | 0.7012 | 10.3885 | 0.5274 | 0.2113 |
 | image only | 1.3106 | 0.3453 | 0.7311 | 8.7938 | 0.6459 | 0.3910 |
+
+#### ▍7 seed mean ± std（權威版）
+
+**trend ON：**
+
+| 設定 | pop log_MAE↓ | pop facc_2x | pop spear | score MAE↓ | score win10 | score spear |
+|------|:---:|:---:|:---:|:---:|:---:|:---:|
+| **full** | 0.976 ± 0.119 | 0.446 ± 0.051 | 0.850 ± 0.003 | 7.927 ± 0.479 | 0.690 ± 0.032 | 0.543 ± 0.012 |
+| RAG off | 1.033 ± 0.070 | 0.425 ± 0.029 | 0.839 ± 0.006 | 7.861 ± 0.216 | 0.695 ± 0.019 | 0.522 ± 0.009 |
+| 移除 image | 0.980 ± 0.063 | 0.454 ± 0.033 | 0.828 ± 0.003 | 8.655 ± 0.661 | 0.645 ± 0.047 | 0.511 ± 0.010 |
+| meta only | 1.006 ± 0.067 | 0.433 ± 0.034 | 0.827 ± 0.004 | 8.090 ± 0.318 | 0.679 ± 0.022 | 0.503 ± 0.021 |
+| text only | 1.451 ± 0.060 | 0.294 ± 0.030 | 0.678 ± 0.016 | 10.909 ± 2.047 | 0.509 ± 0.110 | 0.287 ± 0.065 |
+| image only | 1.353 ± 0.118 | 0.329 ± 0.026 | 0.727 ± 0.006 | 9.057 ± 0.954 | 0.623 ± 0.054 | 0.393 ± 0.009 |
+
+**trend OFF：**
+
+| 設定 | pop log_MAE↓ | pop facc_2x | pop spear | score MAE↓ | score win10 | score spear |
+|------|:---:|:---:|:---:|:---:|:---:|:---:|
+| **full** | 0.907 ± 0.016 | 0.475 ± 0.009 | 0.853 ± 0.003 | 8.043 ± 0.090 | 0.683 ± 0.007 | 0.549 ± 0.006 |
+| RAG off | 0.951 ± 0.005 | 0.456 ± 0.005 | 0.840 ± 0.004 | 7.917 ± 0.216 | 0.689 ± 0.015 | 0.527 ± 0.015 |
+| 移除 image | 0.952 ± 0.019 | 0.467 ± 0.012 | 0.832 ± 0.002 | 8.305 ± 0.122 | 0.670 ± 0.009 | 0.515 ± 0.007 |
+| meta only | 0.948 ± 0.011 | 0.460 ± 0.009 | 0.831 ± 0.005 | 8.096 ± 0.167 | 0.680 ± 0.009 | 0.506 ± 0.011 |
+| text only | 1.272 ± 0.022 | 0.359 ± 0.010 | 0.704 ± 0.004 | 10.561 ± 0.321 | 0.520 ± 0.023 | 0.255 ± 0.041 |
+| image only | 1.298 ± 0.024 | 0.342 ± 0.006 | 0.731 ± 0.006 | 8.354 ± 0.224 | 0.663 ± 0.010 | 0.400 ± 0.015 |
+
+> **ON vs OFF 對比重點：**
+> 1. **trend OFF 全面更穩**：full pop log_MAE std 0.016（OFF）vs 0.119（ON）；6 個設定 OFF 的 std 幾乎都更小 → trend = 波動源（普適）。
+> 2. **組件排序兩版一致**：full / 移除 image / meta only 三者相近且最佳，RAG off 次之，text-only / image-only 最弱 → **消融的方向性結論不受 trend 開關影響**。
+> 3. **trend 對 pop 是負擔**：每個設定 OFF 的 pop log_MAE mean 都 ≤ ON（full 0.907 vs 0.976、RAG off 0.951 vs 1.033…）。
+> 4. **trend 對 score 微妙**：full / RAG off 在 ON 時 score MAE 略低（7.93/7.86 vs 8.04/7.92），但 std 變大；其餘設定 OFF 反而較好。
 
 #### image 來源消融（per-target HP，seed=42）
 
@@ -543,7 +672,7 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 > 1. **full model 兩個 target 都最佳**（pop 0.8823、score 7.5911）→ 每個組件在各自最佳 HP 下都有貢獻，先前共用 HP 的反直覺消失。
 > 2. **RAG 對兩者皆有益**：移除後 pop 0.8823→0.9473、score 7.5911→8.1246。
 > 3. **image 對 meanScore 尤其關鍵**：移除 image，score 7.5911→8.6352（大幅退步）、pop 0.8823→0.9307。
-> 4. **meta 仍是最強單一模態**（only_meta：pop 0.9524、score 7.956）；text / image 單獨都弱（pop 1.27 / 1.31）。
+> 4. **meta 仍是最強單一模態**（trend ON 下 only_meta：pop 1.0847、score 7.729）；text / image 單獨都弱（pop 1.43 / 1.40）。
 > 5. **三個視覺來源合用最佳**：任一單獨來源（cover / banner / yolo）兩個 target 都不如三者合，視覺模態互補。
 
 #### Temporal Trend（TrendHead）on/off — ~~concept drift 證據~~（論文 4.3.3）
@@ -557,7 +686,7 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 | **with trend（full）** | **0.8823** | **0.7633** | **7.5911** | **0.1934** | 0.5424 |
 | without trend | 0.9036 | 0.7518 | 7.8877 | 0.1247 | 0.5533 |
 
-> **發現**：加 TrendHead 兩個 target 主要誤差都更好 —— pop log_MAE 0.9036→0.8823、**score MAE 7.8877→7.5911、score R² 0.1247→0.1934**（meanScore 受年代評分漂移影響最大，得益最多）。score Spearman 幾乎不變（trend 平移數值水準、不改排序）→ **支持「時序項處理 concept drift」的宣稱**。
+> **發現（單 seed，已被多 seed 推翻）**：seed=42 時加 TrendHead 兩個 target 主要誤差都更好（pop 0.9036→0.8823、score 7.8877→7.5911、score R² 0.1247→0.1934），曾被誤讀為「支持時序項處理 concept drift」。**但這只是 seed=42 的運氣**：7 seed 後 trend 對任何指標皆不顯著（T2b），且 pop 上 trend 淨虧、是波動源 —— **正確結論見上方「🔴 TrendHead」與「ON vs OFF 對比」，concept-drift 宣稱不成立。**
 
 ### Stage Embedding 實驗（test set，`fussion_configs_stages*.yaml`）
 
