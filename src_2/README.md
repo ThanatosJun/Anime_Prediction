@@ -601,6 +601,29 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 > 本版**每個 target 各用自己的最佳 HP**（保留 config 的 per-target overrides：pop dr=0.3；score dr=0.3, attn_dr=0.1, wd=1e-4, batch=256），full=Run22 設定、seed=42，整張表同一條 code path。
 > **結果乾淨：full model 在兩個 target 都最佳**，RAG 與每個模態對兩者都有正貢獻。摘要 `runs/ablation_pertarget_s42_summary.json`。
 
+#### ▍論文 4.3 對照表（seed=42）
+
+> 一張表含兩種消融，**分兩組讀、不可逐列跨組比**：
+> - **前 4 列＝組件消融（leave-one-out）**：從 full「拿掉一項」，trend ON（`CARMA w/o trend` 那列即移除 trend）。
+> - **後 3 列＝單模態天花板（keep-only-one）**：只留一個模態，全 trend OFF（防 text/image-only 的 release_year year-leak）。
+>
+> ⚠️ **標籤定義**：`w/o RA all` = 移除整條 RAG / cross-attention（含檢索前作的 meta/text/image）；`w/o image（目標）` = 只移除**目標動畫自己的 image 分支**（cover+banner+yolo），**RAG 檢索前作的 image 仍在**（這兩者不同！我們沒有「只移除 RAG image」的實驗）。
+
+| 設定 | trend | pop log_MAE↓ | pop log R²↑ | pop Spear↑ | pop F_acc 2×↑ | score MAE↓ | score R²↑ | score Spear↑ | score Win10↑ |
+|------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **CARMA(all)** | ON | 0.8823 | 0.7633 | 0.8520 | 0.4943 | 7.5911 | 0.1934 | 0.5424 | 0.7104 |
+| w/o RA all | ON | 0.9473 | 0.7325 | 0.8387 | 0.4642 | 8.1246 | 0.1109 | 0.5273 | 0.6718 |
+| w/o image（目標）| ON | 0.9307 | 0.7265 | 0.8293 | 0.4830 | 8.6352 | −0.0253 | 0.5168 | 0.6511 |
+| CARMA w/o trend | OFF | 0.9036 | 0.7518 | 0.8494 | 0.4830 | 7.8877 | 0.1247 | 0.5533 | 0.6929 |
+| w/ metadata only | OFF | 0.9524 | 0.7215 | 0.8271 | 0.4587 | 7.9560 | 0.1457 | 0.5105 | 0.6832 |
+| w/ text only | OFF | 1.2705 | 0.5081 | 0.7012 | 0.3638 | 10.3885 | −0.3462 | 0.2113 | 0.5274 |
+| w/ image only | OFF | 1.3106 | 0.4806 | 0.7311 | 0.3453 | 8.7938 | −0.0565 | 0.3910 | 0.6459 |
+
+> **讀法**：
+> - **前 4 列（組件消融）**：移除任一組件誤差都升（RA all 貢獻 pop ~0.065、目標 image ~0.048）；trend 移除後 pop 反而略好（見 trend 專節）。
+> - **後 3 列（單模態）**：metadata 最強（0.95 << text 1.27 / image 1.31）；**沒有單模態接近 full（0.88）→ 模態互補、融合有價值**。單模態較差是預期且即結論。
+> - ⚠️ **前 4 列與後 3 列不可逐列跨比**（輸入模態數 + trend 狀態都不同，如 `w/o RA all` vs `w/ metadata only` 無意義）。
+
 > **消融方法論**：消融只改「被移除的那一項」，其餘組件維持 full 設定。**trend 本身是其中一個變因**，故以下分 **trend ON / trend OFF 兩版並列**，方便對比。
 > ⚠️ trend ON 版的 text only / image only 移除 meta 但 trend 仍讀 `release_year` → 有輕微 year-leak（這兩列略被高估）；trend OFF 版無此問題。
 
@@ -658,15 +681,17 @@ config：`src_2/fussion_configs.yaml`，結果：`src_2/runs/{run_id}/`
 > 3. **trend 對 pop 是負擔**：每個設定 OFF 的 pop log_MAE mean 都 ≤ ON（full 0.907 vs 0.976、RAG off 0.951 vs 1.033…）。
 > 4. **trend 對 score 微妙**：full / RAG off 在 ON 時 score MAE 略低（7.93/7.86 vs 8.04/7.92），但 std 變大；其餘設定 OFF 反而較好。
 
-#### image 來源消融（per-target HP，seed=42）
+#### image 來源消融（per-target HP，seed=42，**全部 trend ON**）
 
-| image 來源 | pop log_MAE↓ | pop spear | score MAE↓ | score spear |
-|------------|:---:|:---:|:---:|:---:|
-| **full（cover+banner+yolo）** | **0.8823** | **0.8520** | **7.5911** | **0.5424** |
-| cover only | 0.9059 | 0.8443 | 8.0512 | 0.5125 |
-| cover + banner | 0.9367 | 0.8481 | 7.9372 | 0.5390 |
-| banner only | 0.8948 | 0.8385 | 8.2616 | 0.5419 |
-| yolo only | 0.9280 | 0.8437 | 8.2020 | 0.5188 |
+> 只改 image 分支用哪些來源，其餘（text + meta + rag + trend）維持 full 設定不變 → 全列 trend ON、對等可比（無 single-modality 的 year-leak 問題）。
+
+| image 來源 | trend | pop log_MAE↓ | pop log R²↑ | pop Spear↑ | pop F_acc 2×↑ | score MAE↓ | score R²↑ | score Spear↑ | score Win10↑ |
+|------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **full（cover+banner+yolo）** | ON | 0.8823 | 0.7633 | 0.8520 | 0.4943 | 7.5911 | 0.1934 | 0.5424 | 0.7104 |
+| cover+banner | ON | 0.9367 | 0.7334 | 0.8481 | 0.4668 | 7.9372 | 0.1263 | 0.5390 | 0.6874 |
+| cover only | ON | 0.9059 | 0.7469 | 0.8443 | 0.4843 | 8.0512 | 0.1022 | 0.5125 | 0.6874 |
+| banner only | ON | 0.8948 | 0.7592 | 0.8385 | 0.4791 | 8.2616 | 0.0601 | 0.5419 | 0.6748 |
+| character only（yolo） | ON | 0.9280 | 0.7389 | 0.8437 | 0.4691 | 8.2020 | 0.0682 | 0.5188 | 0.6835 |
 
 > **發現（每 target 最佳 HP 下）**：
 > 1. **full model 兩個 target 都最佳**（pop 0.8823、score 7.5911）→ 每個組件在各自最佳 HP 下都有貢獻，先前共用 HP 的反直覺消失。
