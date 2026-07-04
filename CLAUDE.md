@@ -526,5 +526,39 @@ conda run -n anime_prediction tensorboard --logdir results/01/logs --port 6007
 - `Older/`不要推
 - `src/` 對應至main的`src/image_branch/資料夾`
 
+##  文件轉寫
+
+> 當提到文件轉寫實，你需要分別說明名 ```related work``` 和 ```methodnology```，**每個流程皆須與我討論**
+> 使用的論文和論文簡述存在```docs/pappers/```內
+
+- 檔案請分別存放於: ```docs/relatedWork.md```和 ```docs/methodnology.md```
+
+
+
+- 在```relatedWork.md```中，撰寫的流程為:
+    - 用到了哪一些方法
+    - 參考的文獻(舉一到兩個)
+    - 內容撰寫(語言:```繁體中文```)
+
+### 使用的論文與對應方向
+
+| 論文 | 檔案 | 對應方向 | 優勢／選擇理由 |
+|------|------|----------|----------------|
+| Swin Transformer（Liu et al., 2021） | `docs/pappers/swin transforemrs.pdf` | 視覺特徵提取 Backbone | 階層式 attention 同時捕捉局部紋理（line art）與全局語義（畫風構圖）；原生輸出 4 個 stage（128/256/512/1024 維）；計算複雜度線性，優於 ViT 的二次方；CNN 固定感受野無法捕捉長距離依賴，Swin 彌補此缺陷 |
+| SimCLR（Chen et al., 2020） | `docs/pappers/A Simple Framework for Contrastive Learning of Visual Representations.pdf` | 自監督訓練策略（為何用對比式學習） | 動漫圖像無視覺標籤，無法用監督式學習；透過資料增強正負樣本對，讓模型學到對色彩/裁切/模糊的不變性，同時保持對不同圖片的區分能力；**線性評估達 76.5% top-1（ImageNet）**，追平有完整標籤的監督式 ResNet-50；僅用 1% 標籤微調即達 **85.8% top-5**，超越使用 100% 標籤的 AlexNet；在 12 個遷移學習資料集中 5 個超越監督式預訓練基準 |
+| To Crop or Not to Crop（Beery et al.） | `docs/pappers/To crop or not to crop.pdf` | YOLO 前處理，降低背景雜訊 | 完整圖像含大量背景，模型易學到偽相關（spurious correlations）；先裁切主體（動漫人物）可排除背景干擾，提升 embedding 品質與模型泛化能力；**加入偵測裁切後 Macro-average F1 提升約 25%**（大型不平衡資料集）；所有指標中表現最佳者皆為包含裁切的模型 |
+
+### 論文串聯敘事
+
+> 核心問題：如何從**無標籤**的動漫圖像中，提取出能反映畫風、人物設計、視覺品質的有意義特徵？
+
+1. 無標籤 → 選 **Contrastive Learning（SimCLR）**：自監督訓練，不依賴人工標記
+2. 需多尺度理解 → 選 **Swin Transformer**：encoder 同時捕捉局部與全局，CNN 無法兼顧
+3. 背景雜訊干擾 → 選 **YOLO 前裁切（To Crop or Not to Crop）**：先移除背景，再送入 encoder
+
+- 在```methodnology```中，轉寫的順序為:
+    - 根據我的流程，來撰寫內容
+
+
 
 
