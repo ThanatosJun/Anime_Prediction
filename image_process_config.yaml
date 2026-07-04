@@ -60,8 +60,8 @@ augmentation:
 
 # ── Training ──────────────────────────────────────────────────────────────────
 training:
-  batch_size: 64
-  epochs: 50
+  batch_size: 16
+  epochs: 30
   learning_rate: 1.0e-4
   weight_decay: 1.0e-4
   device: cuda                # cuda / cpu
@@ -73,14 +73,14 @@ training:
 # ── Output (predict.py)────────────────────────────────────────────────────────────────────
 output:
   results_dir: results          # 根目錄，子路徑由程式碼以 run_id 組合
-  run_id: "02"                  # 每次微調遞增，對應 results/{run_id}/
+  run_id: "03"                  # 每次微調遞增，對應 results/{run_id}/
   embedding_path: data/processed/image_embeddings.parquet
   # run_predict.py 修改 test set
 
 # Output (output.py)
 inference:
   results_dir: results
-  run_id: "01"
+  run_id: "03"
   embedding_path: data/processed/image_embeddings.parquet
   file_kind: file  # file(csv) | image(single)
   use_yolo: true   # 覆蓋 yolo_config.yaml 的 yolo.use 設定
